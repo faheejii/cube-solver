@@ -29,8 +29,16 @@ public class Algorithm {
         return List.copyOf(this.moves);
     }
 
+    // Counts solving moves only. Ignore rotations like x, y, z and their variants.
     public int getMoveCount() {
-        return moves.size();
+        int count = 0;
+        for (var move : this.moves) {
+            if (move.getNotation().equals("x") || move.getNotation().equals("y") || move.getNotation().equals("z") ||
+                    move.getNotation().equals("x'") || move.getNotation().equals("y'") || move.getNotation().equals("z'") ||
+                    move.getNotation().equals("x2") || move.getNotation().equals("y2") || move.getNotation().equals("z2"))
+                count++;
+        }
+        return moves.size() - count;
     }
 
     public boolean isEmpty() {
