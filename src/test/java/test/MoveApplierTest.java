@@ -87,7 +87,7 @@ public class MoveApplierTest {
     @Test
     void sliceMoves_shouldMatchEquivalentOuterTurnAndRotationAlgorithms() {
         assertEquivalentAlgorithms("M", "R L' x'");
-        assertEquivalentAlgorithms("E", "U D' y'");
+        assertEquivalentAlgorithms("E", "U' y D");
         assertEquivalentAlgorithms("S", "F' B z");
     }
 
