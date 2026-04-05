@@ -1,38 +1,41 @@
 package solver;
 
-import cfop.F2LSlot;
-import cube.Corner;
-import cube.CubeState;
-import cube.Edge;
-import cube.Face;
-import cube.MoveApplier;
+import algorithms.F2LCaseDatabase;
+import cube.*;
 
 import java.util.ArrayList;
 
 public class SolverMain {
     public static void main(String[] args) {
-        var crossFace = args.length > 0 ? Face.fromNotation(args[0].charAt(0)) : Face.U;
+        var crossFace = args.length > 0 ? Face.fromNotation(args[0].charAt(0)) : Face.D;
 
         var scrambles = new ArrayList<String>();
-        scrambles.add("R U F' L2 D B'");
-        scrambles.add("D R B' U2 L2 U2 B' R2 B2 R2 F D2 B R2 L' D B U F D U");
-        scrambles.add("U F2 D L2 R2 D2 F2 U' L2 U' R2 F' D L R' D' B2 F R F L'");
-        scrambles.add("B2 D2 B2 D' L2 U F2 L2 B2 U B' D2 L B2 L2 D' B' R' F' U'");
-        scrambles.add("F2 R' F R2 B2 L2 B' R2 B' D2 F D2 U2 R2 D' F R F' R F");
-        scrambles.add("L' U2 L2 U2 F2 R' B2 U2 L B2 R F D B2 L2 U2 R' U' B2 R'");
+        scrambles.add("F R' D2 B' D' R' B U2 F2 U' F2 R2 D2 F2 L2 D L2 F");
+        scrambles.add("B2 R' B2 U2 L F2 L F2 L2 U' B' R' B U");
+        scrambles.add("F' U2 F U2 B U2 B2 R B R F R2 F'");
+        scrambles.add("L' B' R2 B L2 F' R2 F' U2 F' U' R U' R F L' R2");
+        scrambles.add("L R2 F U2 F2 R2 F' U2 F2 R2 F U R U L' U2 R' U2 ");
 
         var count = 1;
         for (var scramble : scrambles) {
+            long startTime = System.nanoTime();
             var cube = new CubeState();
             MoveApplier.applyAlgorithm(cube, scramble);
             var crossSolver = new CrossSolver();
             var crossSolution = crossSolver.solve(cube, crossFace);
 
-            MoveApplier.applyMoves(cube, crossSolution.getMoves());
-
-            var f2lSolver = new F2LSolver();
+            if (crossFace == Face.D) {
+                MoveApplier.applyMoves(cube, crossSolution.getMoves());
+            } else {
+                MoveApplier.executeMoves(cube, crossSolution.getMoves());
+            }
+            var f2lSolver = new F2LSolver(F2LCaseDatabase.seedBasicCases());
             var f2lSolution = f2lSolver.solveAfterCross(cube, crossFace);
-            MoveApplier.applyMoves(cube, f2lSolution.getMoves());
+            if (crossFace == Face.D) {
+                MoveApplier.applyMoves(cube, f2lSolution.getMoves());
+            } else {
+                MoveApplier.executeMoves(cube, f2lSolution.getMoves());
+            }
 
             System.out.printf("%d.", count);
             System.out.println("Selected face: " + crossFace);
@@ -42,7 +45,8 @@ public class SolverMain {
             System.out.println("F2L solution: " + f2lSolution);
             System.out.println("Solved F2L slots on D frame: " + solvedSlotSummary(cube, crossFace));
             System.out.println("Cross solution length: " + crossSolution.getMoveCount());
-            System.out.println("F2L solution length: " + f2lSolution.getMoveCount() + "\n");
+            System.out.println("F2L solution length: " + f2lSolution.getMoveCount());
+            System.out.printf("Elapsed time: %.3f ms%n%n", (System.nanoTime() - startTime) / 1_000_000.0);
             count++;
         }
     }
@@ -111,6 +115,7 @@ public class SolverMain {
         };
     }
 
-    private record TargetSlot(String name, Corner cornerPosition, Corner cornerPiece, Edge edgePosition, Edge edgePiece) {
+    private record TargetSlot(String name, Corner cornerPosition, Corner cornerPiece, Edge edgePosition,
+                              Edge edgePiece) {
     }
 }

@@ -14,9 +14,9 @@ public class OrientedCube {
         this(cube, new CubeOrientation());
     }
 
-    private OrientedCube(CubeState cube, CubeOrientation orientation) {
+    public OrientedCube(CubeState cube, CubeOrientation orientation) {
         this.cube = cube;
-        this.orientation = orientation;
+        this.orientation = orientation.copy();
     }
 
     public void applyMove(Move move) {

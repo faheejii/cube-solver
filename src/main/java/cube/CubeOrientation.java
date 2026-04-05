@@ -27,6 +27,15 @@ public class CubeOrientation {
         };
     }
 
+    public Face logicalFaceOf(Face physicalFace) {
+        for (var logical : Face.values()) {
+            if (faceAt(logical) == physicalFace) {
+                return logical;
+            }
+        }
+        throw new IllegalStateException("Unexpected physical face: " + physicalFace);
+    }
+
     public Move mapMove(Move move) {
         var amount = amountOf(move);
         return switch (baseOf(move)) {

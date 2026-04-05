@@ -49,6 +49,18 @@ public class MoveApplier {
         }
     }
 
+    public static void executeMoves(CubeState cube, List<Move> moves) {
+        var orientedCube = new OrientedCube(cube);
+        orientedCube.applyMoves(moves);
+    }
+
+    public static void executeAlgorithm(CubeState cube, String algorithm) {
+        if (algorithm == null || algorithm.isBlank()) return;
+
+        var parsed = Algorithm.parse(algorithm);
+        executeMoves(cube, parsed.getMoves());
+    }
+
     private static boolean isCubeRotation(Move move) {
         return switch (move) {
             case X, X2, X_PRIME, Y, Y2, Y_PRIME, Z, Z2, Z_PRIME -> true;
@@ -61,9 +73,9 @@ public class MoveApplier {
             case X -> applyMoves(cube, List.of(Move.R, Move.M_PRIME, Move.L_PRIME));
             case X2 -> applyMoves(cube, List.of(Move.X, Move.X));
             case X_PRIME -> applyMoves(cube, List.of(Move.R_PRIME, Move.M, Move.L));
-            case Y -> applyMoves(cube, List.of(Move.U, Move.E_PRIME, Move.D_PRIME));
+            case Y -> applyMoves(cube, List.of(Move.U, Move.E, Move.D_PRIME));
             case Y2 -> applyMoves(cube, List.of(Move.Y, Move.Y));
-            case Y_PRIME -> applyMoves(cube, List.of(Move.U_PRIME, Move.E, Move.D));
+            case Y_PRIME -> applyMoves(cube, List.of(Move.Y, Move.Y, Move.Y));
             case Z -> applyMoves(cube, List.of(Move.F, Move.S, Move.B_PRIME));
             case Z2 -> applyMoves(cube, List.of(Move.Z, Move.Z));
             case Z_PRIME -> applyMoves(cube, List.of(Move.F_PRIME, Move.S_PRIME, Move.B));
