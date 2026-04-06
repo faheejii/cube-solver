@@ -6,11 +6,11 @@ import cube.Edge;
 import cube.Face;
 import cube.Move;
 import cube.MoveApplier;
+import cube.OrientationFrames;
 
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.List;
 
 public class CrossSolver {
     private static final Move[] FACE_TURNS = {
@@ -29,13 +29,9 @@ public class CrossSolver {
     }
 
     public Algorithm solve(CubeState cube, Face crossFace) {
-        var orientation = orientationToD(crossFace);
-        var orientedCube = new cube.OrientedCube(copyCube(cube));
-        orientedCube.applyMoves(orientation.getMoves());
-
-        var targetCross = targetCrossForOrientation(orientedCube.orientation());
-        var mappedFaceTurns = mapFaceTurns(orientedCube.orientation());
-        return orientation.concat(solveForTargetCross(orientedCube.cubeState(), targetCross, mappedFaceTurns));
+        var orientation = OrientationFrames.orientedFrameFor(crossFace);
+        return OrientationFrames.orientationToD(crossFace)
+                .concat(solveForTargetCross(copyCube(cube), targetCrossForOrientation(orientation), mapFaceTurns(orientation)));
     }
 
     private Algorithm solveForTargetCross(CubeState cube, Edge[] targetCross, Move[] mappedFaceTurns) {
@@ -85,17 +81,6 @@ public class CrossSolver {
             }
         }
         return true;
-    }
-
-    private static Algorithm orientationToD(Face face) {
-        return switch (face) {
-            case D -> new Algorithm();
-            case U -> Algorithm.fromMoves(List.of(Move.Z2));
-            case R -> Algorithm.fromMoves(List.of(Move.Z));
-            case L -> Algorithm.fromMoves(List.of(Move.Z_PRIME));
-            case F -> Algorithm.fromMoves(List.of(Move.X));
-            case B -> Algorithm.fromMoves(List.of(Move.X_PRIME));
-        };
     }
 
     private static Edge[] targetCrossForOrientation(cube.CubeOrientation orientation) {

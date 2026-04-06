@@ -116,9 +116,9 @@ public class CubeOrientation {
     }
 
     private void rotateY() {
-        var newRight = front;
+        var newRight = front.negate();
         var newUp = up;
-        var newFront = right.negate();
+        var newFront = right;
         right = newRight;
         up = newUp;
         front = newFront;

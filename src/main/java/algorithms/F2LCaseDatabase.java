@@ -31,9 +31,10 @@ public class F2LCaseDatabase {
         database.register("F' U' F", "F' U F", "basic-insert-5");
         database.register("F' U F U' R U R'", "R U' R' U F' U' F", "basic-insert-6");
         database.register("F' U F U' R U2 R'", "R U2 R' U F' U' F", "basic-insert-7");
-        database.register("F' U F U F' U' F","F' U F U' F' U' F","basic-insert-8");
-        database.register("R U R' U2 R U' R'","R U R' U2 R U' R'","basic-insert-9");
-        database.register("R U R' U2 R U2 R'","R U2 R' U2 R U' R'","basic-insert-10");
+        database.register("F' U F U F' U' F", "F' U F U' F' U' F", "basic-insert-8");
+        database.register("R U R' U2 R U' R'", "R U R' U2 R U' R'", "basic-insert-9");
+        database.register("R U R' U2 R U2 R'", "R U2 R' U2 R U' R'", "basic-insert-10");
+        database.register("R U R' U' R U' R'", "R U R' U R U' R'", "basic-insert-11");
 
         return database;
     }
