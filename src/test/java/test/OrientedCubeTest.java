@@ -41,7 +41,7 @@ public class OrientedCubeTest {
 
         orientedCube.applyMove(Move.Y);
         orientedCube.applyMove(Move.M);
-        MoveApplier.applyMove(expected, Move.S_PRIME);
+        MoveApplier.applyMove(expected, Move.S);
 
         assertSameState(expected, orientedCube.cubeState());
     }
