@@ -85,6 +85,18 @@ public class MoveApplierTest {
     }
 
     @Test
+    void wideMoves_shouldMatchEquivalentFaceAndSliceAlgorithms() {
+        assertEquivalentAlgorithms("r", "R M'");
+        assertEquivalentAlgorithms("r'", "R' M");
+        assertEquivalentAlgorithms("r2", "R2 M2");
+        assertEquivalentAlgorithms("u", "U E'");
+        assertEquivalentAlgorithms("u'", "U' E");
+        assertEquivalentAlgorithms("f", "F S");
+        assertEquivalentAlgorithms("l", "L M");
+        assertEquivalentAlgorithms("b'", "B' S");
+    }
+
+    @Test
     void sliceMoves_shouldMatchEquivalentOuterTurnAndRotationAlgorithms() {
         assertEquivalentAlgorithms("M", "R L' x'");
         assertEquivalentAlgorithms("E", "U' y D");

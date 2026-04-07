@@ -58,6 +58,18 @@ public class OrientedCubeTest {
         assertEquals(Face.U, orientedCube.faceAt(Face.D));
     }
 
+    @Test
+    void wideTurnsShouldFollowCurrentOrientation() {
+        var orientedCube = new OrientedCube();
+        var expected = new CubeState();
+
+        orientedCube.applyMove(Move.Y);
+        orientedCube.applyMove(Move.RW);
+        MoveApplier.applyAlgorithm(expected, "b");
+
+        assertSameState(expected, orientedCube.cubeState());
+    }
+
     private static void assertSameState(CubeState expected, CubeState actual) {
         assertArrayEquals(expected.cornerPerm, actual.cornerPerm, "Corner permutation mismatch");
         assertArrayEquals(expected.cornerOri, actual.cornerOri, "Corner orientation mismatch");

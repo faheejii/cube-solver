@@ -40,6 +40,7 @@ public class CubeOrientation {
         var amount = amountOf(move);
         return switch (baseOf(move)) {
             case U, R, F, D, L, B -> faceMove(faceFromVector(transform(faceVector(baseOf(move)))), amount);
+            case UW, RW, FW, DW, LW, BW -> wideMove(faceFromVector(transform(faceVector(faceBaseOfWide(baseOf(move))))), amount);
             case M, E, S -> mapSliceMove(baseOf(move), amount);
             default -> throw new IllegalArgumentException("Cannot map cube rotation through orientation: " + move);
         };
@@ -147,6 +148,12 @@ public class CubeOrientation {
             case D, D2, D_PRIME -> Move.D;
             case L, L2, L_PRIME -> Move.L;
             case B, B2, B_PRIME -> Move.B;
+            case UW, UW2, UW_PRIME -> Move.UW;
+            case RW, RW2, RW_PRIME -> Move.RW;
+            case FW, FW2, FW_PRIME -> Move.FW;
+            case DW, DW2, DW_PRIME -> Move.DW;
+            case LW, LW2, LW_PRIME -> Move.LW;
+            case BW, BW2, BW_PRIME -> Move.BW;
             case M, M2, M_PRIME -> Move.M;
             case E, E2, E_PRIME -> Move.E;
             case S, S2, S_PRIME -> Move.S;
@@ -156,10 +163,24 @@ public class CubeOrientation {
 
     private static int amountOf(Move move) {
         return switch (move) {
-            case U, R, F, D, L, B, M, E, S -> 1;
-            case U2, R2, F2, D2, L2, B2, M2, E2, S2 -> 2;
-            case U_PRIME, R_PRIME, F_PRIME, D_PRIME, L_PRIME, B_PRIME, M_PRIME, E_PRIME, S_PRIME -> 3;
+            case U, R, F, D, L, B, UW, RW, FW, DW, LW, BW, M, E, S -> 1;
+            case U2, R2, F2, D2, L2, B2, UW2, RW2, FW2, DW2, LW2, BW2, M2, E2, S2 -> 2;
+            case U_PRIME, R_PRIME, F_PRIME, D_PRIME, L_PRIME, B_PRIME,
+                    UW_PRIME, RW_PRIME, FW_PRIME, DW_PRIME, LW_PRIME, BW_PRIME,
+                    M_PRIME, E_PRIME, S_PRIME -> 3;
             default -> throw new IllegalArgumentException("Unsupported move amount for: " + move);
+        };
+    }
+
+    private static Move faceBaseOfWide(Move move) {
+        return switch (move) {
+            case UW -> Move.U;
+            case RW -> Move.R;
+            case FW -> Move.F;
+            case DW -> Move.D;
+            case LW -> Move.L;
+            case BW -> Move.B;
+            default -> throw new IllegalArgumentException("Not a wide move family: " + move);
         };
     }
 
@@ -277,6 +298,47 @@ public class CubeOrientation {
                 default -> throw new IllegalArgumentException("Unsupported move amount: " + amount);
             };
             default -> throw new IllegalArgumentException("Not a slice move family: " + base);
+        };
+    }
+
+    private static Move wideMove(Face face, int amount) {
+        return switch (face) {
+            case U -> switch (amount) {
+                case 1 -> Move.UW;
+                case 2 -> Move.UW2;
+                case 3 -> Move.UW_PRIME;
+                default -> throw new IllegalArgumentException("Unsupported move amount: " + amount);
+            };
+            case R -> switch (amount) {
+                case 1 -> Move.RW;
+                case 2 -> Move.RW2;
+                case 3 -> Move.RW_PRIME;
+                default -> throw new IllegalArgumentException("Unsupported move amount: " + amount);
+            };
+            case F -> switch (amount) {
+                case 1 -> Move.FW;
+                case 2 -> Move.FW2;
+                case 3 -> Move.FW_PRIME;
+                default -> throw new IllegalArgumentException("Unsupported move amount: " + amount);
+            };
+            case D -> switch (amount) {
+                case 1 -> Move.DW;
+                case 2 -> Move.DW2;
+                case 3 -> Move.DW_PRIME;
+                default -> throw new IllegalArgumentException("Unsupported move amount: " + amount);
+            };
+            case L -> switch (amount) {
+                case 1 -> Move.LW;
+                case 2 -> Move.LW2;
+                case 3 -> Move.LW_PRIME;
+                default -> throw new IllegalArgumentException("Unsupported move amount: " + amount);
+            };
+            case B -> switch (amount) {
+                case 1 -> Move.BW;
+                case 2 -> Move.BW2;
+                case 3 -> Move.BW_PRIME;
+                default -> throw new IllegalArgumentException("Unsupported move amount: " + amount);
+            };
         };
     }
 

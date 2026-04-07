@@ -30,6 +30,17 @@ public class AlgorithmTest {
     }
 
     @Test
+    void parse_shouldReadWideMoveNotation() {
+        Algorithm algorithm = Algorithm.parse("r U f2 u' l b'");
+
+        assertEquals(
+                List.of(Move.RW, Move.U, Move.FW2, Move.UW_PRIME, Move.LW, Move.BW_PRIME),
+                algorithm.getMoves()
+        );
+        assertEquals("r U f2 u' l b'", algorithm.toString());
+    }
+
+    @Test
     void parse_shouldRejectNullBlankAndInvalidMoves() {
         assertThrows(IllegalArgumentException.class, () -> Algorithm.parse(null));
         assertThrows(IllegalArgumentException.class, () -> Algorithm.parse("   "));
@@ -44,6 +55,16 @@ public class AlgorithmTest {
 
         assertEquals(List.of(Move.F, Move.U2, Move.R_PRIME), inverse.getMoves());
         assertEquals("F U2 R'", inverse.toString());
+    }
+
+    @Test
+    void inverse_shouldHandleWideMoves() {
+        Algorithm algorithm = Algorithm.parse("r U f'");
+
+        Algorithm inverse = algorithm.inverse();
+
+        assertEquals(List.of(Move.FW, Move.U_PRIME, Move.RW_PRIME), inverse.getMoves());
+        assertEquals("f U' r'", inverse.toString());
     }
 
     @Test

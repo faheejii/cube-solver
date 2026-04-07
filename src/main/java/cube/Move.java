@@ -7,6 +7,12 @@ public enum Move {
     D("D"), D2("D2"), D_PRIME("D'"),
     L("L"), L2("L2"), L_PRIME("L'"),
     B("B"), B2("B2"), B_PRIME("B'"),
+    UW("u"), UW2("u2"), UW_PRIME("u'"),
+    RW("r"), RW2("r2"), RW_PRIME("r'"),
+    FW("f"), FW2("f2"), FW_PRIME("f'"),
+    DW("d"), DW2("d2"), DW_PRIME("d'"),
+    LW("l"), LW2("l2"), LW_PRIME("l'"),
+    BW("b"), BW2("b2"), BW_PRIME("b'"),
     M("M"), M2("M2"), M_PRIME("M'"),
     E("E"), E2("E2"), E_PRIME("E'"),
     S("S"), S2("S2"), S_PRIME("S'"),
@@ -44,6 +50,24 @@ public enum Move {
             case B -> B_PRIME;
             case B2 -> B2;
             case B_PRIME -> B;
+            case UW -> UW_PRIME;
+            case UW2 -> UW2;
+            case UW_PRIME -> UW;
+            case RW -> RW_PRIME;
+            case RW2 -> RW2;
+            case RW_PRIME -> RW;
+            case FW -> FW_PRIME;
+            case FW2 -> FW2;
+            case FW_PRIME -> FW;
+            case DW -> DW_PRIME;
+            case DW2 -> DW2;
+            case DW_PRIME -> DW;
+            case LW -> LW_PRIME;
+            case LW2 -> LW2;
+            case LW_PRIME -> LW;
+            case BW -> BW_PRIME;
+            case BW2 -> BW2;
+            case BW_PRIME -> BW;
             case M -> M_PRIME;
             case M2 -> M2;
             case M_PRIME -> M;
