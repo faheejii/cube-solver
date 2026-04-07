@@ -6,10 +6,12 @@ import cfop.F2LAnalyzer;
 import cube.CubeState;
 import cube.Face;
 import cube.MoveApplier;
+import cube.OrientedCube;
 import org.junit.jupiter.api.Test;
 import solver.F2LSolver;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class F2LSolverTest {
@@ -82,6 +84,27 @@ public class F2LSolverTest {
         MoveApplier.executeMoves(cube, solution.getMoves());
         assertTrue(CrossAnalyzer.isCrossSolved(cube, Face.U));
         assertTrue(F2LAnalyzer.isF2LSolved(cube, Face.U));
+    }
+
+    @Test
+    void solveOnPersistentOrientedCube_shouldNotRepeatSelectedFacePrefix() {
+        var cube = new CubeState();
+        MoveApplier.applyAlgorithm(cube, "B' L B L2 D2 L D2");
+        var orientedCube = new OrientedCube(cube);
+
+        var crossSolver = new solver.CrossSolver();
+        var crossSolution = crossSolver.solve(orientedCube.cubeState(), Face.U);
+        orientedCube.applyMoves(crossSolution.getMoves());
+
+        var solver = new F2LSolver(F2LCaseDatabase.seedBasicCases());
+        var f2lSolution = solver.solve(orientedCube);
+
+        assertFalse(f2lSolution.toString().startsWith("z2"),
+                "persistent oriented stage should not restate the selected-face prefix");
+
+        orientedCube.applyMoves(f2lSolution.getMoves());
+        assertTrue(CrossAnalyzer.isCrossSolved(orientedCube.cubeState(), Face.U));
+        assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), Face.U));
     }
 
     @Test
