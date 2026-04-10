@@ -17,7 +17,7 @@ public class OLLAnalyzerTest {
     @Test
     void isOllSolved_shouldBeFalseForKnownOllCase() {
         var cube = new CubeState();
-        MoveApplier.applyAlgorithm(cube, "R U2 R' U' R U' R'");
+        MoveApplier.executeAlgorithm(cube, "R U2 R' U' R U' R'");
 
         assertFalse(OLLAnalyzer.isOllSolved(cube));
     }

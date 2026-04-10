@@ -9,8 +9,7 @@ public class MoveApplier {
             return;
         }
         if (isWideMove(move)) {
-            applyWideMove(cube, move);
-            return;
+            throw new IllegalArgumentException("Wide moves require frame-aware execution; use executeMoves/executeAlgorithm: " + move);
         }
 
         var m = move.ordinal();
@@ -56,6 +55,7 @@ public class MoveApplier {
     public static void executeMoves(CubeState cube, List<Move> moves) {
         var orientedCube = new OrientedCube(cube);
         orientedCube.applyMoves(moves);
+        orientedCube.collapseOrientationIntoCube();
     }
 
     public static void executeAlgorithm(CubeState cube, String algorithm) {
@@ -96,30 +96,6 @@ public class MoveApplier {
             case Z2 -> applyMoves(cube, List.of(Move.Z, Move.Z));
             case Z_PRIME -> applyMoves(cube, List.of(Move.F_PRIME, Move.S_PRIME, Move.B));
             default -> throw new IllegalArgumentException("Not a cube rotation: " + move);
-        }
-    }
-
-    private static void applyWideMove(CubeState cube, Move move) {
-        switch (move) {
-            case UW -> applyMoves(cube, List.of(Move.U, Move.E_PRIME));
-            case UW2 -> applyMoves(cube, List.of(Move.U2, Move.E2));
-            case UW_PRIME -> applyMoves(cube, List.of(Move.U_PRIME, Move.E));
-            case RW -> applyMoves(cube, List.of(Move.R, Move.M_PRIME));
-            case RW2 -> applyMoves(cube, List.of(Move.R2, Move.M2));
-            case RW_PRIME -> applyMoves(cube, List.of(Move.R_PRIME, Move.M));
-            case FW -> applyMoves(cube, List.of(Move.F, Move.S));
-            case FW2 -> applyMoves(cube, List.of(Move.F2, Move.S2));
-            case FW_PRIME -> applyMoves(cube, List.of(Move.F_PRIME, Move.S_PRIME));
-            case DW -> applyMoves(cube, List.of(Move.D, Move.E));
-            case DW2 -> applyMoves(cube, List.of(Move.D2, Move.E2));
-            case DW_PRIME -> applyMoves(cube, List.of(Move.D_PRIME, Move.E_PRIME));
-            case LW -> applyMoves(cube, List.of(Move.L, Move.M));
-            case LW2 -> applyMoves(cube, List.of(Move.L2, Move.M2));
-            case LW_PRIME -> applyMoves(cube, List.of(Move.L_PRIME, Move.M_PRIME));
-            case BW -> applyMoves(cube, List.of(Move.B, Move.S_PRIME));
-            case BW2 -> applyMoves(cube, List.of(Move.B2, Move.S2));
-            case BW_PRIME -> applyMoves(cube, List.of(Move.B_PRIME, Move.S));
-            default -> throw new IllegalArgumentException("Not a wide move: " + move);
         }
     }
 }

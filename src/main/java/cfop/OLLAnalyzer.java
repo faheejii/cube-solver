@@ -39,13 +39,21 @@ public class OLLAnalyzer {
         var ub = edgeForFaces(orientation.faceAt(Face.U), orientation.faceAt(Face.B));
 
         return new OLLCaseSignature(
+                Corner.values()[cube.cornerPerm[urf.ordinal()]],
                 cube.cornerOri[urf.ordinal()],
+                Corner.values()[cube.cornerPerm[ufl.ordinal()]],
                 cube.cornerOri[ufl.ordinal()],
+                Corner.values()[cube.cornerPerm[ulb.ordinal()]],
                 cube.cornerOri[ulb.ordinal()],
+                Corner.values()[cube.cornerPerm[ubr.ordinal()]],
                 cube.cornerOri[ubr.ordinal()],
+                Edge.values()[cube.edgePerm[ur.ordinal()]],
                 cube.edgeOri[ur.ordinal()],
+                Edge.values()[cube.edgePerm[uf.ordinal()]],
                 cube.edgeOri[uf.ordinal()],
+                Edge.values()[cube.edgePerm[ul.ordinal()]],
                 cube.edgeOri[ul.ordinal()],
+                Edge.values()[cube.edgePerm[ub.ordinal()]],
                 cube.edgeOri[ub.ordinal()]
         );
     }

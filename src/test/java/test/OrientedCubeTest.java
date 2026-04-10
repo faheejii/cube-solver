@@ -65,7 +65,7 @@ public class OrientedCubeTest {
 
         orientedCube.applyMove(Move.Y);
         orientedCube.applyMove(Move.RW);
-        MoveApplier.applyAlgorithm(expected, "b");
+        MoveApplier.executeAlgorithm(expected, "b");
 
         assertSameState(expected, orientedCube.cubeState());
     }

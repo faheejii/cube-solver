@@ -27,7 +27,7 @@ public class OLLSolverTest {
     void solve_shouldUseDatabaseCaseForKnownOll() {
         var cube = new CubeState();
         var algorithm = "R U R' U R U2 R'";
-        MoveApplier.applyMoves(cube, Algorithm.parse(algorithm).inverse().getMoves());
+        MoveApplier.executeMoves(cube, Algorithm.parse(algorithm).inverse().getMoves());
 
         var database = OLLCaseDatabase.empty();
         database.register(algorithm, "sune");
