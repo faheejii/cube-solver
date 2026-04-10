@@ -2,8 +2,7 @@ package solver;
 
 import cfop.F2LCaseSignatureExtractor;
 import cfop.F2LSlot;
-import cube.CubeState;
-import cube.MoveApplier;
+import cube.OrientedCube;
 import util.NotationNormalizer;
 
 public class F2LCaseProbeMain {
@@ -12,15 +11,16 @@ public class F2LCaseProbeMain {
         var setup = parsed.setup();
         var slot = parsed.slot();
 
-        var cube = new CubeState();
+        var orientedCube = new OrientedCube();
         if (!setup.isBlank()) {
-            MoveApplier.applyAlgorithm(cube, NotationNormalizer.normalizePrimes(setup));
+            orientedCube.applyAlgorithm(NotationNormalizer.normalizePrimes(setup));
         }
 
-        var signature = F2LCaseSignatureExtractor.extract(cube, slot);
+        var signature = F2LCaseSignatureExtractor.extract(orientedCube.cubeState(), slot, orientedCube.orientation());
 
         System.out.println("Setup: " + (setup.isBlank() ? "<solved>" : setup));
         System.out.println("Slot: " + slot);
+        System.out.println("Orientation: " + orientedCube.orientation());
         System.out.println("Signature: " + signature);
         System.out.println("DB register:");
         System.out.println("database.register(\"" + setup + "\", \"<solve alg>\", \"case-name\");");

@@ -6,6 +6,7 @@ import cube.CubeState;
 import cube.Edge;
 import cube.Face;
 import cube.MoveApplier;
+import cube.OrientedCube;
 
 import java.util.Arrays;
 
@@ -14,22 +15,20 @@ public final class F2LCaseSignatureExtractor {
     }
 
     public static F2LCaseSignature extract(CubeState cube, F2LSlot slot) {
+        return extract(cube, slot, new CubeOrientation());
+    }
+
+    public static F2LCaseSignature extract(CubeState cube, F2LSlot slot, CubeOrientation orientation) {
         var rotation = F2LCaseFrame.rotationToCanonical(slot);
-        var normalized = copyCube(cube);
-        MoveApplier.applyMoves(normalized, rotation.getMoves());
-
-        var targetPair = canonicalTargetPair(rotation);
-
-        var cornerPosition = findCornerPosition(normalized, targetPair.corner());
-        var edgePosition = findEdgePosition(normalized, targetPair.edge());
-        var cornerOrientation = normalized.cornerOri[cornerPosition.ordinal()];
-        var edgeOrientation = normalized.edgeOri[edgePosition.ordinal()];
-
-        return new F2LCaseSignature(
-                cornerPosition,
-                cornerOrientation,
-                edgePosition,
-                edgeOrientation
+        var orientedCube = new OrientedCube(copyCube(cube), orientation);
+        orientedCube.applyMoves(rotation.getMoves());
+        var rotatedOrientation = orientedCube.orientation();
+        var canonicalTargetPair = canonicalTargetPair(rotatedOrientation);
+        return extract(
+                orientedCube.cubeState(),
+                canonicalTargetPair.corner(),
+                canonicalTargetPair.edge(),
+                rotatedOrientation
         );
     }
 
@@ -45,12 +44,10 @@ public final class F2LCaseSignatureExtractor {
         );
     }
 
-    private static TargetPair canonicalTargetPair(cube.Algorithm rotation) {
-        var solved = new CubeState();
-        MoveApplier.applyMoves(solved, rotation.getMoves());
+    private static TargetPair canonicalTargetPair(CubeOrientation orientation) {
         return new TargetPair(
-                Corner.values()[solved.cornerPerm[Corner.DFR.ordinal()]],
-                Edge.values()[solved.edgePerm[Edge.FR.ordinal()]]
+                cornerForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.F), orientation.faceAt(Face.R)),
+                edgeForFaces(orientation.faceAt(Face.F), orientation.faceAt(Face.R))
         );
     }
 

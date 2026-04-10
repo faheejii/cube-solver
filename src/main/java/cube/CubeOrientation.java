@@ -16,6 +16,12 @@ public class CubeOrientation {
         return copy;
     }
 
+    public void reset() {
+        right = new Vector(1, 0, 0);
+        up = new Vector(0, 1, 0);
+        front = new Vector(0, 0, 1);
+    }
+
     public Face faceAt(Face logicalFace) {
         return switch (logicalFace) {
             case U -> faceFromVector(up);

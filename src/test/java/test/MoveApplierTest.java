@@ -6,6 +6,7 @@ import cube.MoveApplier;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class MoveApplierTest {
     @Test
@@ -86,14 +87,21 @@ public class MoveApplierTest {
 
     @Test
     void wideMoves_shouldMatchEquivalentFaceAndSliceAlgorithms() {
-        assertEquivalentAlgorithms("r", "R M'");
-        assertEquivalentAlgorithms("r'", "R' M");
-        assertEquivalentAlgorithms("r2", "R2 M2");
-        assertEquivalentAlgorithms("u", "U E'");
-        assertEquivalentAlgorithms("u'", "U' E");
-        assertEquivalentAlgorithms("f", "F S");
-        assertEquivalentAlgorithms("l", "L M");
-        assertEquivalentAlgorithms("b'", "B' S");
+        assertEquivalentExecutedAlgorithms("r", "L x");
+        assertEquivalentExecutedAlgorithms("r'", "L' x'");
+        assertEquivalentExecutedAlgorithms("r2", "L2 x2");
+        assertEquivalentExecutedAlgorithms("u", "D y");
+        assertEquivalentExecutedAlgorithms("u'", "D' y'");
+        assertEquivalentExecutedAlgorithms("f", "B z");
+        assertEquivalentExecutedAlgorithms("l", "R x'");
+        assertEquivalentExecutedAlgorithms("b'", "F' z");
+    }
+
+    @Test
+    void rawWideMoveApplication_shouldBeRejected() {
+        var cube = new CubeState();
+        assertThrows(IllegalArgumentException.class, () -> MoveApplier.applyMove(cube, Move.RW));
+        assertThrows(IllegalArgumentException.class, () -> MoveApplier.applyAlgorithm(cube, "r"));
     }
 
     @Test
@@ -119,6 +127,16 @@ public class MoveApplierTest {
 
         MoveApplier.applyAlgorithm(firstCube, first);
         MoveApplier.applyAlgorithm(secondCube, second);
+
+        assertSameState(firstCube, secondCube);
+    }
+
+    private static void assertEquivalentExecutedAlgorithms(String first, String second) {
+        CubeState firstCube = new CubeState();
+        CubeState secondCube = new CubeState();
+
+        MoveApplier.executeAlgorithm(firstCube, first);
+        MoveApplier.executeAlgorithm(secondCube, second);
 
         assertSameState(firstCube, secondCube);
     }

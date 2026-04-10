@@ -4,9 +4,8 @@ import cfop.F2LCaseSignature;
 import cfop.F2LCaseSignatureExtractor;
 import cfop.F2LSlot;
 import cube.Algorithm;
-import cube.CubeState;
 import cube.Move;
-import cube.MoveApplier;
+import cube.OrientedCube;
 import util.NotationNormalizer;
 
 import java.util.Collection;
@@ -117,18 +116,18 @@ public class F2LCaseDatabase {
     }
 
     private static F2LCase caseFromAlgorithm(String algorithm, F2LSlot slot, String name) {
-        var cube = new CubeState();
         var alg = Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm));
         var setup = alg.inverse().toString();
-        MoveApplier.applyAlgorithm(cube, NotationNormalizer.normalizePrimes(setup));
-        var signature = F2LCaseSignatureExtractor.extract(cube, slot);
+        var orientedCube = new OrientedCube();
+        orientedCube.applyAlgorithm(NotationNormalizer.normalizePrimes(setup));
+        var signature = F2LCaseSignatureExtractor.extract(orientedCube.cubeState(), slot, orientedCube.orientation());
         return new F2LCase(signature, alg, name);
     }
 
     private static F2LCase caseFromSetup(String setup, F2LSlot slot, String algorithm, String name) {
-        var cube = new CubeState();
-        MoveApplier.applyAlgorithm(cube, NotationNormalizer.normalizePrimes(setup));
-        var signature = F2LCaseSignatureExtractor.extract(cube, slot);
+        var orientedCube = new OrientedCube();
+        orientedCube.applyAlgorithm(NotationNormalizer.normalizePrimes(setup));
+        var signature = F2LCaseSignatureExtractor.extract(orientedCube.cubeState(), slot, orientedCube.orientation());
         return new F2LCase(signature, Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm)), name);
     }
 
