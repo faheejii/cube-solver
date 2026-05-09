@@ -1,10 +1,10 @@
 package cfop;
 
-import cube.Corner;
 import cube.CubeOrientation;
 import cube.CubeState;
-import cube.Edge;
 import cube.Face;
+import io.CubeConverter;
+import io.FaceletState;
 
 public class OLLAnalyzer {
     public static boolean isOllSolved(CubeState cube) {
@@ -13,14 +13,14 @@ public class OLLAnalyzer {
 
     public static boolean isOllSolved(CubeState cube, CubeOrientation orientation) {
         var signature = extractSignature(cube, orientation);
-        return signature.urfCornerOrientation() == 0
-                && signature.uflCornerOrientation() == 0
-                && signature.ulbCornerOrientation() == 0
-                && signature.ubrCornerOrientation() == 0
-                && signature.urEdgeOrientation() == 0
-                && signature.ufEdgeOrientation() == 0
-                && signature.ulEdgeOrientation() == 0
-                && signature.ubEdgeOrientation() == 0;
+        return signature.u0()
+                && signature.u1()
+                && signature.u2()
+                && signature.u3()
+                && signature.u5()
+                && signature.u6()
+                && signature.u7()
+                && signature.u8();
     }
 
     public static OLLCaseSignature extractSignature(CubeState cube) {
@@ -28,73 +28,111 @@ public class OLLAnalyzer {
     }
 
     public static OLLCaseSignature extractSignature(CubeState cube, CubeOrientation orientation) {
-        var urf = cornerForFaces(orientation.faceAt(Face.U), orientation.faceAt(Face.R), orientation.faceAt(Face.F));
-        var ufl = cornerForFaces(orientation.faceAt(Face.U), orientation.faceAt(Face.F), orientation.faceAt(Face.L));
-        var ulb = cornerForFaces(orientation.faceAt(Face.U), orientation.faceAt(Face.L), orientation.faceAt(Face.B));
-        var ubr = cornerForFaces(orientation.faceAt(Face.U), orientation.faceAt(Face.B), orientation.faceAt(Face.R));
-
-        var ur = edgeForFaces(orientation.faceAt(Face.U), orientation.faceAt(Face.R));
-        var uf = edgeForFaces(orientation.faceAt(Face.U), orientation.faceAt(Face.F));
-        var ul = edgeForFaces(orientation.faceAt(Face.U), orientation.faceAt(Face.L));
-        var ub = edgeForFaces(orientation.faceAt(Face.U), orientation.faceAt(Face.B));
+        var facelets = CubeConverter.toFaceletStateAllowingCenterParity(cube);
 
         return new OLLCaseSignature(
-                Corner.values()[cube.cornerPerm[urf.ordinal()]],
-                cube.cornerOri[urf.ordinal()],
-                Corner.values()[cube.cornerPerm[ufl.ordinal()]],
-                cube.cornerOri[ufl.ordinal()],
-                Corner.values()[cube.cornerPerm[ulb.ordinal()]],
-                cube.cornerOri[ulb.ordinal()],
-                Corner.values()[cube.cornerPerm[ubr.ordinal()]],
-                cube.cornerOri[ubr.ordinal()],
-                Edge.values()[cube.edgePerm[ur.ordinal()]],
-                cube.edgeOri[ur.ordinal()],
-                Edge.values()[cube.edgePerm[uf.ordinal()]],
-                cube.edgeOri[uf.ordinal()],
-                Edge.values()[cube.edgePerm[ul.ordinal()]],
-                cube.edgeOri[ul.ordinal()],
-                Edge.values()[cube.edgePerm[ub.ordinal()]],
-                cube.edgeOri[ub.ordinal()]
+                hasLogicalUSticker(facelets, orientation, Face.U, 0),
+                hasLogicalUSticker(facelets, orientation, Face.U, 1),
+                hasLogicalUSticker(facelets, orientation, Face.U, 2),
+                hasLogicalUSticker(facelets, orientation, Face.U, 3),
+                hasLogicalUSticker(facelets, orientation, Face.U, 5),
+                hasLogicalUSticker(facelets, orientation, Face.U, 6),
+                hasLogicalUSticker(facelets, orientation, Face.U, 7),
+                hasLogicalUSticker(facelets, orientation, Face.U, 8),
+                hasLogicalUSticker(facelets, orientation, Face.F, 0),
+                hasLogicalUSticker(facelets, orientation, Face.F, 1),
+                hasLogicalUSticker(facelets, orientation, Face.F, 2),
+                hasLogicalUSticker(facelets, orientation, Face.R, 0),
+                hasLogicalUSticker(facelets, orientation, Face.R, 1),
+                hasLogicalUSticker(facelets, orientation, Face.R, 2),
+                hasLogicalUSticker(facelets, orientation, Face.B, 0),
+                hasLogicalUSticker(facelets, orientation, Face.B, 1),
+                hasLogicalUSticker(facelets, orientation, Face.B, 2),
+                hasLogicalUSticker(facelets, orientation, Face.L, 0),
+                hasLogicalUSticker(facelets, orientation, Face.L, 1),
+                hasLogicalUSticker(facelets, orientation, Face.L, 2)
         );
     }
 
-    private static Edge edgeForFaces(Face first, Face second) {
-        if (matches(first, second, Face.U, Face.R)) return Edge.UR;
-        if (matches(first, second, Face.U, Face.F)) return Edge.UF;
-        if (matches(first, second, Face.U, Face.L)) return Edge.UL;
-        if (matches(first, second, Face.U, Face.B)) return Edge.UB;
-        if (matches(first, second, Face.D, Face.R)) return Edge.DR;
-        if (matches(first, second, Face.D, Face.F)) return Edge.DF;
-        if (matches(first, second, Face.D, Face.L)) return Edge.DL;
-        if (matches(first, second, Face.D, Face.B)) return Edge.DB;
-        if (matches(first, second, Face.F, Face.R)) return Edge.FR;
-        if (matches(first, second, Face.F, Face.L)) return Edge.FL;
-        if (matches(first, second, Face.B, Face.R)) return Edge.BR;
-        if (matches(first, second, Face.B, Face.L)) return Edge.BL;
-        throw new IllegalArgumentException("Faces do not form an edge: " + first + ", " + second);
+    private static boolean hasLogicalUSticker(FaceletState facelets, CubeOrientation orientation, Face logicalFace, int index) {
+        return logicalSticker(facelets, orientation, logicalFace, index) == Face.U;
     }
 
-    private static Corner cornerForFaces(Face a, Face b, Face c) {
-        if (matchesAll(a, b, c, Face.U, Face.R, Face.F)) return Corner.URF;
-        if (matchesAll(a, b, c, Face.U, Face.F, Face.L)) return Corner.UFL;
-        if (matchesAll(a, b, c, Face.U, Face.L, Face.B)) return Corner.ULB;
-        if (matchesAll(a, b, c, Face.U, Face.B, Face.R)) return Corner.UBR;
-        if (matchesAll(a, b, c, Face.D, Face.F, Face.R)) return Corner.DFR;
-        if (matchesAll(a, b, c, Face.D, Face.L, Face.F)) return Corner.DLF;
-        if (matchesAll(a, b, c, Face.D, Face.B, Face.L)) return Corner.DBL;
-        if (matchesAll(a, b, c, Face.D, Face.R, Face.B)) return Corner.DRB;
-        throw new IllegalArgumentException("Faces do not form a corner: " + a + ", " + b + ", " + c);
+    private static Face logicalSticker(FaceletState facelets, CubeOrientation orientation, Face logicalFace, int index) {
+        var physicalFace = orientation.faceAt(logicalFace);
+        var physicalIndex = physicalIndexForLogicalFacelet(orientation, logicalFace, index);
+        var physicalSticker = facelets.getSticker(physicalFace, physicalIndex);
+        return orientation.logicalFaceOf(physicalSticker);
     }
 
-    private static boolean matches(Face first, Face second, Face expectedA, Face expectedB) {
-        return (first == expectedA && second == expectedB) || (first == expectedB && second == expectedA);
+    private static int physicalIndexForLogicalFacelet(CubeOrientation orientation, Face logicalFace, int index) {
+        var logicalPosition = positionFor(logicalFace, index);
+        var physicalPosition = transform(orientation, logicalPosition);
+        return indexFor(orientation.faceAt(logicalFace), physicalPosition);
     }
 
-    private static boolean matchesAll(Face a, Face b, Face c, Face x, Face y, Face z) {
-        return contains(a, b, c, x) && contains(a, b, c, y) && contains(a, b, c, z);
+    private static Vec transform(CubeOrientation orientation, Vec logicalPosition) {
+        return vectorForLogicalAxis(orientation, Face.R).scale(logicalPosition.x())
+                .add(vectorForLogicalAxis(orientation, Face.U).scale(logicalPosition.y()))
+                .add(vectorForLogicalAxis(orientation, Face.F).scale(logicalPosition.z()));
     }
 
-    private static boolean contains(Face a, Face b, Face c, Face target) {
-        return a == target || b == target || c == target;
+    private static Vec vectorForLogicalAxis(CubeOrientation orientation, Face positiveLogicalAxis) {
+        return vectorForFace(orientation.faceAt(positiveLogicalAxis));
+    }
+
+    private static Vec positionFor(Face face, int index) {
+        var row = index / 3;
+        var col = index % 3;
+        var horizontal = col - 1;
+        var vertical = row - 1;
+
+        return switch (face) {
+            case U -> new Vec(horizontal, 1, vertical);
+            case D -> new Vec(horizontal, -1, -vertical);
+            case F -> new Vec(horizontal, -vertical, 1);
+            case B -> new Vec(-horizontal, -vertical, -1);
+            case R -> new Vec(1, -vertical, -horizontal);
+            case L -> new Vec(-1, -vertical, horizontal);
+        };
+    }
+
+    private static int indexFor(Face face, Vec position) {
+        var rowCol = switch (face) {
+            case U -> new RowCol(position.z() + 1, position.x() + 1);
+            case D -> new RowCol(1 - position.z(), position.x() + 1);
+            case F -> new RowCol(1 - position.y(), position.x() + 1);
+            case B -> new RowCol(1 - position.y(), 1 - position.x());
+            case R -> new RowCol(1 - position.y(), 1 - position.z());
+            case L -> new RowCol(1 - position.y(), position.z() + 1);
+        };
+        if (rowCol.row() < 0 || rowCol.row() > 2 || rowCol.col() < 0 || rowCol.col() > 2) {
+            throw new IllegalStateException("Facelet position is outside face " + face + ": " + position);
+        }
+        return rowCol.row() * 3 + rowCol.col();
+    }
+
+    private static Vec vectorForFace(Face face) {
+        return switch (face) {
+            case U -> new Vec(0, 1, 0);
+            case R -> new Vec(1, 0, 0);
+            case F -> new Vec(0, 0, 1);
+            case D -> new Vec(0, -1, 0);
+            case L -> new Vec(-1, 0, 0);
+            case B -> new Vec(0, 0, -1);
+        };
+    }
+
+    private record Vec(int x, int y, int z) {
+        private Vec add(Vec other) {
+            return new Vec(x + other.x, y + other.y, z + other.z);
+        }
+
+        private Vec scale(int factor) {
+            return new Vec(x * factor, y * factor, z * factor);
+        }
+    }
+
+    private record RowCol(int row, int col) {
     }
 }

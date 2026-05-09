@@ -42,6 +42,14 @@ public class CubeOrientation {
         throw new IllegalStateException("Unexpected physical face: " + physicalFace);
     }
 
+    @Override
+    public String toString() {
+        return "Frame[U=" + faceAt(Face.U)
+                + ", R=" + faceAt(Face.R)
+                + ", F=" + faceAt(Face.F)
+                + "]";
+    }
+
     public Move mapMove(Move move) {
         var amount = amountOf(move);
         return switch (baseOf(move)) {

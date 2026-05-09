@@ -55,7 +55,6 @@ public class MoveApplier {
     public static void executeMoves(CubeState cube, List<Move> moves) {
         var orientedCube = new OrientedCube(cube);
         orientedCube.applyMoves(moves);
-        orientedCube.collapseOrientationIntoCube();
     }
 
     public static void executeAlgorithm(CubeState cube, String algorithm) {

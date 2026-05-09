@@ -6,7 +6,7 @@ out/
 Thumbs.db
 *.iml
 target/
-.log
+*.log
 .kotlin
 .codex
 

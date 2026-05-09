@@ -1,6 +1,7 @@
 package solver;
 
 import algorithms.F2LCaseDatabase;
+import cfop.F2LCaseSignatureExtractor;
 import cfop.F2LSlot;
 import cube.Algorithm;
 import cube.Corner;
@@ -20,7 +21,8 @@ import java.util.List;
 import java.util.Map;
 
 public class F2LSolver {
-    private static final boolean DEBUG_DB = false;
+    private static final boolean DEBUG_DB = Boolean.getBoolean("f2l.debug");
+    private static final boolean DEBUG_VERBOSE = Boolean.getBoolean("f2l.debug.verbose");
     private static final int MAX_SLOT_SEARCH_DEPTH = 12;
 
     private static final Move[] FACE_TURNS = {
@@ -197,7 +199,9 @@ public class F2LSolver {
             nextPairs.add(fallback.solvedPair());
             if (DEBUG_DB) {
                 System.out.println("[F2L STAGE] depth=" + depth
-                        + " search solvedPair=" + fallback.solvedPair()
+                        + " " + fallback.source()
+                        + " solvedPair=" + fallback.solvedPair()
+                        + " checkedSlot=" + fallback.checkedSlot()
                         + " algorithm=" + fallback.algorithm()
                         + " nextOrientation=" + fallback.resultingOrientation());
             }
@@ -224,7 +228,10 @@ public class F2LSolver {
             try {
                 if (DEBUG_DB) {
                     System.out.println("[F2L STAGE] depth=" + depth
-                            + " trying DB solvedPair=" + candidate.solvedPair()
+                            + " trying " + candidate.source()
+                            + " checkedSlot=" + candidate.checkedSlot()
+                            + " solvedPair=" + candidate.solvedPair()
+                            + " case=" + candidate.caseName()
                             + " algorithm=" + candidate.algorithm()
                             + " nextOrientation=" + candidate.resultingOrientation());
                 }
@@ -240,7 +247,10 @@ public class F2LSolver {
             } catch (IllegalStateException ignored) {
                 if (DEBUG_DB) {
                     System.out.println("[F2L STAGE] depth=" + depth
-                            + " DB branch failed for solvedPair=" + candidate.solvedPair()
+                            + " " + candidate.source()
+                            + " branch failed for solvedPair=" + candidate.solvedPair()
+                            + " checkedSlot=" + candidate.checkedSlot()
+                            + " case=" + candidate.caseName()
                             + " algorithm=" + candidate.algorithm());
                 }
             }
@@ -256,7 +266,9 @@ public class F2LSolver {
         nextPairs.add(fallback.solvedPair());
         if (DEBUG_DB) {
             System.out.println("[F2L STAGE] depth=" + depth
-                    + " search solvedPair=" + fallback.solvedPair()
+                    + " " + fallback.source()
+                    + " solvedPair=" + fallback.solvedPair()
+                    + " checkedSlot=" + fallback.checkedSlot()
                     + " algorithm=" + fallback.algorithm()
                     + " nextOrientation=" + fallback.resultingOrientation());
         }
@@ -282,8 +294,13 @@ public class F2LSolver {
 
         for (var prefix : DB_PREFIX_TRIALS) {
             for (var pair : stagePairs) {
-                if (DEBUG_DB) {
-                    System.out.println("[F2L DB] --- pair=" + pair
+                if (DEBUG_VERBOSE) {
+                    System.out.println("[F2L SLOT] pair=" + pair
+                            + " visibleSlot=" + visibleSlotForStageIndex(
+                            slotIndexForPair(pair, stagePairs),
+                            stageTargets,
+                            stageOrientation
+                    )
                             + " prefix=" + printableAlgorithm(prefix) + " ---");
                 }
                 var candidate = tryDatabaseCandidate(cube, stageOrientation, stagePairs, stageTargets, protectedPairs, pair, prefix);
@@ -320,45 +337,59 @@ public class F2LSolver {
         var prefixedCube = copyCube(cube);
         var candidateOrientation = executeAndReturnOrientation(prefixedCube, stageOrientation, prefix.getMoves());
         if (protectedPairs.contains(targetPair) || isPairSolved(prefixedCube, targetPair, stagePairs, stageTargets, candidateOrientation)) {
-            if (DEBUG_DB) {
+            if (DEBUG_VERBOSE) {
                 System.out.println("[F2L DB] skip pair=" + targetPair + " reason=already protected or solved");
             }
             return null;
         }
-        for (var dbCase : caseDatabase.allCases()) {
-            var algorithm = prefix.concat(dbCase.algorithm());
-            var validation = validateTargets(cube, stageOrientation, stagePairs, stageTargets, protectedPairs, algorithm);
-            if (DEBUG_DB) {
-                System.out.println("[F2L DB] pair=" + targetPair
+        var targetSlot = visibleSlotForStageIndex(
+                slotIndexForPair(targetPair, stagePairs),
+                stageTargets,
+                candidateOrientation
+        );
+        var signature = F2LCaseSignatureExtractor.extract(prefixedCube, targetSlot, candidateOrientation);
+        var match = caseDatabase.find(targetSlot, signature);
+        if (match.isEmpty()) {
+            if (DEBUG_VERBOSE) {
+                System.out.println("[F2L SLOT] exact DB miss pair=" + targetPair
+                        + " visibleSlot=" + targetSlot
                         + " prefix=" + printableAlgorithm(prefix)
-                        + " case=" + dbCase.name()
-                        + " algorithm=" + algorithm);
+                        + " signature=" + signature);
             }
-            if (!validation.valid() || validation.solvedPair() == null) {
-                if (DEBUG_DB) {
-                    System.out.println("[F2L DB] rejected pair=" + targetPair
-                            + " prefix=" + printableAlgorithm(prefix)
-                            + " case=" + dbCase.name()
-                            + " reason=" + validation.reason()
-                            + " algorithm=" + algorithm);
-                }
-                continue;
-            }
-            if (DEBUG_DB) {
-                System.out.println("[F2L DB] accepted pair=" + targetPair
-                        + " solvedPair=" + validation.solvedPair()
-                        + " prefix=" + printableAlgorithm(prefix)
-                        + " case=" + dbCase.name()
-                        + " algorithm=" + algorithm);
-            }
-
-            return new CandidateSolution(algorithm, validation.resultingOrientation(), validation.solvedPair());
+            return null;
         }
 
+        var dbCase = match.get();
+        var algorithm = prefix.concat(dbCase.algorithm());
+        var validation = validateTargets(cube, stageOrientation, stagePairs, stageTargets, protectedPairs, algorithm);
+        if (DEBUG_VERBOSE) {
+            System.out.println("[F2L SLOT] exact DB lookup pair=" + targetPair
+                    + " visibleSlot=" + targetSlot
+                    + " prefix=" + printableAlgorithm(prefix)
+                    + " case=" + dbCase.name()
+                    + " algorithm=" + algorithm);
+        }
+        if (!validation.valid() || validation.solvedPair() == null) {
+            if (DEBUG_VERBOSE) {
+                System.out.println("[F2L SLOT] exact DB rejected pair=" + targetPair
+                        + " visibleSlot=" + targetSlot
+                        + " prefix=" + printableAlgorithm(prefix)
+                        + " case=" + dbCase.name()
+                        + " reason=" + validation.reason()
+                        + " algorithm=" + algorithm);
+            }
+            return null;
+        }
         if (DEBUG_DB) {
-            System.out.println("[F2L DB] no match for pair=" + targetPair + " prefix=" + printableAlgorithm(prefix));
+            System.out.println("[F2L SLOT] exact DB accepted pair=" + targetPair
+                    + " visibleSlot=" + targetSlot
+                    + " solvedPair=" + validation.solvedPair()
+                    + " prefix=" + printableAlgorithm(prefix)
+                    + " case=" + dbCase.name()
+                    + " algorithm=" + algorithm);
         }
-        return null;
+
+        return new CandidateSolution(algorithm, validation.resultingOrientation(), validation.solvedPair(), "exact DB lookup", targetSlot, dbCase.name());
     }
 
     private CandidateSolution findOneSlotSearchFallback(
@@ -384,6 +415,11 @@ public class F2LSolver {
                 }
 
                 try {
+                    var checkedSlot = visibleSlotForStageIndex(
+                            slotIndexForPair(pair, stagePairs),
+                            stageTargets,
+                            resultingOrientation
+                    );
                     var targetSlot = targetSlotForPair(pair, stagePairs, stageTargets, resultingOrientation);
                     var slotSolution = solveSlotInternal(
                             prefixedCube,
@@ -393,17 +429,18 @@ public class F2LSolver {
                             mapFaceTurns(resultingOrientation)
                     );
                     var total = prefix.concat(slotSolution);
-                    if (DEBUG_DB) {
-                        System.out.println("[F2L SEARCH] solved pair=" + pair
+                    if (DEBUG_VERBOSE) {
+                        System.out.println("[F2L SLOT] IDA/search candidate pair=" + pair
+                                + " checkedSlot=" + checkedSlot
                                 + " prefix=" + printableAlgorithm(prefix)
                                 + " algorithm=" + total);
                     }
                     if (best == null || total.getMoves().size() < best.algorithm().getMoves().size()) {
-                        best = new CandidateSolution(total, resultingOrientation.copy(), pair);
+                        best = new CandidateSolution(total, resultingOrientation.copy(), pair, "IDA/search brute force", checkedSlot, "<none>");
                     }
                 } catch (IllegalStateException ignored) {
-                    if (DEBUG_DB) {
-                        System.out.println("[F2L SEARCH] no solution for pair=" + pair
+                    if (DEBUG_VERBOSE) {
+                        System.out.println("[F2L SLOT] IDA/search miss pair=" + pair
                                 + " prefix=" + printableAlgorithm(prefix));
                     }
                 }
@@ -414,7 +451,9 @@ public class F2LSolver {
             throw new IllegalStateException("Failed to solve any remaining F2L slot");
         }
         if (DEBUG_DB) {
-            System.out.println("[F2L SEARCH] best solvedPair=" + best.solvedPair()
+            System.out.println("[F2L SLOT] IDA/search selected solvedPair=" + best.solvedPair()
+                    + " checkedSlot=" + best.checkedSlot()
+                    + " case=" + best.caseName()
                     + " algorithm=" + best.algorithm()
                     + " nextOrientation=" + best.resultingOrientation());
         }
@@ -853,7 +892,14 @@ public class F2LSolver {
     private record SlotPair(Corner cornerPiece, Edge edgePiece) {
     }
 
-    private record CandidateSolution(Algorithm algorithm, CubeOrientation resultingOrientation, SlotPair solvedPair) {
+    private record CandidateSolution(
+            Algorithm algorithm,
+            CubeOrientation resultingOrientation,
+            SlotPair solvedPair,
+            String source,
+            F2LSlot checkedSlot,
+            String caseName
+    ) {
     }
 
     private record ValidationResult(boolean valid, String reason, SlotPair solvedPair, CubeOrientation resultingOrientation) {

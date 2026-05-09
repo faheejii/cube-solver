@@ -5,7 +5,7 @@ import cube.Edge;
 
 /**
  * Canonical F2L case identifier for a single corner-edge pair.
- * Cases are intended to be normalized into the FR working slot before lookup.
+ * The database key pairs this normalized signature with the target F2L slot.
  */
 public record F2LCaseSignature(
         Corner cornerPosition,

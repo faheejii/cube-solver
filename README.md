@@ -5,14 +5,14 @@ Java 17 Rubik's Cube solver and experimentation project built around CFOP stages
 - Cross
 - F2L
 - OLL
-- PLL is not implemented yet
+- PLL
 
 The project includes:
 
 - a cubie-level cube model
 - parsing and execution for standard notation, slice moves, cube rotations, and lowercase wide moves
 - selected cross-face support
-- seeded F2L and OLL case databases
+- seeded F2L, OLL, and PLL case databases
 - analyzers and tests for the current solving pipeline
 
 ## Current Status
@@ -27,19 +27,18 @@ What works today:
   - validation by direct execution
   - search fallback when no DB candidate works
 - OLL solving from a seeded OLL database
+- PLL solving from a seeded PLL database, including final AUF handling
 - frame-based execution using `OrientedCube`, so stage outputs can contain `x/y/z` reorientation moves and still execute consistently
 
 What is still incomplete:
 
-- PLL is not implemented
-- `CfopSolver` is still a placeholder
-- F2L and OLL signature extractors currently have known signature-collision issues for some distinct cases
+- there is no full CFOP orchestration class yet; `SolverMain` wires the current stages for development
 
-That last point matters:
+Signature collisions are surfaced explicitly:
 
-- F2L runtime does not depend on exact signature matching anymore, so it still works
-- OLL currently still uses signature lookup, so if two real cases collapse to the same signature, whichever one is kept by the DB map wins
-- `SolverMain` prints collision reports for both F2L and OLL seeds to make that visible
+- `SolverMain` prints collision reports for F2L, OLL, and PLL seeds to make that visible
+- F2L validates DB candidates by execution before accepting them
+- OLL and PLL validate selected DB algorithms by execution before accepting them
 
 ## Requirements
 
@@ -127,34 +126,51 @@ This project currently uses a frame model for the runtime solver path:
 - [`src/main/java/cfop/CrossAnalyzer.java`](src/main/java/cfop/CrossAnalyzer.java)
 - [`src/main/java/cfop/F2LAnalyzer.java`](src/main/java/cfop/F2LAnalyzer.java)
 - [`src/main/java/cfop/OLLAnalyzer.java`](src/main/java/cfop/OLLAnalyzer.java)
+- [`src/main/java/cfop/PLLAnalyzer.java`](src/main/java/cfop/PLLAnalyzer.java)
 
 ### Case databases
 
 - [`src/main/java/algorithms/F2LCaseDatabase.java`](src/main/java/algorithms/F2LCaseDatabase.java)
 - [`src/main/java/algorithms/OLLCaseDatabase.java`](src/main/java/algorithms/OLLCaseDatabase.java)
+- [`src/main/java/algorithms/PLLCaseDatabase.java`](src/main/java/algorithms/PLLCaseDatabase.java)
 
 ### Solvers
 
 - [`src/main/java/solver/CrossSolver.java`](src/main/java/solver/CrossSolver.java)
 - [`src/main/java/solver/F2LSolver.java`](src/main/java/solver/F2LSolver.java)
 - [`src/main/java/solver/OLLSolver.java`](src/main/java/solver/OLLSolver.java)
+- [`src/main/java/solver/PLLSolver.java`](src/main/java/solver/PLLSolver.java)
 - [`src/main/java/solver/SolverMain.java`](src/main/java/solver/SolverMain.java)
 
 ## How F2L Works Right Now
 
-F2L currently does not pick a DB algorithm by exact signature lookup.
+F2L uses a slot-aware DB key:
 
-Instead it:
+```text
+(F2LSlot, F2LCaseSignature)
+```
 
-1. tries seeded F2L DB algorithms under a small prefix set
-2. executes them on a trial cube in the current frame
-3. validates whether they:
-   - preserve cross
-   - preserve already solved pairs
-   - solve one new pair
+Runtime flow:
+
+1. tries exact DB lookup for each unsolved pair under the configured prefix set
+2. validates the matched candidate by execution
+3. accepts it only if it:
+   - preserves cross
+   - preserves already solved pairs
+   - solves one new pair
 4. falls back to one-slot search if no DB candidate works
 
-This makes the F2L runtime more robust even while the F2L signature extractor still has collisions.
+Enable concise F2L diagnostics with:
+
+```bash
+mvn -q -Df2l.debug=true compile exec:java -Dexec.mainClass=solver.SolverMain
+```
+
+For every signature miss/check:
+
+```bash
+mvn -q -Df2l.debug=true -Df2l.debug.verbose=true compile exec:java -Dexec.mainClass=solver.SolverMain
+```
 
 ## How OLL Works Right Now
 
@@ -166,7 +182,22 @@ OLL currently:
 4. looks that signature up in the OLL DB
 5. validates the resulting algorithm by execution
 
-This works as long as the seeded OLL signature uniquely identifies the case. Right now some distinct seeded OLL cases collide, so this is one of the main known limitations.
+This works as long as the seeded OLL signature uniquely identifies the case.
+`SolverMain` prints OLL seed collisions so they are easy to catch while editing the DB.
+
+## How PLL Works Right Now
+
+PLL currently:
+
+1. assumes cross, F2L, and OLL are already solved
+2. tries `""`, `U`, `U2`, `U'`
+3. returns that AUF immediately if it solves the cube
+4. extracts the current PLL permutation signature
+5. looks that signature up in the PLL DB
+6. validates the resulting algorithm plus optional final AUF by execution
+
+The PLL signature records which logical last-layer corner and edge pieces occupy the four logical U-layer corner and edge positions.
+The seeded PLL DB stores 21 base PLL algorithms under 84 signatures, covering the four possible final AUF states for each algorithm.
 
 ## Adding Cases
 
@@ -186,12 +217,26 @@ Edit:
 
 OLL cases are currently seeded in `seedCaseList()`.
 
+### PLL
+
+Edit:
+
+- [`src/main/java/algorithms/PLLCaseDatabase.java`](src/main/java/algorithms/PLLCaseDatabase.java)
+
+PLL cases are currently seeded in `seedCaseList()`.
+
 ## Useful Commands
 
 Run only the OLL tests:
 
 ```bash
 mvn -q -Dtest=test.OLLAnalyzerTest,test.OLLSolverTest test
+```
+
+Run only the PLL tests:
+
+```bash
+mvn -q -Dtest=test.PLLAnalyzerTest,test.PLLCaseDatabaseTest,test.PLLSolverTest test
 ```
 
 Run only the F2L tests:
@@ -208,15 +253,10 @@ mvn -q -Dtest=test.AlgorithmTest,test.MoveApplierTest,test.OrientedCubeTest test
 
 ## Known Limitations
 
-- `CfopSolver` is not wired yet
-- PLL is unimplemented
-- OLL DB signatures currently collapse some distinct cases
-- F2L case signatures also collide for some distinct registrations, though F2L runtime is no longer blocked by that
+- F2L, OLL, and PLL databases are hand-seeded and can temporarily contain collisions while cases are being edited
 - `SolverMain` is still a developer/demo harness, not a polished CLI
 
 ## Next Good Steps
 
-- fix OLL signature extraction so distinct OLL cases no longer collide
-- decide whether to make OLL runtime collision-aware before or instead of strengthening the signature
-- implement PLL
-- wire the full pipeline into `CfopSolver`
+- add a full CFOP orchestration class
+- keep tightening F2L/OLL signatures and seed collision tests as the databases grow

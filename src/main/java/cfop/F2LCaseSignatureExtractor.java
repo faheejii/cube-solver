@@ -5,12 +5,25 @@ import cube.CubeOrientation;
 import cube.CubeState;
 import cube.Edge;
 import cube.Face;
-import cube.MoveApplier;
-import cube.OrientedCube;
-
-import java.util.Arrays;
+import io.CubeConverter;
+import io.FaceletState;
 
 public final class F2LCaseSignatureExtractor {
+    private static final StickerRef[][] EDGE_FACELETS = {
+            {sticker(Face.U, 5), sticker(Face.R, 1)}, // UR
+            {sticker(Face.U, 7), sticker(Face.F, 1)}, // UF
+            {sticker(Face.U, 3), sticker(Face.L, 1)}, // UL
+            {sticker(Face.U, 1), sticker(Face.B, 1)}, // UB
+            {sticker(Face.D, 5), sticker(Face.R, 7)}, // DR
+            {sticker(Face.D, 1), sticker(Face.F, 7)}, // DF
+            {sticker(Face.D, 3), sticker(Face.L, 7)}, // DL
+            {sticker(Face.D, 7), sticker(Face.B, 7)}, // DB
+            {sticker(Face.F, 5), sticker(Face.R, 3)}, // FR
+            {sticker(Face.F, 3), sticker(Face.L, 5)}, // FL
+            {sticker(Face.B, 5), sticker(Face.L, 3)}, // BL
+            {sticker(Face.B, 3), sticker(Face.R, 5)}  // BR
+    };
+
     private F2LCaseSignatureExtractor() {
     }
 
@@ -19,16 +32,12 @@ public final class F2LCaseSignatureExtractor {
     }
 
     public static F2LCaseSignature extract(CubeState cube, F2LSlot slot, CubeOrientation orientation) {
-        var rotation = F2LCaseFrame.rotationToCanonical(slot);
-        var orientedCube = new OrientedCube(copyCube(cube), orientation);
-        orientedCube.applyMoves(rotation.getMoves());
-        var rotatedOrientation = orientedCube.orientation();
-        var canonicalTargetPair = canonicalTargetPair(rotatedOrientation);
+        var targetPair = targetPair(slot, orientation);
         return extract(
-                orientedCube.cubeState(),
-                canonicalTargetPair.corner(),
-                canonicalTargetPair.edge(),
-                rotatedOrientation
+                cube,
+                targetPair.corner(),
+                targetPair.edge(),
+                orientation
         );
     }
 
@@ -40,15 +49,29 @@ public final class F2LCaseSignatureExtractor {
                 mapCornerPosition(rawCornerPosition, orientation),
                 cube.cornerOri[rawCornerPosition.ordinal()],
                 mapEdgePosition(rawEdgePosition, orientation),
-                cube.edgeOri[rawEdgePosition.ordinal()]
+                edgeOrientation(cube, rawEdgePosition, targetEdge, orientation)
         );
     }
 
-    private static TargetPair canonicalTargetPair(CubeOrientation orientation) {
-        return new TargetPair(
-                cornerForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.F), orientation.faceAt(Face.R)),
-                edgeForFaces(orientation.faceAt(Face.F), orientation.faceAt(Face.R))
-        );
+    private static TargetPair targetPair(F2LSlot slot, CubeOrientation orientation) {
+        return switch (slot) {
+            case FR -> new TargetPair(
+                    cornerForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.F), orientation.faceAt(Face.R)),
+                    edgeForFaces(orientation.faceAt(Face.F), orientation.faceAt(Face.R))
+            );
+            case FL -> new TargetPair(
+                    cornerForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.F), orientation.faceAt(Face.L)),
+                    edgeForFaces(orientation.faceAt(Face.F), orientation.faceAt(Face.L))
+            );
+            case BL -> new TargetPair(
+                    cornerForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.B), orientation.faceAt(Face.L)),
+                    edgeForFaces(orientation.faceAt(Face.B), orientation.faceAt(Face.L))
+            );
+            case BR -> new TargetPair(
+                    cornerForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.B), orientation.faceAt(Face.R)),
+                    edgeForFaces(orientation.faceAt(Face.B), orientation.faceAt(Face.R))
+            );
+        };
     }
 
     private static Corner findCornerPosition(CubeState cube, Corner targetCorner) {
@@ -69,13 +92,17 @@ public final class F2LCaseSignatureExtractor {
         throw new IllegalStateException("Missing target edge: " + targetEdge);
     }
 
-    private static CubeState copyCube(CubeState cube) {
-        var copy = new CubeState();
-        copy.cornerPerm = Arrays.copyOf(cube.cornerPerm, cube.cornerPerm.length);
-        copy.cornerOri = Arrays.copyOf(cube.cornerOri, cube.cornerOri.length);
-        copy.edgePerm = Arrays.copyOf(cube.edgePerm, cube.edgePerm.length);
-        copy.edgeOri = Arrays.copyOf(cube.edgeOri, cube.edgeOri.length);
-        return copy;
+    private static int edgeOrientation(CubeState cube, Edge rawPosition, Edge targetEdge, CubeOrientation orientation) {
+        var facelets = CubeConverter.toFaceletStateAllowingCenterParity(cube);
+        var logicalTargetFaces = edgeFaces(mapEdgePosition(targetEdge, orientation));
+        var logicalStickerOnFirstPositionFace = logicalEdgeSticker(facelets, rawPosition, 0, orientation);
+
+        return logicalStickerOnFirstPositionFace == logicalTargetFaces[0] ? 0 : 1;
+    }
+
+    private static Face logicalEdgeSticker(FaceletState facelets, Edge rawPosition, int stickerIndex, CubeOrientation orientation) {
+        var sticker = EDGE_FACELETS[rawPosition.ordinal()][stickerIndex];
+        return orientation.logicalFaceOf(facelets.getSticker(sticker.face(), sticker.index()));
     }
 
     private static Edge mapEdgePosition(Edge rawPosition, CubeOrientation orientation) {
@@ -166,5 +193,12 @@ public final class F2LCaseSignatureExtractor {
     }
 
     private record TargetPair(Corner corner, Edge edge) {
+    }
+
+    private static StickerRef sticker(Face face, int index) {
+        return new StickerRef(face, index);
+    }
+
+    private record StickerRef(Face face, int index) {
     }
 }

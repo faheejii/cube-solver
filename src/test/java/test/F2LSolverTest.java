@@ -10,20 +10,17 @@ import cube.OrientedCube;
 import org.junit.jupiter.api.Test;
 import solver.F2LSolver;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class F2LSolverTest {
     @Test
-    void solveAfterCross_shouldUseDirectDatabaseCaseForBasicInsertOne() {
+    void solveAfterCross_shouldSolveBasicInsertOne() {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, "R U R' U'");
 
         var solver = new F2LSolver(F2LCaseDatabase.seedBasicCases());
         var solution = solver.solveAfterCross(cube, Face.D);
-
-        assertEquals("U R U' R'", solution.toString());
 
         MoveApplier.executeMoves(cube, solution.getMoves());
         assertTrue(CrossAnalyzer.isCrossSolved(cube));
@@ -31,14 +28,12 @@ public class F2LSolverTest {
     }
 
     @Test
-    void solveAfterCross_shouldUseDirectDatabaseCaseForBasicInsertThree() {
+    void solveAfterCross_shouldSolveBasicInsertThree() {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, "R U R'");
 
         var solver = new F2LSolver(F2LCaseDatabase.seedBasicCases());
         var solution = solver.solveAfterCross(cube, Face.D);
-
-        assertEquals("R U' R'", solution.toString());
 
         MoveApplier.executeMoves(cube, solution.getMoves());
         assertTrue(CrossAnalyzer.isCrossSolved(cube));

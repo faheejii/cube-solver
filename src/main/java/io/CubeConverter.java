@@ -98,7 +98,15 @@ public final class CubeConverter {
 
     public static FaceletState toFaceletState(CubeState cube) {
         validateCubieState(cube);
+        return buildFaceletState(cube);
+    }
 
+    public static FaceletState toFaceletStateAllowingCenterParity(CubeState cube) {
+        validateCubieState(cube, false);
+        return buildFaceletState(cube);
+    }
+
+    private static FaceletState buildFaceletState(CubeState cube) {
         FaceletState facelets = new FaceletState();
 
         for (Corner position : Corner.values()) {
@@ -198,6 +206,10 @@ public final class CubeConverter {
     }
 
     private static void validateCubieState(CubeState cube) {
+        validateCubieState(cube, true);
+    }
+
+    private static void validateCubieState(CubeState cube, boolean requirePermutationParity) {
         if (cube == null) {
             throw new IllegalArgumentException("CubeState cannot be null");
         }
@@ -256,7 +268,7 @@ public final class CubeConverter {
             throw new IllegalArgumentException("Edge orientation sum must be even");
         }
 
-        if (permutationParity(cube.cornerPerm) != permutationParity(cube.edgePerm)) {
+        if (requirePermutationParity && permutationParity(cube.cornerPerm) != permutationParity(cube.edgePerm)) {
             throw new IllegalArgumentException("Corner and edge permutation parity must match");
         }
     }
