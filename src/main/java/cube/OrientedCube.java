@@ -20,11 +20,11 @@ public class OrientedCube {
     }
 
     public void applyMove(Move move) {
-        if (isCubeRotation(move)) {
+        if (move.isCubeRotation()) {
             orientation.applyRotation(move);
             return;
         }
-        if (isWideMove(move)) {
+        if (move.isWideMove()) {
             applyWideMove(move);
             return;
         }
@@ -90,13 +90,6 @@ public class OrientedCube {
         cube.edgePerm = newEdgePerm;
         cube.edgeOri = newEdgeOri;
         orientation.reset();
-    }
-
-    private static boolean isCubeRotation(Move move) {
-        return switch (move) {
-            case X, X2, X_PRIME, Y, Y2, Y_PRIME, Z, Z2, Z_PRIME -> true;
-            default -> false;
-        };
     }
 
     private void applyWideMove(Move move) {
@@ -181,18 +174,6 @@ public class OrientedCube {
         return orientation.faceAt(Face.U) == Face.U
                 && orientation.faceAt(Face.R) == Face.R
                 && orientation.faceAt(Face.F) == Face.F;
-    }
-
-    private static boolean isWideMove(Move move) {
-        return switch (move) {
-            case UW, UW2, UW_PRIME,
-                    RW, RW2, RW_PRIME,
-                    FW, FW2, FW_PRIME,
-                    DW, DW2, DW_PRIME,
-                    LW, LW2, LW_PRIME,
-                    BW, BW2, BW_PRIME -> true;
-            default -> false;
-        };
     }
 
     private static Face[] edgeFaces(Edge edge) {

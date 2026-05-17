@@ -4,11 +4,11 @@ import java.util.List;
 
 public class MoveApplier {
     public static void applyMove(CubeState cube, Move move) {
-        if (isCubeRotation(move)) {
+        if (move.isCubeRotation()) {
             applyCubeRotation(cube, move);
             return;
         }
-        if (isWideMove(move)) {
+        if (move.isWideMove()) {
             throw new IllegalArgumentException("Wide moves require frame-aware execution; use executeMoves/executeAlgorithm: " + move);
         }
 
@@ -62,25 +62,6 @@ public class MoveApplier {
 
         var parsed = Algorithm.parse(algorithm);
         executeMoves(cube, parsed.getMoves());
-    }
-
-    private static boolean isCubeRotation(Move move) {
-        return switch (move) {
-            case X, X2, X_PRIME, Y, Y2, Y_PRIME, Z, Z2, Z_PRIME -> true;
-            default -> false;
-        };
-    }
-
-    private static boolean isWideMove(Move move) {
-        return switch (move) {
-            case UW, UW2, UW_PRIME,
-                    RW, RW2, RW_PRIME,
-                    FW, FW2, FW_PRIME,
-                    DW, DW2, DW_PRIME,
-                    LW, LW2, LW_PRIME,
-                    BW, BW2, BW_PRIME -> true;
-            default -> false;
-        };
     }
 
     private static void applyCubeRotation(CubeState cube, Move move) {

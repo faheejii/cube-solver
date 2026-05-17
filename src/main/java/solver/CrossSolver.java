@@ -9,7 +9,6 @@ import cube.MoveApplier;
 import cube.OrientationFrames;
 
 import java.util.ArrayDeque;
-import java.util.Arrays;
 import java.util.HashSet;
 
 public class CrossSolver {
@@ -25,17 +24,17 @@ public class CrossSolver {
     private static final Edge[] D_CROSS_POSITIONS = {Edge.DF, Edge.DR, Edge.DB, Edge.DL};
 
     public Algorithm solve(CubeState cube) {
-        return solveForTargetCross(copyCube(cube), D_CROSS_POSITIONS, FACE_TURNS);
+        return solveForTargetCross(cube.copy(), D_CROSS_POSITIONS, FACE_TURNS);
     }
 
     public Algorithm solve(CubeState cube, Face crossFace) {
         var orientation = OrientationFrames.orientedFrameFor(crossFace);
         return OrientationFrames.orientationToD(crossFace)
-                .concat(solveForTargetCross(copyCube(cube), targetCrossForOrientation(orientation), mapFaceTurns(orientation)));
+                .concat(solveForTargetCross(cube.copy(), targetCrossForOrientation(orientation), mapFaceTurns(orientation)));
     }
 
     private Algorithm solveForTargetCross(CubeState cube, Edge[] targetCross, Move[] mappedFaceTurns) {
-        var start = copyCube(cube);
+        var start = cube.copy();
         if (isTargetCrossSolved(start, targetCross)) {
             return new Algorithm();
         }
@@ -52,7 +51,7 @@ public class CrossSolver {
             for (int i = 0; i < FACE_TURNS.length; i++) {
                 var move = FACE_TURNS[i];
                 var mappedMove = mappedFaceTurns[i];
-                var nextCube = copyCube(current.cube());
+                var nextCube = current.cube().copy();
                 MoveApplier.applyMove(nextCube, mappedMove);
 
                 var key = encodeCrossState(nextCube, targetCross);
@@ -136,15 +135,6 @@ public class CrossSolver {
 
     private static boolean matches(Face first, Face second, Face expectedA, Face expectedB) {
         return (first == expectedA && second == expectedB) || (first == expectedB && second == expectedA);
-    }
-
-    private static CubeState copyCube(CubeState cube) {
-        var copy = new CubeState();
-        copy.cornerPerm = Arrays.copyOf(cube.cornerPerm, cube.cornerPerm.length);
-        copy.cornerOri = Arrays.copyOf(cube.cornerOri, cube.cornerOri.length);
-        copy.edgePerm = Arrays.copyOf(cube.edgePerm, cube.edgePerm.length);
-        copy.edgeOri = Arrays.copyOf(cube.edgeOri, cube.edgeOri.length);
-        return copy;
     }
 
     private record SearchNode(CubeState cube, Algorithm algorithm) {

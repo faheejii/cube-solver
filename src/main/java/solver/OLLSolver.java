@@ -36,16 +36,16 @@ public class OLLSolver {
     }
 
     public Algorithm solve(CubeState cube) {
-        return solveStage(copyCube(cube), new CubeOrientation());
+        return solveStage(cube.copy(), new CubeOrientation());
     }
 
     public Algorithm solve(CubeState cube, Face crossFace) {
         return OrientationFrames.orientationToD(crossFace)
-                .concat(solveStage(copyCube(cube), OrientationFrames.orientedFrameFor(crossFace)));
+                .concat(solveStage(cube.copy(), OrientationFrames.orientedFrameFor(crossFace)));
     }
 
     public Algorithm solve(OrientedCube cube) {
-        return solveStage(copyCube(cube.cubeState()), cube.orientation());
+        return solveStage(cube.cubeState().copy(), cube.orientation());
     }
 
     public Algorithm solveAfterF2L(CubeState cube, Face crossFace) {
@@ -63,7 +63,7 @@ public class OLLSolver {
         }
 
         for (var auf : AUF_TRIALS) {
-            var trialCube = copyCube(cube);
+            var trialCube = cube.copy();
             var resultingOrientation = executeAndReturnOrientation(trialCube, orientation, auf.getMoves());
             var signature = OLLAnalyzer.extractSignature(trialCube, resultingOrientation);
             var match = caseDatabase.find(signature);
@@ -72,7 +72,7 @@ public class OLLSolver {
             }
 
             var candidate = auf.concat(match.get().algorithm());
-            var validationCube = copyCube(cube);
+            var validationCube = cube.copy();
             var finalOrientation = executeAndReturnOrientation(validationCube, orientation, candidate.getMoves());
             if (CrossAnalyzer.isCrossSolved(validationCube, finalOrientation)
                     && F2LAnalyzer.isF2LSolved(validationCube, finalOrientation)
@@ -99,12 +99,4 @@ public class OLLSolver {
         return orientedCube.orientation();
     }
 
-    private static CubeState copyCube(CubeState cube) {
-        var copy = new CubeState();
-        copy.cornerPerm = java.util.Arrays.copyOf(cube.cornerPerm, cube.cornerPerm.length);
-        copy.cornerOri = java.util.Arrays.copyOf(cube.cornerOri, cube.cornerOri.length);
-        copy.edgePerm = java.util.Arrays.copyOf(cube.edgePerm, cube.edgePerm.length);
-        copy.edgeOri = java.util.Arrays.copyOf(cube.edgeOri, cube.edgeOri.length);
-        return copy;
-    }
 }

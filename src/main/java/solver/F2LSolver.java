@@ -1,9 +1,12 @@
 package solver;
 
 import algorithms.F2LCaseDatabase;
+import algorithms.F2LInsertCaseDatabase;
+import algorithms.F2LSetupCaseDatabase;
 import cfop.F2LCaseSignatureExtractor;
 import cfop.F2LGeometry.SlotPair;
 import cfop.F2LGeometry.TargetSlot;
+import cfop.F2LPreservationMask;
 import cfop.F2LSlot;
 import cube.Algorithm;
 import cube.Corner;
@@ -17,11 +20,11 @@ import cube.OrientationFrames;
 import cube.OrientedCube;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 import java.util.function.ToLongFunction;
@@ -38,6 +41,7 @@ import static cfop.F2LGeometry.targetSlotFor;
 import static cfop.F2LGeometry.targetSlotForPair;
 import static cfop.F2LGeometry.targetSlotsForOrientation;
 import static cfop.F2LGeometry.visibleSlotForStageIndex;
+import static cfop.F2LGeometry.visibleSlotForTarget;
 
 public class F2LSolver {
     private static final boolean DEBUG_DB = Boolean.getBoolean("f2l.debug");
@@ -76,34 +80,52 @@ public class F2LSolver {
             Algorithm.fromMoves(List.of(Move.U_PRIME))
     };
     private final F2LCaseDatabase caseDatabase;
+    private final F2LSetupCaseDatabase setupCaseDatabase;
+    private final F2LInsertCaseDatabase insertCaseDatabase;
 
     public F2LSolver() {
-        this(null);
+        this(F2LSetupCaseDatabase.seedCases(), F2LInsertCaseDatabase.seedCases());
     }
 
     public F2LSolver(F2LCaseDatabase caseDatabase) {
+        this(caseDatabase, F2LSetupCaseDatabase.empty(), F2LInsertCaseDatabase.empty());
+    }
+
+    public F2LSolver(F2LSetupCaseDatabase setupCaseDatabase, F2LInsertCaseDatabase insertCaseDatabase) {
+        this(null, setupCaseDatabase, insertCaseDatabase);
+    }
+
+    public F2LSolver(
+            F2LCaseDatabase caseDatabase,
+            F2LSetupCaseDatabase setupCaseDatabase,
+            F2LInsertCaseDatabase insertCaseDatabase
+    ) {
         this.caseDatabase = caseDatabase;
         if (this.caseDatabase != null) {
             this.caseDatabase.validate();
         }
+        this.setupCaseDatabase = setupCaseDatabase == null ? F2LSetupCaseDatabase.empty() : setupCaseDatabase;
+        this.insertCaseDatabase = insertCaseDatabase == null ? F2LInsertCaseDatabase.empty() : insertCaseDatabase;
+        this.setupCaseDatabase.validate();
+        this.insertCaseDatabase.validate();
     }
 
     public Algorithm solve(CubeState cube) {
-        return solveStage(copyCube(cube), new CubeOrientation());
+        return solveStage(cube.copy(), new CubeOrientation());
     }
 
     public Algorithm solveAfterCross(CubeState cube, Face crossFace) {
         return OrientationFrames.orientationToD(crossFace)
-                .concat(solveStage(copyCube(cube), OrientationFrames.orientedFrameFor(crossFace)));
+                .concat(solveStage(cube.copy(), OrientationFrames.orientedFrameFor(crossFace)));
     }
 
     public Algorithm solve(OrientedCube cube) {
-        return solveStage(copyCube(cube.cubeState()), cube.orientation());
+        return solveStage(cube.cubeState().copy(), cube.orientation());
     }
 
     public Algorithm solve(CubeState cube, Face crossFace) {
         return OrientationFrames.orientationToD(crossFace)
-                .concat(solveStage(copyCube(cube), OrientationFrames.orientedFrameFor(crossFace)));
+                .concat(solveStage(cube.copy(), OrientationFrames.orientedFrameFor(crossFace)));
     }
 
     public Algorithm solveSlot(CubeState cube, F2LSlot slot) {
@@ -114,7 +136,7 @@ public class F2LSolver {
         var orientation = OrientationFrames.orientedFrameFor(crossFace);
         return OrientationFrames.orientationToD(crossFace).concat(
                 solveSlotInternal(
-                        copyCube(cube),
+                        cube.copy(),
                         orientation,
                         targetCrossForOrientation(orientation),
                         targetSlotFor(slot, orientation),
@@ -125,25 +147,32 @@ public class F2LSolver {
     }
 
     private Algorithm solveForTargets(CubeState cube, CubeOrientation orientation) {
-        var targetCross = targetCrossForOrientation(orientation);
         var targetSlots = targetSlotsForOrientation(orientation);
-        var faceTurns = mapFaceTurns(orientation);
-        var workingCube = copyCube(cube);
-        ensureCrossSolved(workingCube, targetCross);
+        var workingCube = cube.copy();
+        var currentOrientation = orientation.copy();
+        ensureCrossSolved(workingCube, targetCrossForOrientation(currentOrientation));
 
         var solution = new Algorithm();
         var protectedSlots = new ArrayList<TargetSlot>();
-
         for (var targetSlot : targetSlots) {
             if (isTargetSlotSolved(workingCube, targetSlot)) {
                 protectedSlots.add(targetSlot);
+            }
+        }
+
+        for (var targetSlot : targetSlots) {
+            if (protectedSlots.contains(targetSlot)) {
                 continue;
             }
 
-            var slotSolution = solveSlotInternal(workingCube, orientation, targetCross, targetSlot, protectedSlots, faceTurns);
-            executeMovesInOrientation(workingCube, orientation, slotSolution.getMoves());
+            var targetCross = targetCrossForOrientation(currentOrientation);
+            var faceTurns = mapFaceTurns(currentOrientation);
+            var slotSolution = solveSlotInternal(workingCube, currentOrientation, targetCross, targetSlot, protectedSlots, faceTurns);
+            currentOrientation = executeAndReturnOrientation(workingCube, currentOrientation, slotSolution.getMoves());
             solution = solution.concat(slotSolution);
-            protectedSlots.add(targetSlot);
+            if (!protectedSlots.contains(targetSlot)) {
+                protectedSlots.add(targetSlot);
+            }
         }
 
         return solution;
@@ -161,7 +190,7 @@ public class F2LSolver {
     }
 
     private Algorithm solveStageWithDatabase(CubeState cube, CubeOrientation initialOrientation) {
-        var workingCube = copyCube(cube);
+        var workingCube = cube.copy();
         var stageTargets = targetSlotsForOrientation(initialOrientation);
         var stagePairs = slotPairsForTargets(stageTargets);
 
@@ -212,7 +241,7 @@ public class F2LSolver {
                 System.out.println("[F2L STAGE] depth=" + depth + " no DB candidate, falling back to one-slot search");
             }
             var fallback = findOneSlotSearchFallback(cube, currentOrientation, stagePairs, stageTargets, nextProtected);
-            var nextCube = copyCube(cube);
+            var nextCube = cube.copy();
             executeMovesInOrientation(nextCube, currentOrientation, fallback.algorithm().getMoves());
             var nextPairs = new ArrayList<>(nextProtected);
             nextPairs.add(fallback.solvedPair());
@@ -238,7 +267,7 @@ public class F2LSolver {
             System.out.println("[F2L STAGE] depth=" + depth + " DB candidates=" + candidates.size());
         }
         for (var candidate : candidates) {
-            var nextCube = copyCube(cube);
+            var nextCube = cube.copy();
             executeMovesInOrientation(nextCube, currentOrientation, candidate.algorithm().getMoves());
 
             var nextPairs = new ArrayList<>(nextProtected);
@@ -279,7 +308,7 @@ public class F2LSolver {
             System.out.println("[F2L STAGE] depth=" + depth + " all DB branches failed, falling back to one-slot search");
         }
         var fallback = findOneSlotSearchFallback(cube, currentOrientation, stagePairs, stageTargets, nextProtected);
-        var nextCube = copyCube(cube);
+        var nextCube = cube.copy();
         executeMovesInOrientation(nextCube, currentOrientation, fallback.algorithm().getMoves());
         var nextPairs = new ArrayList<>(nextProtected);
         nextPairs.add(fallback.solvedPair());
@@ -350,7 +379,7 @@ public class F2LSolver {
             SlotPair targetPair,
             Algorithm prefix
     ) {
-        var prefixedCube = copyCube(cube);
+        var prefixedCube = cube.copy();
         var candidateOrientation = executeAndReturnOrientation(prefixedCube, stageOrientation, prefix.getMoves());
         if (protectedPairs.contains(targetPair) || isPairSolved(prefixedCube, targetPair, stagePairs, stageTargets, candidateOrientation)) {
             if (DEBUG_VERBOSE) {
@@ -418,7 +447,7 @@ public class F2LSolver {
         CandidateSolution best = null;
 
         for (var prefix : SEARCH_PREFIX_TRIALS) {
-            var prefixedCube = copyCube(cube);
+            var prefixedCube = cube.copy();
             var resultingOrientation = executeAndReturnOrientation(prefixedCube, currentOrientation, prefix.getMoves());
             var protectedTargets = new ArrayList<TargetSlot>();
             for (var protectedPair : protectedPairs) {
@@ -491,11 +520,23 @@ public class F2LSolver {
         }
 
         var targetPair = new SlotPair(targetSlot.corner(), targetSlot.edge());
-        var setup = solveSetupPhase(cube, orientation, targetCross, targetPair, targetSlot, protectedSlots, faceTurns);
-        var setupCube = copyCube(cube);
-        applyMappedMoves(setupCube, setup.getMoves(), faceTurns);
+        var directInsert = findPrefixedInsertDatabaseSolution(cube, orientation, targetSlot, protectedSlots);
+        if (directInsert.isPresent()) {
+            return directInsert.get();
+        }
 
-        var insert = solveInsertPhase(setupCube, targetCross, targetSlot, protectedSlots, faceTurns);
+        var setup = solveSetupPhase(cube, orientation, targetCross, targetPair, targetSlot, protectedSlots, faceTurns);
+        var setupCube = cube.copy();
+        var setupOrientation = executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
+
+        var insert = solveInsertPhase(
+                setupCube,
+                setupOrientation,
+                targetCrossForOrientation(setupOrientation),
+                targetSlot,
+                protectedSlots,
+                mapFaceTurns(setupOrientation)
+        );
         return setup.concat(insert);
     }
 
@@ -508,6 +549,11 @@ public class F2LSolver {
             List<TargetSlot> protectedSlots,
             Move[] faceTurns
     ) {
+        var databaseSolution = findPrefixedSetupDatabaseSolution(cube, orientation, targetPair, targetSlot, protectedSlots);
+        if (databaseSolution.isPresent()) {
+            return databaseSolution.get();
+        }
+
         return solveSearchPhase(
                 cube,
                 faceTurns,
@@ -522,11 +568,17 @@ public class F2LSolver {
 
     private Algorithm solveInsertPhase(
             CubeState cube,
+            CubeOrientation orientation,
             Edge[] targetCross,
             TargetSlot targetSlot,
             List<TargetSlot> protectedSlots,
             Move[] faceTurns
     ) {
+        var databaseSolution = findPrefixedInsertDatabaseSolution(cube, orientation, targetSlot, protectedSlots);
+        if (databaseSolution.isPresent()) {
+            return databaseSolution.get();
+        }
+
         return solveSearchPhase(
                 cube,
                 faceTurns,
@@ -539,6 +591,150 @@ public class F2LSolver {
         );
     }
 
+    private Optional<Algorithm> findPrefixedSetupDatabaseSolution(
+            CubeState cube,
+            CubeOrientation orientation,
+            SlotPair targetPair,
+            TargetSlot targetSlot,
+            List<TargetSlot> protectedSlots
+    ) {
+        if (setupCaseDatabase.size() == 0) {
+            return Optional.empty();
+        }
+
+        var candidates = new ArrayList<Algorithm>();
+        for (var prefix : DB_PREFIX_TRIALS) {
+            var prefixedCube = cube.copy();
+            var prefixedOrientation = executeAndReturnOrientation(prefixedCube, orientation, prefix.getMoves());
+            var match = findSetupDatabaseSolution(
+                    prefixedCube,
+                    prefixedOrientation,
+                    targetPair,
+                    targetSlot,
+                    protectedSlots
+            );
+            match.ifPresent(algorithm -> candidates.add(prefix.concat(algorithm)));
+        }
+
+        candidates.sort(Comparator.comparingInt(algorithm -> algorithm.getMoves().size()));
+        return candidates.stream().findFirst();
+    }
+
+    private Optional<Algorithm> findPrefixedInsertDatabaseSolution(
+            CubeState cube,
+            CubeOrientation orientation,
+            TargetSlot targetSlot,
+            List<TargetSlot> protectedSlots
+    ) {
+        if (insertCaseDatabase.size() == 0) {
+            return Optional.empty();
+        }
+
+        var candidates = new ArrayList<Algorithm>();
+        for (var prefix : DB_PREFIX_TRIALS) {
+            var prefixedCube = cube.copy();
+            var prefixedOrientation = executeAndReturnOrientation(prefixedCube, orientation, prefix.getMoves());
+            var match = findInsertDatabaseSolution(
+                    prefixedCube,
+                    prefixedOrientation,
+                    targetSlot,
+                    protectedSlots
+            );
+            match.ifPresent(algorithm -> candidates.add(prefix.concat(algorithm)));
+        }
+
+        candidates.sort(Comparator.comparingInt(algorithm -> algorithm.getMoves().size()));
+        return candidates.stream().findFirst();
+    }
+
+    private Optional<Algorithm> findSetupDatabaseSolution(
+            CubeState cube,
+            CubeOrientation orientation,
+            SlotPair targetPair,
+            TargetSlot targetSlot,
+            List<TargetSlot> protectedSlots
+    ) {
+        if (setupCaseDatabase.size() == 0) {
+            return Optional.empty();
+        }
+
+        var insertSlot = visibleSlotForTarget(targetSlot, orientation);
+        var preservedMask = preservationMaskFor(protectedSlots, orientation);
+        var signature = F2LCaseSignatureExtractor.extract(cube, insertSlot, orientation);
+
+        for (var setupCase : setupCaseDatabase.findCompatible(insertSlot, preservedMask, signature)) {
+            var trialCube = cube.copy();
+            var resultingOrientation = executeAndReturnOrientation(trialCube, orientation, setupCase.algorithm().getMoves());
+            if (isSetupGoalSolved(
+                    trialCube,
+                    resultingOrientation,
+                    targetCrossForOrientation(resultingOrientation),
+                    targetPair,
+                    protectedSlots
+            )) {
+                if (DEBUG_DB) {
+                    System.out.println("[F2L SETUP DB] accepted insertSlot=" + insertSlot
+                            + " preserved=" + preservedMask
+                            + " case=" + setupCase.name()
+                            + " algorithm=" + setupCase.algorithm());
+                }
+                return Optional.of(setupCase.algorithm());
+            }
+
+            if (DEBUG_VERBOSE) {
+                System.out.println("[F2L SETUP DB] rejected insertSlot=" + insertSlot
+                        + " preserved=" + preservedMask
+                        + " case=" + setupCase.name()
+                        + " algorithm=" + setupCase.algorithm());
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    private Optional<Algorithm> findInsertDatabaseSolution(
+            CubeState cube,
+            CubeOrientation orientation,
+            TargetSlot targetSlot,
+            List<TargetSlot> protectedSlots
+    ) {
+        if (insertCaseDatabase.size() == 0) {
+            return Optional.empty();
+        }
+
+        var insertSlot = visibleSlotForTarget(targetSlot, orientation);
+        var preservedMask = preservationMaskFor(protectedSlots, orientation);
+        var signature = F2LCaseSignatureExtractor.extract(cube, insertSlot, orientation);
+
+        for (var insertCase : insertCaseDatabase.findCompatible(insertSlot, preservedMask, signature)) {
+            var trialCube = cube.copy();
+            var resultingOrientation = executeAndReturnOrientation(trialCube, orientation, insertCase.algorithm().getMoves());
+            if (areGoalsSolved(
+                    trialCube,
+                    targetCrossForOrientation(resultingOrientation),
+                    targetSlot,
+                    protectedSlots
+            )) {
+                if (DEBUG_DB) {
+                    System.out.println("[F2L INSERT DB] accepted insertSlot=" + insertSlot
+                            + " preserved=" + preservedMask
+                            + " case=" + insertCase.name()
+                            + " algorithm=" + insertCase.algorithm());
+                }
+                return Optional.of(insertCase.algorithm());
+            }
+
+            if (DEBUG_VERBOSE) {
+                System.out.println("[F2L INSERT DB] rejected insertSlot=" + insertSlot
+                        + " preserved=" + preservedMask
+                        + " case=" + insertCase.name()
+                        + " algorithm=" + insertCase.algorithm());
+            }
+        }
+
+        return Optional.empty();
+    }
+
     private Algorithm solveSearchPhase(
             CubeState cube,
             Move[] faceTurns,
@@ -549,7 +745,7 @@ public class F2LSolver {
         int bound = goal.heuristic(cube);
         while (bound <= MAX_SLOT_SEARCH_DEPTH) {
             var outcome = idaSearch(
-                    copyCube(cube),
+                    cube.copy(),
                     faceTurns,
                     goal,
                     path,
@@ -604,7 +800,7 @@ public class F2LSolver {
                 continue;
             }
 
-            var nextCube = copyCube(cube);
+            var nextCube = cube.copy();
             MoveApplier.applyMove(nextCube, faceTurns[i]);
             path.add(move);
 
@@ -749,6 +945,14 @@ public class F2LSolver {
         return slots;
     }
 
+    private static F2LPreservationMask preservationMaskFor(List<TargetSlot> protectedSlots, CubeOrientation orientation) {
+        var slots = new ArrayList<F2LSlot>();
+        for (var protectedSlot : protectedSlots) {
+            slots.add(visibleSlotForTarget(protectedSlot, orientation));
+        }
+        return F2LPreservationMask.of(slots);
+    }
+
     private static int encodeCorner(CubeState cube, Corner targetCorner) {
         for (var position : Corner.values()) {
             if (cube.cornerPerm[position.ordinal()] == targetCorner.ordinal()) {
@@ -790,15 +994,6 @@ public class F2LSolver {
         return mapped;
     }
 
-    private static CubeState copyCube(CubeState cube) {
-        var copy = new CubeState();
-        copy.cornerPerm = Arrays.copyOf(cube.cornerPerm, cube.cornerPerm.length);
-        copy.cornerOri = Arrays.copyOf(cube.cornerOri, cube.cornerOri.length);
-        copy.edgePerm = Arrays.copyOf(cube.edgePerm, cube.edgePerm.length);
-        copy.edgeOri = Arrays.copyOf(cube.edgeOri, cube.edgeOri.length);
-        return copy;
-    }
-
     private boolean hasCaseDatabase() {
         return caseDatabase != null && caseDatabase.size() > 0;
     }
@@ -811,7 +1006,7 @@ public class F2LSolver {
             List<SlotPair> protectedPairs,
             Algorithm algorithm
     ) {
-        var trialCube = copyCube(cube);
+        var trialCube = cube.copy();
         var resultingOrientation = executeAndReturnOrientation(trialCube, stageOrientation, algorithm.getMoves());
 
         if (!isTargetCrossSolved(trialCube, targetCrossForOrientation(resultingOrientation))) {
@@ -847,21 +1042,6 @@ public class F2LSolver {
         var orientedCube = new OrientedCube(cube, orientation);
         orientedCube.applyMoves(moves);
         return orientedCube.orientation();
-    }
-
-    private static void applyMappedMoves(CubeState cube, List<Move> moves, Move[] faceTurns) {
-        for (var move : moves) {
-            MoveApplier.applyMove(cube, mappedFaceTurn(move, faceTurns));
-        }
-    }
-
-    private static Move mappedFaceTurn(Move move, Move[] faceTurns) {
-        for (int i = 0; i < FACE_TURNS.length; i++) {
-            if (FACE_TURNS[i] == move) {
-                return faceTurns[i];
-            }
-        }
-        throw new IllegalArgumentException("Unexpected F2L search move: " + move);
     }
 
     private static String printableAlgorithm(Algorithm algorithm) {

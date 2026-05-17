@@ -33,12 +33,11 @@ public class Algorithm {
     public int getMoveCount() {
         int count = 0;
         for (var move : this.moves) {
-            if (move.getNotation().equals("x") || move.getNotation().equals("y") || move.getNotation().equals("z") ||
-                    move.getNotation().equals("x'") || move.getNotation().equals("y'") || move.getNotation().equals("z'") ||
-                    move.getNotation().equals("x2") || move.getNotation().equals("y2") || move.getNotation().equals("z2"))
+            if (!move.isCubeRotation()) {
                 count++;
+            }
         }
-        return moves.size() - count;
+        return count;
     }
 
     public boolean isEmpty() {

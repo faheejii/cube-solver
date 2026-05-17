@@ -3,7 +3,6 @@ package algorithms;
 import cfop.OLLAnalyzer;
 import cfop.OLLCaseSignature;
 import cube.Algorithm;
-import cube.Move;
 import cube.OrientedCube;
 import util.NotationNormalizer;
 
@@ -99,13 +98,6 @@ public class OLLCaseDatabase {
         return List.copyOf(ollCases);
     }
 
-    private static boolean isCubeRotation(Move move) {
-        return switch (move) {
-            case X, X2, X_PRIME, Y, Y2, Y_PRIME, Z, Z2, Z_PRIME -> true;
-            default -> false;
-        };
-    }
-
     private static OLLCase caseFromAlgorithm(String algorithm, String name) {
         var alg = Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm));
         var setup = alg.inverse().toString();
@@ -173,7 +165,7 @@ public class OLLCaseDatabase {
     public void validate() {
         for (var ollCase : cases.values()) {
             for (var move : ollCase.algorithm().getMoves()) {
-                if (isCubeRotation(move)) {
+                if (move.isCubeRotation()) {
                     throw new IllegalArgumentException("OLL DB algorithms must not contain cube rotations: " + ollCase.name());
                 }
             }
