@@ -2,6 +2,8 @@ package solver;
 
 import algorithms.F2LCaseDatabase;
 import cfop.F2LCaseSignatureExtractor;
+import cfop.F2LGeometry.SlotPair;
+import cfop.F2LGeometry.TargetSlot;
 import cfop.F2LSlot;
 import cube.Algorithm;
 import cube.Corner;
@@ -16,9 +18,26 @@ import cube.OrientedCube;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
+import java.util.function.ToIntFunction;
+import java.util.function.ToLongFunction;
+
+import static cfop.F2LGeometry.ensureCrossSolved;
+import static cfop.F2LGeometry.isPairConnected;
+import static cfop.F2LGeometry.isPairSolved;
+import static cfop.F2LGeometry.isTargetCrossSolved;
+import static cfop.F2LGeometry.isTargetSlotSolved;
+import static cfop.F2LGeometry.slotIndexForPair;
+import static cfop.F2LGeometry.slotPairsForTargets;
+import static cfop.F2LGeometry.targetCrossForOrientation;
+import static cfop.F2LGeometry.targetSlotFor;
+import static cfop.F2LGeometry.targetSlotForPair;
+import static cfop.F2LGeometry.targetSlotsForOrientation;
+import static cfop.F2LGeometry.visibleSlotForStageIndex;
 
 public class F2LSolver {
     private static final boolean DEBUG_DB = Boolean.getBoolean("f2l.debug");
@@ -56,7 +75,6 @@ public class F2LSolver {
             Algorithm.fromMoves(List.of(Move.U2)),
             Algorithm.fromMoves(List.of(Move.U_PRIME))
     };
-    private static final F2LSlot[] SLOT_ORDER = {F2LSlot.FR, F2LSlot.FL, F2LSlot.BL, F2LSlot.BR};
     private final F2LCaseDatabase caseDatabase;
 
     public F2LSolver() {
@@ -97,6 +115,7 @@ public class F2LSolver {
         return OrientationFrames.orientationToD(crossFace).concat(
                 solveSlotInternal(
                         copyCube(cube),
+                        orientation,
                         targetCrossForOrientation(orientation),
                         targetSlotFor(slot, orientation),
                         List.of(),
@@ -121,7 +140,7 @@ public class F2LSolver {
                 continue;
             }
 
-            var slotSolution = solveSlotInternal(workingCube, targetCross, targetSlot, protectedSlots, faceTurns);
+            var slotSolution = solveSlotInternal(workingCube, orientation, targetCross, targetSlot, protectedSlots, faceTurns);
             executeMovesInOrientation(workingCube, orientation, slotSolution.getMoves());
             solution = solution.concat(slotSolution);
             protectedSlots.add(targetSlot);
@@ -310,10 +329,7 @@ public class F2LSolver {
             }
         }
 
-        candidates.sort((left, right) -> Integer.compare(
-                left.algorithm().getMoves().size(),
-                right.algorithm().getMoves().size()
-        ));
+        candidates.sort(Comparator.comparingInt(left -> left.algorithm().getMoves().size()));
 
         if (!candidates.isEmpty()) {
             return candidates;
@@ -423,6 +439,7 @@ public class F2LSolver {
                     var targetSlot = targetSlotForPair(pair, stagePairs, stageTargets, resultingOrientation);
                     var slotSolution = solveSlotInternal(
                             prefixedCube,
+                            resultingOrientation,
                             targetCrossForOrientation(resultingOrientation),
                             targetSlot,
                             protectedTargets,
@@ -462,6 +479,7 @@ public class F2LSolver {
 
     private Algorithm solveSlotInternal(
             CubeState cube,
+            CubeOrientation orientation,
             Edge[] targetCross,
             TargetSlot targetSlot,
             List<TargetSlot> protectedSlots,
@@ -472,15 +490,68 @@ public class F2LSolver {
             return new Algorithm();
         }
 
+        var targetPair = new SlotPair(targetSlot.corner(), targetSlot.edge());
+        var setup = solveSetupPhase(cube, orientation, targetCross, targetPair, targetSlot, protectedSlots, faceTurns);
+        var setupCube = copyCube(cube);
+        applyMappedMoves(setupCube, setup.getMoves(), faceTurns);
+
+        var insert = solveInsertPhase(setupCube, targetCross, targetSlot, protectedSlots, faceTurns);
+        return setup.concat(insert);
+    }
+
+    private Algorithm solveSetupPhase(
+            CubeState cube,
+            CubeOrientation orientation,
+            Edge[] targetCross,
+            SlotPair targetPair,
+            TargetSlot targetSlot,
+            List<TargetSlot> protectedSlots,
+            Move[] faceTurns
+    ) {
+        return solveSearchPhase(
+                cube,
+                faceTurns,
+                "F2L setup",
+                new SearchGoal(
+                        state -> isSetupGoalSolved(state, orientation, targetCross, targetPair, protectedSlots),
+                        state -> setupHeuristic(state, orientation, targetCross, targetPair, protectedSlots),
+                        state -> encodeState(state, targetCross, targetSlot, protectedSlots)
+                )
+        );
+    }
+
+    private Algorithm solveInsertPhase(
+            CubeState cube,
+            Edge[] targetCross,
+            TargetSlot targetSlot,
+            List<TargetSlot> protectedSlots,
+            Move[] faceTurns
+    ) {
+        return solveSearchPhase(
+                cube,
+                faceTurns,
+                "F2L insert",
+                new SearchGoal(
+                        state -> areGoalsSolved(state, targetCross, targetSlot, protectedSlots),
+                        state -> canonicalHeuristic(state, targetCross, targetSlot, protectedSlots),
+                        state -> encodeState(state, targetCross, targetSlot, protectedSlots)
+                )
+        );
+    }
+
+    private Algorithm solveSearchPhase(
+            CubeState cube,
+            Move[] faceTurns,
+            String phaseName,
+            SearchGoal goal
+    ) {
         var path = new ArrayList<Move>();
-        int bound = canonicalHeuristic(cube, targetCross, targetSlot, protectedSlots);
+        int bound = goal.heuristic(cube);
         while (bound <= MAX_SLOT_SEARCH_DEPTH) {
             var outcome = idaSearch(
                     copyCube(cube),
-                    targetCross,
-                    targetSlot,
-                    protectedSlots,
                     faceTurns,
+                    goal,
                     path,
                     null,
                     0,
@@ -496,31 +567,29 @@ public class F2LSolver {
             bound = outcome.nextBound();
         }
 
-        throw new IllegalStateException("Failed to find an F2L solution for slot " + targetSlot);
+        throw new IllegalStateException("Failed to find an " + phaseName + " solution");
     }
 
 
     private SearchOutcome idaSearch(
             CubeState cube,
-            Edge[] targetCross,
-            TargetSlot targetSlot,
-            List<TargetSlot> protectedSlots,
             Move[] faceTurns,
+            SearchGoal goal,
             List<Move> path,
             Move lastMove,
             int depth,
             int bound,
             Map<Long, Integer> visitedDepth
     ) {
-        int estimate = depth + canonicalHeuristic(cube, targetCross, targetSlot, protectedSlots);
+        int estimate = depth + goal.heuristic(cube);
         if (estimate > bound) {
             return new SearchOutcome(null, estimate);
         }
-        if (areGoalsSolved(cube, targetCross, targetSlot, protectedSlots)) {
+        if (goal.isSolved(cube)) {
             return new SearchOutcome(Algorithm.fromMoves(List.copyOf(path)), depth);
         }
 
-        long stateKey = encodeState(cube, targetCross, targetSlot, protectedSlots);
+        long stateKey = goal.stateKey(cube);
         var bestDepth = visitedDepth.get(stateKey);
         if (bestDepth != null && bestDepth <= depth) {
             return new SearchOutcome(null, Integer.MAX_VALUE);
@@ -541,10 +610,8 @@ public class F2LSolver {
 
             var outcome = idaSearch(
                     nextCube,
-                    targetCross,
-                    targetSlot,
-                    protectedSlots,
                     faceTurns,
+                    goal,
                     path,
                     move,
                     depth + 1,
@@ -581,6 +648,52 @@ public class F2LSolver {
             }
         }
         return true;
+    }
+
+    private static boolean isSetupGoalSolved(
+            CubeState cube,
+            CubeOrientation orientation,
+            Edge[] targetCross,
+            SlotPair targetPair,
+            List<TargetSlot> protectedSlots
+    ) {
+        if (!isTargetCrossSolved(cube, targetCross)) {
+            return false;
+        }
+        for (var slot : protectedSlots) {
+            if (!isTargetSlotSolved(cube, slot)) {
+                return false;
+            }
+        }
+        return isPairConnected(cube, targetPair, orientation);
+    }
+
+    private static int setupHeuristic(
+            CubeState cube,
+            CubeOrientation orientation,
+            Edge[] targetCross,
+            SlotPair targetPair,
+            List<TargetSlot> protectedSlots
+    ) {
+        if (isSetupGoalSolved(cube, orientation, targetCross, targetPair, protectedSlots)) {
+            return 0;
+        }
+
+        int unsolvedParts = 0;
+        for (var edge : targetCross) {
+            if (cube.edgePerm[edge.ordinal()] != edge.ordinal() || cube.edgeOri[edge.ordinal()] != 0) {
+                unsolvedParts++;
+            }
+        }
+        for (var slot : protectedSlots) {
+            if (!isTargetSlotSolved(cube, slot)) {
+                unsolvedParts++;
+            }
+        }
+        if (!isPairConnected(cube, targetPair, orientation)) {
+            unsolvedParts++;
+        }
+        return Math.max(1, (unsolvedParts + 3) / 4);
     }
 
     private static int canonicalHeuristic(
@@ -669,149 +782,12 @@ public class F2LSolver {
         };
     }
 
-    private static void ensureCrossSolved(CubeState cube, Edge[] targetCross) {
-        if (!isTargetCrossSolved(cube, targetCross)) {
-            throw new IllegalArgumentException("F2L requires a solved D cross");
-        }
-    }
-
-    private static SlotPair[] slotPairsForTargets(TargetSlot[] targets) {
-        return new SlotPair[]{
-                new SlotPair(targets[0].corner(), targets[0].edge()),
-                new SlotPair(targets[1].corner(), targets[1].edge()),
-                new SlotPair(targets[2].corner(), targets[2].edge()),
-                new SlotPair(targets[3].corner(), targets[3].edge())
-        };
-    }
-
-    private static boolean isPairSolved(CubeState cube, SlotPair pair, SlotPair[] stagePairs, CubeOrientation orientation) {
-        var targetSlot = targetSlotForPair(pair, stagePairs, targetSlotsForOrientation(orientation), orientation);
-        return isTargetSlotSolved(cube, targetSlot);
-    }
-
-    private static boolean isPairSolved(CubeState cube, SlotPair pair, SlotPair[] stagePairs, TargetSlot[] stageTargets, CubeOrientation orientation) {
-        var targetSlot = targetSlotForPair(pair, stagePairs, stageTargets, orientation);
-        return isTargetSlotSolved(cube, targetSlot);
-    }
-
-    private static TargetSlot targetSlotForPair(SlotPair pair, SlotPair[] stagePairs, TargetSlot[] stageTargets, CubeOrientation orientation) {
-        var index = slotIndexForPair(pair, stagePairs);
-        var visibleSlot = visibleSlotForStageIndex(index, stageTargets, orientation);
-        return targetSlotFor(visibleSlot, orientation);
-    }
-
-    private static F2LSlot visibleSlotForStageIndex(int index, TargetSlot[] stageTargets, CubeOrientation orientation) {
-        var originalTarget = stageTargets[index];
-        for (var slot : SLOT_ORDER) {
-            var visibleTarget = targetSlotFor(slot, orientation);
-            if (visibleTarget.corner() == originalTarget.corner() && visibleTarget.edge() == originalTarget.edge()) {
-                return slot;
-            }
-        }
-        throw new IllegalStateException("Missing visible slot for stage index " + index);
-    }
-
-    private static TargetSlot[] targetSlotsForOrientation(CubeOrientation orientation) {
-        return new TargetSlot[]{
-                targetSlotFor(F2LSlot.FR, orientation),
-                targetSlotFor(F2LSlot.FL, orientation),
-                targetSlotFor(F2LSlot.BL, orientation),
-                targetSlotFor(F2LSlot.BR, orientation)
-        };
-    }
-
-    private static TargetSlot targetSlotFor(F2LSlot slot, CubeOrientation orientation) {
-        return switch (slot) {
-            case FR -> new TargetSlot(
-                    cornerForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.F), orientation.faceAt(Face.R)),
-                    edgeForFaces(orientation.faceAt(Face.F), orientation.faceAt(Face.R))
-            );
-            case FL -> new TargetSlot(
-                    cornerForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.F), orientation.faceAt(Face.L)),
-                    edgeForFaces(orientation.faceAt(Face.F), orientation.faceAt(Face.L))
-            );
-            case BL -> new TargetSlot(
-                    cornerForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.B), orientation.faceAt(Face.L)),
-                    edgeForFaces(orientation.faceAt(Face.B), orientation.faceAt(Face.L))
-            );
-            case BR -> new TargetSlot(
-                    cornerForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.B), orientation.faceAt(Face.R)),
-                    edgeForFaces(orientation.faceAt(Face.B), orientation.faceAt(Face.R))
-            );
-        };
-    }
-
-    private static Edge[] targetCrossForOrientation(CubeOrientation orientation) {
-        return new Edge[]{
-                edgeForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.F)),
-                edgeForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.R)),
-                edgeForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.B)),
-                edgeForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.L))
-        };
-    }
-
     private static Move[] mapFaceTurns(CubeOrientation orientation) {
         var mapped = new Move[FACE_TURNS.length];
         for (int i = 0; i < FACE_TURNS.length; i++) {
             mapped[i] = orientation.mapMove(FACE_TURNS[i]);
         }
         return mapped;
-    }
-
-    private static boolean isTargetCrossSolved(CubeState cube, Edge[] targetCross) {
-        for (var edge : targetCross) {
-            if (cube.edgePerm[edge.ordinal()] != edge.ordinal() || cube.edgeOri[edge.ordinal()] != 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean isTargetSlotSolved(CubeState cube, TargetSlot slot) {
-        return cube.cornerPerm[slot.corner().ordinal()] == slot.corner().ordinal()
-                && cube.cornerOri[slot.corner().ordinal()] == 0
-                && cube.edgePerm[slot.edge().ordinal()] == slot.edge().ordinal()
-                && cube.edgeOri[slot.edge().ordinal()] == 0;
-    }
-
-    private static Edge edgeForFaces(Face first, Face second) {
-        if (matches(first, second, Face.U, Face.R)) return Edge.UR;
-        if (matches(first, second, Face.U, Face.F)) return Edge.UF;
-        if (matches(first, second, Face.U, Face.L)) return Edge.UL;
-        if (matches(first, second, Face.U, Face.B)) return Edge.UB;
-        if (matches(first, second, Face.D, Face.R)) return Edge.DR;
-        if (matches(first, second, Face.D, Face.F)) return Edge.DF;
-        if (matches(first, second, Face.D, Face.L)) return Edge.DL;
-        if (matches(first, second, Face.D, Face.B)) return Edge.DB;
-        if (matches(first, second, Face.F, Face.R)) return Edge.FR;
-        if (matches(first, second, Face.F, Face.L)) return Edge.FL;
-        if (matches(first, second, Face.B, Face.R)) return Edge.BR;
-        if (matches(first, second, Face.B, Face.L)) return Edge.BL;
-        throw new IllegalArgumentException("Faces do not form an edge: " + first + ", " + second);
-    }
-
-    private static Corner cornerForFaces(Face a, Face b, Face c) {
-        if (matchesAll(a, b, c, Face.U, Face.R, Face.F)) return Corner.URF;
-        if (matchesAll(a, b, c, Face.U, Face.F, Face.L)) return Corner.UFL;
-        if (matchesAll(a, b, c, Face.U, Face.L, Face.B)) return Corner.ULB;
-        if (matchesAll(a, b, c, Face.U, Face.B, Face.R)) return Corner.UBR;
-        if (matchesAll(a, b, c, Face.D, Face.F, Face.R)) return Corner.DFR;
-        if (matchesAll(a, b, c, Face.D, Face.L, Face.F)) return Corner.DLF;
-        if (matchesAll(a, b, c, Face.D, Face.B, Face.L)) return Corner.DBL;
-        if (matchesAll(a, b, c, Face.D, Face.R, Face.B)) return Corner.DRB;
-        throw new IllegalArgumentException("Faces do not form a corner: " + a + ", " + b + ", " + c);
-    }
-
-    private static boolean matches(Face first, Face second, Face expectedA, Face expectedB) {
-        return (first == expectedA && second == expectedB) || (first == expectedB && second == expectedA);
-    }
-
-    private static boolean matchesAll(Face a, Face b, Face c, Face x, Face y, Face z) {
-        return contains(a, b, c, x) && contains(a, b, c, y) && contains(a, b, c, z);
-    }
-
-    private static boolean contains(Face a, Face b, Face c, Face target) {
-        return a == target || b == target || c == target;
     }
 
     private static CubeState copyCube(CubeState cube) {
@@ -873,23 +849,23 @@ public class F2LSolver {
         return orientedCube.orientation();
     }
 
-    private static String printableAlgorithm(Algorithm algorithm) {
-        return algorithm.isEmpty() ? "<none>" : algorithm.toString();
+    private static void applyMappedMoves(CubeState cube, List<Move> moves, Move[] faceTurns) {
+        for (var move : moves) {
+            MoveApplier.applyMove(cube, mappedFaceTurn(move, faceTurns));
+        }
     }
 
-    private static int slotIndexForPair(SlotPair pair, SlotPair[] stagePairs) {
-        for (int i = 0; i < stagePairs.length; i++) {
-            if (stagePairs[i].equals(pair)) {
-                return i;
+    private static Move mappedFaceTurn(Move move, Move[] faceTurns) {
+        for (int i = 0; i < FACE_TURNS.length; i++) {
+            if (FACE_TURNS[i] == move) {
+                return faceTurns[i];
             }
         }
-        throw new IllegalStateException("Missing stage slot for pair " + pair);
+        throw new IllegalArgumentException("Unexpected F2L search move: " + move);
     }
 
-    private record TargetSlot(Corner corner, Edge edge) {
-    }
-
-    private record SlotPair(Corner cornerPiece, Edge edgePiece) {
+    private static String printableAlgorithm(Algorithm algorithm) {
+        return algorithm.isEmpty() ? "<none>" : algorithm.toString();
     }
 
     private record CandidateSolution(
@@ -906,5 +882,23 @@ public class F2LSolver {
     }
 
     private record SearchOutcome(Algorithm solution, int nextBound) {
+    }
+
+    private record SearchGoal(
+            Predicate<CubeState> isSolved,
+            ToIntFunction<CubeState> heuristic,
+            ToLongFunction<CubeState> stateKey
+    ) {
+        boolean isSolved(CubeState cube) {
+            return isSolved.test(cube);
+        }
+
+        int heuristic(CubeState cube) {
+            return heuristic.applyAsInt(cube);
+        }
+
+        long stateKey(CubeState cube) {
+            return stateKey.applyAsLong(cube);
+        }
     }
 }

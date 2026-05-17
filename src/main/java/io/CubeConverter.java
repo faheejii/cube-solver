@@ -294,13 +294,6 @@ public final class CubeConverter {
         return result < 0 ? result + modulus : result;
     }
 
-    private static final class StickerRef {
-        private final Face face;
-        private final int index;
-
-        private StickerRef(Face face, int index) {
-            this.face = face;
-            this.index = index;
-        }
+    private record StickerRef(Face face, int index) {
     }
 }

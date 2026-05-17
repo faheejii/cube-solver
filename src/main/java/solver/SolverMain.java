@@ -17,12 +17,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SolverMain {
+    private static final boolean USE_TWO_PHASE_F2L = Boolean.getBoolean("f2l.twophase");
     private static final List<String> DEFAULT_SCRAMBLES = List.of(
-            "F' L' U2 B L' D B U' F2 R2 F2 R U2 D2 L' D2 F2 L2 D2 F",
-            //"F' U2 F U2 B U2 R2 F D2 U2 L U' L2 B U L R B2 U F",
-            //"D' R B L2 F2 D' U2 R2 U' B2 F2 D2 U' R2 F L' B2 D B D2 U'",
-            //"R F U D B L2 F' L U' R' D2 B2 R2 U L2 D' B2 R2 D B2 U2",
-            "U2 R2 B2 D' L2 U F2 D2 R2 B2 R2 D F' R' B2 L' B' R2 B2 L' D2"
+            "L2 F R' F2 R2 F2 U2 R2 D U' R2 F2 R2 B' D' R2 F' L' R2 D2"
     );
 
     public static void main(String[] args) {
@@ -36,6 +33,7 @@ public class SolverMain {
         System.out.println("F2L collisions: " + f2lCollisions);
         System.out.println("OLL collisions: " + ollCollisions);
         System.out.println("PLL collisions: " + pllCollisions);
+        System.out.println("F2L mode: " + (USE_TWO_PHASE_F2L ? "two-phase search" : "DB + validated fallback"));
         System.out.println("Selected face: " + crossFace);
         System.out.println("Scramble count: " + scrambles.size());
 
@@ -54,7 +52,10 @@ public class SolverMain {
         var crossSolution = new CrossSolver().solve(orientedCube.cubeState(), crossFace);
         orientedCube.applyMoves(crossSolution.getMoves());
 
-        var f2lSolution = new F2LSolver(F2LCaseDatabase.seedBasicCases()).solve(orientedCube);
+        var f2lSolver = USE_TWO_PHASE_F2L
+                ? new F2LSolver()
+                : new F2LSolver(F2LCaseDatabase.seedBasicCases());
+        var f2lSolution = f2lSolver.solve(orientedCube);
         orientedCube.applyMoves(f2lSolution.getMoves());
 
         Algorithm ollSolution = new Algorithm();

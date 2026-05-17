@@ -41,6 +41,19 @@ public class F2LSolverTest {
     }
 
     @Test
+    void solveAfterCross_withoutDatabaseShouldUseTwoPhaseSearch() {
+        var cube = new CubeState();
+        MoveApplier.applyAlgorithm(cube, "R U R' U'");
+
+        var solver = new F2LSolver();
+        var solution = solver.solveAfterCross(cube, Face.D);
+
+        MoveApplier.executeMoves(cube, solution.getMoves());
+        assertTrue(CrossAnalyzer.isCrossSolved(cube));
+        assertTrue(F2LAnalyzer.isF2LSolved(cube));
+    }
+
+    @Test
     void solveAfterCross_shouldSolveCaseThatPreviouslyNeededAuf() {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, "R U' R' U' F U F'");
