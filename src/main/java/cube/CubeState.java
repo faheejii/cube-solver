@@ -1,5 +1,7 @@
 package cube;
 
+import java.util.Arrays;
+
 public class CubeState {
     public byte[] cornerPerm = new byte[8]; // which corner piece in each position
     public byte[] cornerOri = new byte[8]; // 1 of 3 orientations of the corner: 0, 1, 2
@@ -16,5 +18,14 @@ public class CubeState {
             edgePerm[i] = i;
             edgeOri[i] = 0;
         }
+    }
+
+    public CubeState copy() {
+        var copy = new CubeState();
+        copy.cornerPerm = Arrays.copyOf(cornerPerm, cornerPerm.length);
+        copy.cornerOri = Arrays.copyOf(cornerOri, cornerOri.length);
+        copy.edgePerm = Arrays.copyOf(edgePerm, edgePerm.length);
+        copy.edgeOri = Arrays.copyOf(edgeOri, edgeOri.length);
+        return copy;
     }
 }

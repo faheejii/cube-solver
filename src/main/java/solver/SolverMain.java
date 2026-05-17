@@ -1,6 +1,8 @@
 package solver;
 
 import algorithms.F2LCaseDatabase;
+import algorithms.F2LInsertCaseDatabase;
+import algorithms.F2LSetupCaseDatabase;
 import algorithms.OLLCaseDatabase;
 import algorithms.PLLCaseDatabase;
 import cfop.CrossAnalyzer;
@@ -17,9 +19,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SolverMain {
-    private static final boolean USE_TWO_PHASE_F2L = Boolean.getBoolean("f2l.twophase");
+    private static final boolean USE_LEGACY_F2L = Boolean.getBoolean("f2l.legacy");
     private static final List<String> DEFAULT_SCRAMBLES = List.of(
-            "L2 F R' F2 R2 F2 U2 R2 D U' R2 F2 R2 B' D' R2 F' L' R2 D2"
+            "R D R' D2 R D' R'"
     );
 
     public static void main(String[] args) {
@@ -27,22 +29,33 @@ public class SolverMain {
         var scrambles = args.length > 1 ? parseScrambles(args, 1) : DEFAULT_SCRAMBLES;
 
         var f2lCollisions = F2LCaseDatabase.duplicateSeedBasicCases();
+        var f2lSetupDatabase = F2LSetupCaseDatabase.seedCases();
+        var f2lInsertDatabase = F2LInsertCaseDatabase.seedCases();
         var ollCollisions = OLLCaseDatabase.duplicateSeedCases();
         var pllCollisions = PLLCaseDatabase.duplicateSeedCases();
 
         System.out.println("F2L collisions: " + f2lCollisions);
         System.out.println("OLL collisions: " + ollCollisions);
         System.out.println("PLL collisions: " + pllCollisions);
-        System.out.println("F2L mode: " + (USE_TWO_PHASE_F2L ? "two-phase search" : "DB + validated fallback"));
+        System.out.println("F2L mode: " + (USE_LEGACY_F2L ? "legacy DB + validated fallback" : "two-phase DB + fallback"));
+        System.out.println("F2L setup phase cases: " + f2lSetupDatabase.size());
+        System.out.println("F2L insert phase cases: " + f2lInsertDatabase.size());
         System.out.println("Selected face: " + crossFace);
         System.out.println("Scramble count: " + scrambles.size());
 
         for (int i = 0; i < scrambles.size(); i++) {
-            solveScramble(scrambles.get(i), crossFace, i + 1, scrambles.size());
+            solveScramble(scrambles.get(i), crossFace, i + 1, scrambles.size(), f2lSetupDatabase, f2lInsertDatabase);
         }
     }
 
-    private static void solveScramble(String scramble, Face crossFace, int index, int total) {
+    private static void solveScramble(
+            String scramble,
+            Face crossFace,
+            int index,
+            int total,
+            F2LSetupCaseDatabase f2lSetupDatabase,
+            F2LInsertCaseDatabase f2lInsertDatabase
+    ) {
         long startTime = System.nanoTime();
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, scramble);
@@ -52,9 +65,9 @@ public class SolverMain {
         var crossSolution = new CrossSolver().solve(orientedCube.cubeState(), crossFace);
         orientedCube.applyMoves(crossSolution.getMoves());
 
-        var f2lSolver = USE_TWO_PHASE_F2L
-                ? new F2LSolver()
-                : new F2LSolver(F2LCaseDatabase.seedBasicCases());
+        var f2lSolver = USE_LEGACY_F2L
+                ? new F2LSolver(F2LCaseDatabase.seedBasicCases())
+                : new F2LSolver(f2lSetupDatabase, f2lInsertDatabase);
         var f2lSolution = f2lSolver.solve(orientedCube);
         orientedCube.applyMoves(f2lSolution.getMoves());
 
@@ -66,7 +79,7 @@ public class SolverMain {
                 ollSolution = new OLLSolver(ollDatabase).solve(orientedCube);
                 orientedCube.applyMoves(ollSolution.getMoves());
                 ollStatus = Boolean.toString(OLLAnalyzer.isOllSolved(cube, orientedCube.orientation()));
-            } catch (IllegalStateException e) {
+            } catch (IllegalArgumentException | IllegalStateException e) {
                 ollStatus = "not solved (" + e.getMessage() + ")";
             }
         }
@@ -74,14 +87,16 @@ public class SolverMain {
         Algorithm pllSolution = new Algorithm();
         var pllStatus = "skipped (no seeded PLL cases)";
         var pllDatabase = PLLCaseDatabase.seedCases();
-        if (pllDatabase.size() > 0) {
+        if (pllDatabase.size() > 0 && OLLAnalyzer.isOllSolved(cube, orientedCube.orientation())) {
             try {
                 pllSolution = new PLLSolver(pllDatabase).solve(orientedCube);
                 orientedCube.applyMoves(pllSolution.getMoves());
                 pllStatus = Boolean.toString(PLLAnalyzer.isPllSolved(cube, orientedCube.orientation()));
-            } catch (IllegalStateException e) {
+            } catch (IllegalArgumentException | IllegalStateException e) {
                 pllStatus = "not solved (" + e.getMessage() + ")";
             }
+        } else if (pllDatabase.size() > 0) {
+            pllStatus = "skipped (OLL not solved)";
         }
 
         System.out.println();

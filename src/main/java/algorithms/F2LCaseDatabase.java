@@ -63,71 +63,71 @@ public class F2LCaseDatabase {
 
     private static List<F2LCase> seedBasicCaseList() {
         var cases = new SeedCaseList();
-        var frSlot = F2LSlot.FR;
-        var brSlot = F2LSlot.BR;
-        var flSlot = F2LSlot.FL;
-        var blSlot = F2LSlot.BL;
+        var fr = F2LSlot.FR;
+        var br = F2LSlot.BR;
+        var fl = F2LSlot.FL;
+        var bl = F2LSlot.BL;
 
         // free pairs
-        cases.add("R U' R'", frSlot);                         // case-1
-        cases.add("F' r U r'", flSlot);                       // case-2
-        cases.add("L U' L'", blSlot);                         // case-3
+        cases.add("R U' R'", fr);                         // case-1
+        cases.add("F' r U r'", fl);                       // case-2
+        cases.add("L U' L'", bl);                         // case-3
 
-        cases.add("F R' F' R", frSlot);                       // case-4
-        cases.add("L' U L", flSlot);                          // case-5
-        cases.add("R' U R", brSlot);                          // case-6
+        cases.add("F R' F' R", fr);                       // case-4
+        cases.add("L' U L", fl);                          // case-5
+        cases.add("R' U R", br);                          // case-6
 
-        cases.add("F' U' F", frSlot);                         // case-7
-        cases.add("L' U' L", flSlot);                         // case-8
-        cases.add("y R' U' R", blSlot);                       // case-9
-        cases.add("R' U' R", brSlot);                         // case-10
+        cases.add("F' U' F", fr);                         // case-7
+        cases.add("L' U' L", fl);                         // case-8
+        cases.add("y R' U' R", bl);                       // case-9
+        cases.add("R' U' R", br);                         // case-10
 
-        cases.add("R U R'", frSlot);                          // case-11
-        cases.add("F U F'", flSlot);                          // case-12
-        cases.add("L U L'", blSlot);                          // case-13
+        cases.add("R U R'", fr);                          // case-11
+        cases.add("F U F'", fl);                          // case-12
+        cases.add("L U L'", bl);                          // case-13
 
         // others
-        cases.add("R U R' U2 R U' R'", frSlot);               // case-14
-        cases.add("R' U' R U2 R' U R", brSlot);               // case-15
-        cases.add("R U2 R' U' R U2 R'", frSlot);              // case-16
-        cases.add("R' U2 R U R' U2 R", brSlot);               // case-17
-        cases.add("L' U' L U' L' U' L", flSlot);              // case-18
-        cases.add("R U R' U R U R'", frSlot);                 // case-19
-        cases.add("R U2 R' U F' U' F", frSlot);               // case-20
-        cases.add("R' U2 R2 U R2 U R", frSlot);               // case-21
-        cases.add("R' U R U' R' U' R", brSlot);               // case-22
-        cases.add("R U' R' U R U R'", frSlot);                // case-23
-        cases.add("R' D' R U' R' D R U R U' R'", frSlot);     // case-24
-        cases.add("R U' R' U2 F' U' F", frSlot);              // case-25
-        cases.add("R U2 R' U' R U R'", frSlot);               // case-26
-        cases.add("L' U2 L U L' U' L", flSlot);               // case-27
-        cases.add("U R' F' U2 F R U R' U' R", brSlot);        // case-28
-        cases.add("L' U2 L U' L' U L", flSlot);               // case-29
-        cases.add("L U' L' U2 L U L'", blSlot);               // case-30
-        cases.add("R' U R U2 R' U' R", brSlot);               // case-31
-        cases.add("R U' R' U' R U' R' U R U' R'", frSlot);    // case-32
-        cases.add("L' U L U L' U L U' L' U L", flSlot);       // case-33
-        cases.add("F' R U R' U' R' F R", frSlot);             // case-34
-        cases.add("R U' R' F R' F' R", frSlot);               // case-35
-        cases.add("R U' R' U R U' R'", frSlot);               // case-36
-        cases.add("L' U L U' L' U L", flSlot);                // case-37
-        cases.add("R' U' R U R' U' R", brSlot);               // case-38
-        cases.add("R U R' U' R U R'", frSlot);                // case-39
-        cases.add("R' F R F' R U' R'", frSlot);               // case-40
-        cases.add("R U' R' U R U' R' U R U' R'", frSlot);     // case-41
-        cases.add("R U' R' U2 R U' R'", frSlot);              // case-42
-        cases.add("L' U L U2 L' U L", flSlot);                // case-43
-        cases.add("R U R' F R' F' R", frSlot);                // case-44
-        cases.add("L' U' L F' L F L'", flSlot);               // case-45
-        cases.add("R2 U2 F R2 F' U2 R' U R'", frSlot);        // case-46
-        cases.add("R U' R' U' R U R' U2 R U' R'", frSlot);    // case-47
-        cases.add("R U R' U2 R U' R' U R U R'", frSlot);      // case-48
-        cases.add("R U' R' U' R U' R' U y' R' U' R", frSlot); // case-49
-        cases.add("R U' R' F' L' U2 L F", frSlot);            // case-50
+        cases.add("R U R' U2 R U' R'", fr);               // case-14
+        cases.add("R' U' R U2 R' U R", br);               // case-15
+        cases.add("R U2 R' U' R U2 R'", fr);              // case-16
+        cases.add("R' U2 R U R' U2 R", br);               // case-17
+        cases.add("L' U' L U' L' U' L", fl);              // case-18
+        cases.add("R U R' U R U R'", fr);                 // case-19
+        cases.add("R U2 R' U F' U' F", fr);               // case-20
+        cases.add("R' U2 R2 U R2 U R", fr);               // case-21
+        cases.add("R' U R U' R' U' R", br);               // case-22
+        cases.add("R U' R' U R U R'", fr);                // case-23
+        cases.add("R' D' R U' R' D R U R U' R'", fr);     // case-24
+        cases.add("R U' R' U2 F' U' F", fr);              // case-25
+        cases.add("R U2 R' U' R U R'", fr);               // case-26
+        cases.add("L' U2 L U L' U' L", fl);               // case-27
+        cases.add("U R' F' U2 F R U R' U' R", br);        // case-28
+        cases.add("L' U2 L U' L' U L", fl);               // case-29
+        cases.add("L U' L' U2 L U L'", bl);               // case-30
+        cases.add("R' U R U2 R' U' R", br);               // case-31
+        cases.add("R U' R' U' R U' R' U R U' R'", fr);    // case-32
+        cases.add("L' U L U L' U L U' L' U L", fl);       // case-33
+        cases.add("F' R U R' U' R' F R", fr);             // case-34
+        cases.add("R U' R' F R' F' R", fr);               // case-35
+        cases.add("R U' R' U R U' R'", fr);               // case-36
+        cases.add("L' U L U' L' U L", fl);                // case-37
+        cases.add("R' U' R U R' U' R", br);               // case-38
+        cases.add("R U R' U' R U R'", fr);                // case-39
+        cases.add("R' F R F' R U' R'", fr);               // case-40
+        cases.add("R U' R' U R U' R' U R U' R'", fr);     // case-41
+        cases.add("R U' R' U2 R U' R'", fr);              // case-42
+        cases.add("L' U L U2 L' U L", fl);                // case-43
+        cases.add("R U R' F R' F' R", fr);                // case-44
+        cases.add("L' U' L F' L F L'", fl);               // case-45
+        cases.add("R2 U2 F R2 F' U2 R' U R'", fr);        // case-46
+        cases.add("R U' R' U' R U R' U2 R U' R'", fr);    // case-47
+        cases.add("R U R' U2 R U' R' U R U R'", fr);      // case-48
+        cases.add("R U' R' U' R U' R' U y' R' U' R", fr); // case-49
+        cases.add("R U' R' F' L' U2 L F", fr);            // case-50
         return cases.toList();
     }
 
-    private static boolean isCubeRotation(Move move) {
+    private static boolean isUnsupportedRotation(Move move) {
         return switch (move) {
             case X, X2, X_PRIME, Z, Z2, Z_PRIME -> true;
             default -> false;
@@ -214,7 +214,7 @@ public class F2LCaseDatabase {
     public void validate() {
         for (var f2lCase : cases.values()) {
             for (var move : f2lCase.algorithm().getMoves()) {
-                if (isCubeRotation(move)) {
+                if (isUnsupportedRotation(move)) {
                     throw new IllegalArgumentException("F2L DB algorithms must not contain cube rotations: " + f2lCase.name());
                 }
             }

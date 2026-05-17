@@ -30,6 +30,25 @@ public enum Move {
         return notation;
     }
 
+    public boolean isCubeRotation() {
+        return switch (this) {
+            case X, X2, X_PRIME, Y, Y2, Y_PRIME, Z, Z2, Z_PRIME -> true;
+            default -> false;
+        };
+    }
+
+    public boolean isWideMove() {
+        return switch (this) {
+            case UW, UW2, UW_PRIME,
+                    RW, RW2, RW_PRIME,
+                    FW, FW2, FW_PRIME,
+                    DW, DW2, DW_PRIME,
+                    LW, LW2, LW_PRIME,
+                    BW, BW2, BW_PRIME -> true;
+            default -> false;
+        };
+    }
+
     public Move inverse() {
         return switch (this) {
             case U -> U_PRIME;

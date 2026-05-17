@@ -115,13 +115,20 @@ public final class F2LGeometry {
 
     public static F2LSlot visibleSlotForStageIndex(int index, TargetSlot[] stageTargets, CubeOrientation orientation) {
         var originalTarget = stageTargets[index];
+        return visibleSlotForTarget(originalTarget, orientation);
+    }
+
+    public static F2LSlot visibleSlotForTarget(TargetSlot target, CubeOrientation orientation) {
+        if (target == null) {
+            throw new IllegalArgumentException("target cannot be null");
+        }
         for (var slot : SLOT_ORDER) {
             var visibleTarget = targetSlotFor(slot, orientation);
-            if (visibleTarget.corner() == originalTarget.corner() && visibleTarget.edge() == originalTarget.edge()) {
+            if (visibleTarget.corner() == target.corner() && visibleTarget.edge() == target.edge()) {
                 return slot;
             }
         }
-        throw new IllegalStateException("Missing visible slot for stage index " + index);
+        throw new IllegalStateException("Missing visible slot for target " + target);
     }
 
     public static int slotIndexForPair(SlotPair pair, SlotPair[] stagePairs) {
