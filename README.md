@@ -15,22 +15,26 @@ Implemented:
 
 - face turns, slice moves, cube rotations, and lowercase wide moves
 - selected cross-face solving
+- shared CFOP orchestration through `CfopSolveService`
 - default 2-phase F2L solving with setup and insert phase databases
 - legacy F2L DB mode for comparison
 - OLL solving from seeded sticker-orientation signatures
 - PLL solving from seeded last-layer permutation signatures, including final AUF handling
 - validation-by-execution after DB lookup in F2L, OLL, and PLL
+- Java HTTP API and Vite/React frontend
+- 3D cube playback in the frontend through `cubing.js`
 
 Known limitations:
 
 - F2L is still experimental and currently has only a small number of setup/insert cases seeded.
 - The legacy F2L DB remains available via `-Df2l.legacy=true`, but it has known signature collisions and should not be treated as authoritative.
-- There is no standalone CFOP orchestration class yet; `SolverMain` wires the development pipeline.
+- The frontend currently exposes one-scramble solve requests only.
 
 ## Requirements
 
 - Java 17
 - Maven 3.9+
+- Node.js 20+ and npm 10+ for frontend development/builds
 
 ## Build And Test
 
@@ -40,6 +44,49 @@ mvn -q -Dmaven.compiler.useIncrementalCompilation=false test
 
 ```bash
 mvn -q clean compile
+```
+
+## Run The API Server
+
+```bash
+mvn -q compile exec:java -Dexec.mainClass=server.ApiServerMain
+```
+
+This starts:
+
+- `POST /api/solve`
+- `GET /api/health`
+- static frontend serving from `frontend/dist` when a frontend build exists
+
+The default port is `8080`. Override it with:
+
+```bash
+mvn -q compile exec:java -Dexec.mainClass=server.ApiServerMain -Dserver.port=9090
+```
+
+## Frontend Development
+
+Install dependencies:
+
+```bash
+cd frontend
+npm install
+```
+
+Run the Vite dev server:
+
+```bash
+npm run dev
+```
+
+The Vite app proxies `/api` to `http://localhost:8080`, so run the Java API server alongside it.
+The cube visualization uses `cubing.js` and can animate the full solution or individual CFOP stages.
+
+Build the frontend:
+
+```bash
+cd frontend
+npm run build
 ```
 
 ## Run SolverMain
@@ -139,7 +186,21 @@ Solvers:
 - [`src/main/java/solver/F2LSolver.java`](src/main/java/solver/F2LSolver.java)
 - [`src/main/java/solver/OLLSolver.java`](src/main/java/solver/OLLSolver.java)
 - [`src/main/java/solver/PLLSolver.java`](src/main/java/solver/PLLSolver.java)
+- [`src/main/java/solver/CfopSolveService.java`](src/main/java/solver/CfopSolveService.java)
 - [`src/main/java/solver/SolverMain.java`](src/main/java/solver/SolverMain.java)
+
+API / server:
+
+- [`src/main/java/api/SolveApiRequest.java`](src/main/java/api/SolveApiRequest.java)
+- [`src/main/java/server/CubeHttpServer.java`](src/main/java/server/CubeHttpServer.java)
+- [`src/main/java/server/ApiServerMain.java`](src/main/java/server/ApiServerMain.java)
+
+Frontend:
+
+- [`frontend/src/App.tsx`](frontend/src/App.tsx)
+- [`frontend/src/CubeAnimator.tsx`](frontend/src/CubeAnimator.tsx)
+- [`frontend/src/api.ts`](frontend/src/api.ts)
+- [`frontend/vite.config.ts`](frontend/vite.config.ts)
 
 ## F2L
 
@@ -179,10 +240,51 @@ Add cases here:
 - OLL: [`src/main/java/algorithms/OLLCaseDatabase.java`](src/main/java/algorithms/OLLCaseDatabase.java)
 - PLL: [`src/main/java/algorithms/PLLCaseDatabase.java`](src/main/java/algorithms/PLLCaseDatabase.java)
 
+## API Contract
+
+Request:
+
+```json
+{
+  "scramble": "R D R' D2 R D' R'",
+  "crossFace": "U",
+  "useLegacyF2L": false
+}
+```
+
+Response fields include:
+
+- selected cross face and F2L mode
+- per-stage algorithm, move count, solved flag, and status
+- solved F2L slot summary
+- total move count
+- elapsed time in milliseconds
+
+Example:
+
+```json
+{
+  "scramble": "R D R' D2 R D' R'",
+  "crossFace": "U",
+  "useLegacyF2L": false,
+  "f2lMode": "two-phase DB + fallback",
+  "cross": { "algorithm": "z2", "moveCount": 0, "solved": true, "status": "ok" },
+  "f2l": { "algorithm": "y2 R U R' U2 R U' R'", "moveCount": 7, "solved": true, "status": "ok" },
+  "oll": { "algorithm": "", "moveCount": 0, "solved": true, "status": "ok" },
+  "pll": { "algorithm": "", "moveCount": 0, "solved": true, "status": "ok" },
+  "fullySolved": true,
+  "totalMoveCount": 7
+}
+```
+
 ## Useful Targeted Tests
 
 ```bash
 mvn -q -Dtest=test.F2LPhaseCaseDatabaseTest test
+```
+
+```bash
+mvn -q -Dtest=test.CfopSolveServiceTest test
 ```
 
 ```bash
