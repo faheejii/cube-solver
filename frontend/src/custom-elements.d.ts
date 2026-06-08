@@ -12,6 +12,7 @@ declare global {
         "hint-facelets"?: string;
         "camera-latitude"?: string;
         "camera-longitude"?: string;
+        "tempo-scale"?: string;
       };
     }
   }

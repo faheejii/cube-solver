@@ -34,25 +34,36 @@ public class F2LInsertCaseDatabase {
 
     private static List<F2LInsertCase> seedCaseList() {
         var cases = new SeedCaseList();
-        var fr = F2LSlot.FR;
-        var br = F2LSlot.BR;
-        var fl = F2LSlot.FL;
-        var bl = F2LSlot.BL;
+        var FR = F2LSlot.FR;
+        var BR = F2LSlot.BR;
+        var FL = F2LSlot.FL;
+        var BL = F2LSlot.BL;
 
-        // Add insert cases here. Each algorithm should insert into insertSlot while preserving the listed slots.
-        cases.add("R U' R'", fr, List.of(br, fl, bl), "case-1.1");
-        cases.add("R U' R'", fr, List.of(br), "case-1.2");
-        cases.add("R U' R'", fr, List.of(br, fl), "case-1.3");
-        cases.add("R U' R'", fr, List.of(br, bl), "case-1.4");
-        cases.add("R U' R'", fr, List.of(fl), "case-1.5");
-        cases.add("R U' R'", fr, List.of(fl, bl), "case-1.6");
-        cases.add("R U' R'", fr, List.of(bl), "case-1.7");
+        cases.add("R U R'", FR, "case-1.1");
+        cases.add("L U L'", BL, "case-1.2");
+        cases.add("F U F'", FL, "case-1.3");
+
+        cases.add("R U' R'", FR, "case-2.1");
+        cases.add("L U' L'", BL, "case-2.2");
+        cases.add("F U' F'", FL, "case-2.3");
+
+        cases.add("L' U' L", FL, "case-3.1");
+        cases.add("R' U' R", BR, "case-3.2");
+        cases.add("F' U' F", FR, "case-3.3");
+
+        cases.add("L' U L", FL, "case-4.1");
+        cases.add("R' U R", BR, "case-4.2");
+        cases.add("F' U F", FR, "case-4.3");
+
+        cases.add("F' R U R' U' R' F R", FR, "case-5.1");
+
+        cases.add("F L' U' L U L F' L'", FL, "case-6.1");
 
         return cases.toList();
     }
 
-    public void register(String algorithm, F2LSlot insertSlot, Collection<F2LSlot> preservedSlots, String name) {
-        register(caseFromAlgorithm(algorithm, insertSlot, preservedSlots, name));
+    public void register(String algorithm, F2LSlot insertSlot, String name) {
+        register(caseFromAlgorithm(algorithm, insertSlot, name));
     }
 
     public void register(F2LInsertCase insertCase) {
@@ -115,14 +126,13 @@ public class F2LInsertCaseDatabase {
     private static F2LInsertCase caseFromAlgorithm(
             String algorithm,
             F2LSlot insertSlot,
-            Collection<F2LSlot> preservedSlots,
             String name
     ) {
         if (insertSlot == null) {
             throw new IllegalArgumentException("insertSlot cannot be null");
         }
         var alg = Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm));
-        var mask = F2LPreservationMask.of(preservedSlots);
+        var mask = F2LPreservationMask.allExcept(insertSlot);
         var setupCube = new OrientedCube();
         setupCube.applyMoves(alg.inverse().getMoves());
         var signature = F2LCaseSignatureExtractor.extract(setupCube.cubeState(), insertSlot, setupCube.orientation());
@@ -138,13 +148,6 @@ public class F2LInsertCaseDatabase {
 
         if (!F2LGeometry.isTargetCrossSolved(source.cubeState(), F2LGeometry.targetCrossForOrientation(sourceOrientation))) {
             throw new IllegalArgumentException("F2L insert case source does not preserve cross: " + insertCase.name());
-        }
-        if (!F2LGeometry.isPairConnected(
-                source.cubeState(),
-                new F2LGeometry.SlotPair(insertedTarget.corner(), insertedTarget.edge()),
-                sourceOrientation
-        )) {
-            throw new IllegalArgumentException("F2L insert case source is not a connected target pair: " + insertCase.name());
         }
         for (var preservedSlot : insertCase.preservedSlots().slots()) {
             var target = F2LGeometry.targetSlotFor(preservedSlot, sourceOrientation);
@@ -175,8 +178,8 @@ public class F2LInsertCaseDatabase {
     private static final class SeedCaseList {
         private final List<F2LInsertCase> cases = new ArrayList<>();
 
-        private void add(String algorithm, F2LSlot insertSlot, List<F2LSlot> preservedSlots, String name) {
-            cases.add(caseFromAlgorithm(algorithm, insertSlot, preservedSlots, name));
+        private void add(String algorithm, F2LSlot insertSlot, String name) {
+            cases.add(caseFromAlgorithm(algorithm, insertSlot, name));
         }
 
         private List<F2LInsertCase> toList() {

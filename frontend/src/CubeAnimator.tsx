@@ -9,9 +9,12 @@ type StageOption = {
   algorithm: string;
 };
 
+const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2, 3] as const;
+
 export default function CubeAnimator({ result }: { result: SolveResponse }) {
   const options = stageOptions(result);
   const [selectedId, setSelectedId] = useState(options[0]?.id ?? "full");
+  const [playbackSpeed, setPlaybackSpeed] = useState<(typeof PLAYBACK_SPEEDS)[number]>(1);
   const selected = options.find((option) => option.id === selectedId) ?? options[0];
 
   return (
@@ -22,26 +25,45 @@ export default function CubeAnimator({ result }: { result: SolveResponse }) {
           <h2>3D Cube</h2>
         </div>
 
-        <div className="stage-tabs" aria-label="Animation stage">
-          {options.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              className={option.id === selected.id ? "stage-tab active" : "stage-tab"}
-              onClick={() => setSelectedId(option.id)}
-            >
-              {option.label}
-            </button>
-          ))}
+        <div className="playback-controls">
+          <div className="stage-tabs" aria-label="Animation stage">
+            {options.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                className={option.id === selected.id ? "stage-tab active" : "stage-tab"}
+                onClick={() => setSelectedId(option.id)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="speed-control" aria-label="Playback speed">
+            <span>Speed</span>
+            <div className="speed-options">
+              {PLAYBACK_SPEEDS.map((speed) => (
+                <button
+                  key={speed}
+                  type="button"
+                  className={speed === playbackSpeed ? "speed-option active" : "speed-option"}
+                  onClick={() => setPlaybackSpeed(speed)}
+                >
+                  {speed}x
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
       <div className="cube-player-shell">
         <twisty-player
-          key={`${selected.id}-${selected.setupAlgorithm}-${selected.algorithm}`}
+          key={`${selected.id}-${selected.setupAlgorithm}-${selected.algorithm}-${playbackSpeed}`}
           puzzle="3x3x3"
           experimental-setup-alg={selected.setupAlgorithm}
           alg={selected.algorithm}
+          tempo-scale={String(playbackSpeed)}
           background="none"
           control-panel="bottom-row"
           hint-facelets="none"
@@ -52,7 +74,7 @@ export default function CubeAnimator({ result }: { result: SolveResponse }) {
 
       <div className="visualizer-footer">
         <span>Setup: {selected.setupAlgorithm || "Solved cube"}</span>
-        <span>{selected.algorithm || "No moves for this stage"}</span>
+        <span>Solution: {selected.algorithm || "No moves for this stage"}</span>
       </div>
     </section>
   );

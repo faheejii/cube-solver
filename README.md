@@ -26,7 +26,7 @@ Implemented:
 
 Known limitations:
 
-- F2L is still experimental and currently has only a small number of setup/insert cases seeded.
+- F2L is still experimental. The 2-phase setup/insert databases currently have partial case coverage.
 - The legacy F2L DB remains available via `-Df2l.legacy=true`, but it has known signature collisions and should not be treated as authoritative.
 - The frontend currently exposes one-scramble solve requests only.
 
@@ -208,8 +208,8 @@ Default F2L flow:
 
 1. Skip slots already solved after cross.
 2. Try insert DB directly with prefixes: no prefix, AUF, and `y/y'/y2` plus AUF.
-3. If insert misses, try setup DB with the same prefixes.
-4. After setup connects the pair, try insert DB again.
+3. If insert misses, try a validated setup+insert DB path.
+4. If no combined case works, try setup DB as a standalone phase.
 5. Fall back to bounded one-slot search when no phase DB case works.
 
 Setup and insert cases are keyed by:
@@ -218,16 +218,20 @@ Setup and insert cases are keyed by:
 (insert slot, preservation mask, F2L case signature)
 ```
 
-`insertSlot` is the visible logical slot in the current frame. `preservedSlots` describes solved slots the algorithm must preserve in that same visible frame.
+F2L case authors should write cases in a normal D-cross human frame. Do not add global cross-normalizing rotations like `z2` to every seed. `F2LSlot.FR` in a seed means the authored FR case, even if the runtime frame after a selected cross face sees the same physical target through another visible slot.
+
+Signatures are used as fast lookup hints, but they are not trusted as the only source of truth. When keyed lookup misses, the solver can validate seeded setup algorithms by execution and only accepts a setup+insert candidate if it solves the intended physical target slot while preserving the cross and already solved slots.
+
+Insert seed entries take `insertSlot` and derive the preservation mask as every F2L slot except that target slot. Setup seed entries take an explicit `sourceSetup`, a setup algorithm, and one `nonPreservedSlot`; the setup database derives the preservation mask as every F2L slot except `nonPreservedSlot`.
 
 Add 2-phase F2L cases here:
 
 - setup cases: [`src/main/java/algorithms/F2LSetupCaseDatabase.java`](src/main/java/algorithms/F2LSetupCaseDatabase.java)
 - insert cases: [`src/main/java/algorithms/F2LInsertCaseDatabase.java`](src/main/java/algorithms/F2LInsertCaseDatabase.java)
 
-For setup cases, the seed algorithm should connect the pair while preserving the listed slots. The database builds source signatures from canonical connected-pair references and insert AUF variants.
+For setup cases, `sourceSetup` is applied to a solved cube to create the case signature. The setup algorithm should transform that case into an insert-ready case while only allowing `nonPreservedSlot` to be disrupted. The solver validates setup candidates by checking execution against the current frame and, for the combined path, by requiring an insert DB case to solve the next state.
 
-For insert cases, the seed algorithm should insert the connected pair into the target slot while preserving the listed slots. The database seeds by applying the inverse algorithm to a solved cube and extracting the signature.
+For insert cases, the seed algorithm should solve `insertSlot` from an insert-ready case while only allowing that target slot to be disrupted. The database seeds by applying the inverse algorithm to a solved cube and extracting the signature.
 
 ## OLL And PLL
 
