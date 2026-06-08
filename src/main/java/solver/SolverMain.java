@@ -11,7 +11,7 @@ import java.util.List;
 public class SolverMain {
     private static final boolean USE_LEGACY_F2L = Boolean.getBoolean("f2l.legacy");
     private static final List<String> DEFAULT_SCRAMBLES = List.of(
-            "R D R' D2 R D' R'"
+            "L2 B2 D L2 B2 D' R2 U' L2 B2 D2 F' U' F D' L B U' R' U2"
     );
 
     public static void main(String[] args) {

@@ -31,6 +31,13 @@ public record F2LPreservationMask(int bits) {
         return new F2LPreservationMask(bits);
     }
 
+    public static F2LPreservationMask allExcept(F2LSlot nonPreservedSlot) {
+        if (nonPreservedSlot == null) {
+            throw new IllegalArgumentException("nonPreservedSlot cannot be null");
+        }
+        return new F2LPreservationMask(ALL_BITS & ~bitFor(nonPreservedSlot));
+    }
+
     public boolean contains(F2LSlot slot) {
         if (slot == null) {
             throw new IllegalArgumentException("slot cannot be null");

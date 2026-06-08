@@ -52,7 +52,7 @@ public class PLLCaseDatabase {
                 "R2 U' R U' R U R' U R2 D' U R U' R' D",                  // Gc
                 "R U R' U' D R2 U' R U' R' U R' U R2 D'",                 // Gd
                 "M2 U M2 U2 M2 U M2",                                      // H
-                "L' U' L F L' U' L U L F' L2 U L U",                      // Ja
+                "L' U' L F L' U' L U L F' L2 U L",                        // Ja
                 "R U R' F' R U R' U' R' F R2 U' R'",                      // Jb
                 "R U R' U R U R' F' R U R' U' R' F R2 U' R' U2 R U' R'",  // Na
                 "R' U R U' R' F' U' F R U R' F R' F' R U' R",             // Nb
@@ -63,7 +63,7 @@ public class PLLCaseDatabase {
                 "R2 U R U R' U' R' U' R' U R'",                           // Ub
                 "R' U R' d' R' F' R2 U' R' U R' F R F",                   // V
                 "F R U' R' U' R U R' F' R U R' U' R' F R F'",             // Y
-                "M2 U M2 U M' U2 M2 U2 M' U2"                              // Z
+                "M2 U M2 U M' U2 M2 U2 M'"                              // Z
         );
         int count = 1;
         for (var pllCase : cases) {

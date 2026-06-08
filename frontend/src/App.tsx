@@ -1,10 +1,19 @@
-import { FormEvent, startTransition, useState } from "react";
+import { FormEvent, startTransition, useEffect, useRef, useState } from "react";
 import CubeAnimator from "./CubeAnimator";
 import { solveCube } from "./api";
 import type { SolveResponse, SolveStage } from "./types";
 
 const DEFAULT_SCRAMBLE = "R D R' D2 R D' R'";
 const FACE_OPTIONS = ["U", "D", "F", "B", "L", "R"] as const;
+type Theme = "light" | "dark";
+
+function initialTheme(): Theme {
+  const savedTheme = window.localStorage.getItem("cube-solver-theme");
+  if (savedTheme === "light" || savedTheme === "dark") {
+    return savedTheme;
+  }
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
 export default function App() {
   const [scramble, setScramble] = useState(DEFAULT_SCRAMBLE);
@@ -13,11 +22,31 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SolveResponse | null>(null);
+  const [showSummary, setShowSummary] = useState(false);
+  const [pendingSummaryScroll, setPendingSummaryScroll] = useState(false);
+  const [theme, setTheme] = useState<Theme>(initialTheme);
+  const summaryRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem("cube-solver-theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (!pendingSummaryScroll || !showSummary) {
+      return;
+    }
+    summaryRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setPendingSummaryScroll(false);
+  }, [pendingSummaryScroll, showSummary]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
     setError(null);
+    setShowSummary(false);
+    setPendingSummaryScroll(false);
 
     try {
       const nextResult = await solveCube({
@@ -37,6 +66,15 @@ export default function App() {
     }
   }
 
+  function handleShowSummary() {
+    setShowSummary(true);
+    setPendingSummaryScroll(true);
+  }
+
+  function toggleTheme() {
+    setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
+  }
+
   return (
     <main className="page-shell">
       <header className="app-header">
@@ -44,8 +82,21 @@ export default function App() {
           <p className="eyebrow">CFOP Workbench</p>
           <h1>Cube Solver</h1>
         </div>
-        <div className={result?.fullySolved ? "system-pill ready" : "system-pill"}>
-          {result?.fullySolved ? "Solved" : "Ready"}
+        <div className="header-actions">
+          <button
+            className="theme-toggle"
+            type="button"
+            onClick={toggleTheme}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            <span className="theme-toggle-track">
+              <span className="theme-toggle-thumb" />
+            </span>
+            <span>{theme === "dark" ? "Dark" : "Light"}</span>
+          </button>
+          <div className={result?.fullySolved ? "system-pill ready" : "system-pill"}>
+            {result?.fullySolved ? "Solved" : "Ready"}
+          </div>
         </div>
       </header>
 
@@ -119,7 +170,15 @@ export default function App() {
       ) : null}
 
       {result ? (
-        <section className="results-grid">
+        <section className="summary-reveal">
+          <button className="summary-button" type="button" onClick={handleShowSummary}>
+            {showSummary ? "Jump to solve summary" : "View solve summary"}
+          </button>
+        </section>
+      ) : null}
+
+      {result && showSummary ? (
+        <section className="results-grid" ref={summaryRef}>
           <article className="summary-card">
             <p className="eyebrow">Solve Summary</p>
             <h2>{result.fullySolved ? "Solved in current frame" : "Partial solve result"}</h2>
