@@ -1,6 +1,5 @@
 package solver;
 
-import algorithms.F2LCaseDatabase;
 import algorithms.OLLCaseDatabase;
 import algorithms.PLLCaseDatabase;
 import cube.Face;
@@ -9,24 +8,21 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SolverMain {
-    private static final boolean USE_LEGACY_F2L = Boolean.getBoolean("f2l.legacy");
     private static final List<String> DEFAULT_SCRAMBLES = List.of(
-            "L2 B2 D L2 B2 D' R2 U' L2 B2 D2 F' U' F D' L B U' R' U2"
+            "F L2 D' R B2 D2 F' U B2 U2 F2 D2 R2 U2 R' B2 R' B2 R' U' R2"
     );
 
     public static void main(String[] args) {
         var crossFace = args.length > 0 ? Face.fromNotation(args[0].charAt(0)) : Face.U;
         var scrambles = args.length > 1 ? parseScrambles(args, 1) : DEFAULT_SCRAMBLES;
 
-        var f2lCollisions = F2LCaseDatabase.duplicateSeedBasicCases();
         var ollCollisions = OLLCaseDatabase.duplicateSeedCases();
         var pllCollisions = PLLCaseDatabase.duplicateSeedCases();
         var solveService = new CfopSolveService();
 
-        System.out.println("F2L collisions: " + f2lCollisions);
-        System.out.println("OLL collisions: " + ollCollisions);
+        System.out.println("OLL signature collisions handled by validation: " + ollCollisions.size());
         System.out.println("PLL collisions: " + pllCollisions);
-        System.out.println("F2L mode: " + (USE_LEGACY_F2L ? "legacy DB + validated fallback" : "two-phase DB + fallback"));
+        System.out.println("F2L mode: two-phase DB + fallback");
         System.out.println("Selected face: " + crossFace);
         System.out.println("Scramble count: " + scrambles.size());
 
@@ -42,7 +38,7 @@ public class SolverMain {
             int index,
             int total
     ) {
-        var result = solveService.solve(new CfopSolveRequest(scramble, crossFace, USE_LEGACY_F2L));
+        var result = solveService.solve(new CfopSolveRequest(scramble, crossFace));
 
         System.out.println();
         System.out.println("=== Scramble " + index + "/" + total + " ===");

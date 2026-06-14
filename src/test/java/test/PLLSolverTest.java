@@ -104,7 +104,7 @@ public class PLLSolverTest {
         var crossSolution = new CrossSolver().solve(orientedCube.cubeState(), Face.U);
         orientedCube.applyMoves(crossSolution.getMoves());
 
-        var f2lSolution = new F2LSolver(algorithms.F2LCaseDatabase.seedBasicCases()).solve(orientedCube);
+        var f2lSolution = new F2LSolver().solve(orientedCube);
         orientedCube.applyMoves(f2lSolution.getMoves());
 
         var ollSolution = new OLLSolver(algorithms.OLLCaseDatabase.seedCases()).solve(orientedCube);

@@ -7,70 +7,119 @@ import cube.Face;
 import cube.Move;
 import cube.MoveApplier;
 import cube.OrientationFrames;
+import cube.CubeOrientation;
+import cube.OrientedCube;
 
-import java.util.ArrayDeque;
-import java.util.HashSet;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 public class CrossSolver {
-    private static final Move[] FACE_TURNS = {
+    private static final int MAX_CROSS_DEPTH = 12;
+    private static final Move[] NO_B_FACE_TURNS = {
             Move.U, Move.U2, Move.U_PRIME,
             Move.R, Move.R2, Move.R_PRIME,
             Move.F, Move.F2, Move.F_PRIME,
             Move.D, Move.D2, Move.D_PRIME,
-            Move.L, Move.L2, Move.L_PRIME,
-            Move.B, Move.B2, Move.B_PRIME
+            Move.L, Move.L2, Move.L_PRIME
+    };
+    private static final Algorithm[] Y_PREFIX_TRIALS = {
+            new Algorithm(),
+            Algorithm.fromMoves(List.of(Move.Y)),
+            Algorithm.fromMoves(List.of(Move.Y2)),
+            Algorithm.fromMoves(List.of(Move.Y_PRIME))
     };
 
     private static final Edge[] D_CROSS_POSITIONS = {Edge.DF, Edge.DR, Edge.DB, Edge.DL};
 
     public Algorithm solve(CubeState cube) {
-        return solveForTargetCross(cube.copy(), D_CROSS_POSITIONS, FACE_TURNS);
+        return solveForTargetCross(cube.copy(), new CubeOrientation(), D_CROSS_POSITIONS);
     }
 
     public Algorithm solve(CubeState cube, Face crossFace) {
         var orientation = OrientationFrames.orientedFrameFor(crossFace);
         return OrientationFrames.orientationToD(crossFace)
-                .concat(solveForTargetCross(cube.copy(), targetCrossForOrientation(orientation), mapFaceTurns(orientation)));
+                .concat(solveForTargetCross(cube.copy(), orientation, targetCrossForOrientation(orientation)));
     }
 
-    private Algorithm solveForTargetCross(CubeState cube, Edge[] targetCross, Move[] mappedFaceTurns) {
+    private Algorithm solveForTargetCross(CubeState cube, CubeOrientation orientation, Edge[] targetCross) {
         var start = cube.copy();
         if (isTargetCrossSolved(start, targetCross)) {
             return new Algorithm();
         }
 
-        var queue = new ArrayDeque<SearchNode>();
-        var visited = new HashSet<Integer>();
-
-        queue.add(new SearchNode(start, new Algorithm()));
-        visited.add(encodeCrossState(start, targetCross));
-
-        while (!queue.isEmpty()) {
-            var current = queue.removeFirst();
-
-            for (int i = 0; i < FACE_TURNS.length; i++) {
-                var move = FACE_TURNS[i];
-                var mappedMove = mappedFaceTurns[i];
-                var nextCube = current.cube().copy();
-                MoveApplier.applyMove(nextCube, mappedMove);
-
-                var key = encodeCrossState(nextCube, targetCross);
-                if (!visited.add(key)) {
-                    continue;
+        for (int depth = 0; depth <= MAX_CROSS_DEPTH; depth++) {
+            for (var prefix : Y_PREFIX_TRIALS) {
+                var prefixedOrientation = orientationAfterPrefix(orientation, prefix);
+                var mappedFaceTurns = mapFaceTurns(prefixedOrientation);
+                var solution = depthLimitedSearch(
+                        start,
+                        targetCross,
+                        mappedFaceTurns,
+                        new Algorithm(),
+                        null,
+                        depth,
+                        new HashMap<>()
+                );
+                if (solution != null) {
+                    return prefix.concat(solution);
                 }
-
-                var nextAlgorithm = current.algorithm().copy();
-                nextAlgorithm.add(move);
-
-                if (isTargetCrossSolved(nextCube, targetCross)) {
-                    return nextAlgorithm;
-                }
-
-                queue.addLast(new SearchNode(nextCube, nextAlgorithm));
             }
         }
 
-        throw new IllegalStateException("Failed to find a cross solution");
+        throw new IllegalStateException("Failed to find a no-B cross solution");
+    }
+
+    private static Algorithm depthLimitedSearch(
+            CubeState cube,
+            Edge[] targetCross,
+            Move[] mappedFaceTurns,
+            Algorithm path,
+            Move lastMove,
+            int remainingDepth,
+            Map<Integer, Integer> visited
+    ) {
+        if (isTargetCrossSolved(cube, targetCross)) {
+            return path;
+        }
+        if (remainingDepth == 0) {
+            return null;
+        }
+
+        var key = encodeCrossState(cube, targetCross);
+        var bestRemainingDepth = visited.get(key);
+        if (bestRemainingDepth != null && bestRemainingDepth >= remainingDepth) {
+            return null;
+        }
+        visited.put(key, remainingDepth);
+
+        for (int i = 0; i < NO_B_FACE_TURNS.length; i++) {
+            var move = NO_B_FACE_TURNS[i];
+            if (lastMove != null && sameFace(lastMove, move)) {
+                continue;
+            }
+
+            var nextCube = cube.copy();
+            MoveApplier.applyMove(nextCube, mappedFaceTurns[i]);
+
+            var nextPath = path.copy();
+            nextPath.add(move);
+
+            var solution = depthLimitedSearch(
+                    nextCube,
+                    targetCross,
+                    mappedFaceTurns,
+                    nextPath,
+                    move,
+                    remainingDepth - 1,
+                    visited
+            );
+            if (solution != null) {
+                return solution;
+            }
+        }
+
+        return null;
     }
 
     private static boolean isTargetCrossSolved(CubeState cube, Edge[] targetCross) {
@@ -82,7 +131,7 @@ public class CrossSolver {
         return true;
     }
 
-    private static Edge[] targetCrossForOrientation(cube.CubeOrientation orientation) {
+    private static Edge[] targetCrossForOrientation(CubeOrientation orientation) {
         return new Edge[]{
                 edgeForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.F)),
                 edgeForFaces(orientation.faceAt(Face.D), orientation.faceAt(Face.R)),
@@ -91,10 +140,16 @@ public class CrossSolver {
         };
     }
 
-    private static Move[] mapFaceTurns(cube.CubeOrientation orientation) {
-        var mapped = new Move[FACE_TURNS.length];
-        for (int i = 0; i < FACE_TURNS.length; i++) {
-            mapped[i] = orientation.mapMove(FACE_TURNS[i]);
+    private static CubeOrientation orientationAfterPrefix(CubeOrientation orientation, Algorithm prefix) {
+        var orientedCube = new OrientedCube(new CubeState(), orientation);
+        orientedCube.applyMoves(prefix.getMoves());
+        return orientedCube.orientation();
+    }
+
+    private static Move[] mapFaceTurns(CubeOrientation orientation) {
+        var mapped = new Move[NO_B_FACE_TURNS.length];
+        for (int i = 0; i < NO_B_FACE_TURNS.length; i++) {
+            mapped[i] = orientation.mapMove(NO_B_FACE_TURNS[i]);
         }
         return mapped;
     }
@@ -137,6 +192,18 @@ public class CrossSolver {
         return (first == expectedA && second == expectedB) || (first == expectedB && second == expectedA);
     }
 
-    private record SearchNode(CubeState cube, Algorithm algorithm) {
+    private static boolean sameFace(Move first, Move second) {
+        return faceFamily(first) == faceFamily(second);
+    }
+
+    private static Face faceFamily(Move move) {
+        return switch (move) {
+            case U, U2, U_PRIME -> Face.U;
+            case R, R2, R_PRIME -> Face.R;
+            case F, F2, F_PRIME -> Face.F;
+            case D, D2, D_PRIME -> Face.D;
+            case L, L2, L_PRIME -> Face.L;
+            default -> throw new IllegalArgumentException("Unexpected cross move: " + move);
+        };
     }
 }

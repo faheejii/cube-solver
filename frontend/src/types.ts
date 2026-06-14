@@ -9,8 +9,6 @@ export type SolveStage = {
 export type SolveResponse = {
   scramble: string;
   crossFace: string;
-  useLegacyF2L: boolean;
-  f2lMode: string;
   f2lSetupCaseCount: number;
   f2lInsertCaseCount: number;
   cross: SolveStage;
@@ -26,5 +24,4 @@ export type SolveResponse = {
 export type SolveRequest = {
   scramble: string;
   crossFace: string;
-  useLegacyF2L: boolean;
 };

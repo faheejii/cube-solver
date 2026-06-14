@@ -15,17 +15,10 @@ final class JsonSupport {
         return matcher.find() ? unescape(matcher.group(1)) : null;
     }
 
-    static boolean readBoolean(String json, String fieldName, boolean defaultValue) {
-        var matcher = Pattern.compile("\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(true|false)").matcher(json);
-        return matcher.find() ? Boolean.parseBoolean(matcher.group(1)) : defaultValue;
-    }
-
     static String solveResultJson(CfopSolveResult result) {
         return "{"
                 + "\"scramble\":\"" + escape(result.scramble()) + "\","
                 + "\"crossFace\":\"" + escape(result.crossFace()) + "\","
-                + "\"useLegacyF2L\":" + result.useLegacyF2L() + ","
-                + "\"f2lMode\":\"" + escape(result.f2lMode()) + "\","
                 + "\"f2lSetupCaseCount\":" + result.f2lSetupCaseCount() + ","
                 + "\"f2lInsertCaseCount\":" + result.f2lInsertCaseCount() + ","
                 + "\"cross\":" + stageJson(result.cross()) + ","

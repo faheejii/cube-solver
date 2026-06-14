@@ -5,6 +5,15 @@ import java.util.List;
 
 public class Algorithm {
     private final List<Move> moves = new ArrayList<>();
+    private String displayNotation;
+
+    public Algorithm() {
+        this(null);
+    }
+
+    private Algorithm(String displayNotation) {
+        this.displayNotation = normalizeDisplay(displayNotation);
+    }
 
     public static Algorithm parse(String algorithm) {
         var parsedMoves = new ArrayList<Move>();
@@ -22,6 +31,13 @@ public class Algorithm {
     public static Algorithm fromMoves(List<Move> moves) {
         var algorithm = new Algorithm();
         algorithm.addAll(moves);
+        return algorithm;
+    }
+
+    public static Algorithm fromMoves(List<Move> moves, String displayNotation) {
+        var algorithm = new Algorithm();
+        algorithm.moves.addAll(moves);
+        algorithm.displayNotation = normalizeDisplay(displayNotation);
         return algorithm;
     }
 
@@ -46,16 +62,19 @@ public class Algorithm {
 
     public void add(Move move) {
         moves.add(move);
+        displayNotation = null;
     }
 
     public void addAll(List<Move> moves) {
         this.moves.addAll(moves);
+        displayNotation = null;
     }
 
     public Algorithm concat(Algorithm other) {
         var newAlgorithm = new Algorithm();
-        newAlgorithm.addAll(this.moves);
-        newAlgorithm.addAll(other.moves);
+        newAlgorithm.moves.addAll(this.moves);
+        newAlgorithm.moves.addAll(other.moves);
+        newAlgorithm.displayNotation = joinDisplay(this.toString(), other.toString());
         return newAlgorithm;
     }
 
@@ -68,8 +87,8 @@ public class Algorithm {
     }
 
     public Algorithm copy() {
-        var copy = new Algorithm();
-        copy.addAll(this.moves);
+        var copy = new Algorithm(displayNotation);
+        copy.moves.addAll(this.moves);
         return copy;
     }
 
@@ -77,19 +96,32 @@ public class Algorithm {
         return moves.get(index);
     }
 
-    public Move getLast() {
-        if (moves.isEmpty()) {
-            throw new IllegalStateException("Algorithm is empty");
-        }
-        return moves.get(moves.size() - 1);
-    }
-
     @Override
     public String toString() {
+        if (displayNotation != null) {
+            return displayNotation;
+        }
         var sb = new StringBuilder();
         for (var move : moves) {
             sb.append(move).append(' ');
         }
         return sb.toString().trim();
+    }
+
+    private static String normalizeDisplay(String displayNotation) {
+        if (displayNotation == null || displayNotation.isBlank()) {
+            return null;
+        }
+        return displayNotation.trim();
+    }
+
+    private static String joinDisplay(String first, String second) {
+        if (first == null || first.isBlank()) {
+            return normalizeDisplay(second);
+        }
+        if (second == null || second.isBlank()) {
+            return normalizeDisplay(first);
+        }
+        return first + " " + second;
     }
 }

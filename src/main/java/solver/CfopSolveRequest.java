@@ -4,8 +4,7 @@ import cube.Face;
 
 public record CfopSolveRequest(
         String scramble,
-        Face crossFace,
-        boolean useLegacyF2L
+        Face crossFace
 ) {
     public CfopSolveRequest {
         if (scramble == null || scramble.isBlank()) {
