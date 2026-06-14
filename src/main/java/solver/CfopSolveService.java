@@ -1,6 +1,5 @@
 package solver;
 
-import algorithms.F2LCaseDatabase;
 import algorithms.F2LInsertCaseDatabase;
 import algorithms.F2LSetupCaseDatabase;
 import algorithms.OLLCaseDatabase;
@@ -68,9 +67,7 @@ public class CfopSolveService {
                 "ok"
         );
 
-        var f2lSolver = request.useLegacyF2L()
-                ? new F2LSolver(F2LCaseDatabase.seedBasicCases())
-                : new F2LSolver(f2lSetupDatabase, f2lInsertDatabase);
+        var f2lSolver = new F2LSolver(f2lSetupDatabase, f2lInsertDatabase);
         var f2lSolution = f2lSolver.solve(orientedCube);
         orientedCube.applyMoves(f2lSolution.getMoves());
         var f2lResult = new CfopStageResult(
@@ -87,8 +84,6 @@ public class CfopSolveService {
         return new CfopSolveResult(
                 request.scramble(),
                 request.crossFace().toString(),
-                request.useLegacyF2L(),
-                request.useLegacyF2L() ? "legacy DB + validated fallback" : "two-phase DB + fallback",
                 f2lSetupDatabase.size(),
                 f2lInsertDatabase.size(),
                 crossResult,

@@ -1,4 +1,5 @@
 import { FormEvent, startTransition, useEffect, useRef, useState } from "react";
+import { randomScrambleForEvent } from "cubing/scramble";
 import CubeAnimator from "./CubeAnimator";
 import { solveCube } from "./api";
 import type { SolveResponse, SolveStage } from "./types";
@@ -18,8 +19,8 @@ function initialTheme(): Theme {
 export default function App() {
   const [scramble, setScramble] = useState(DEFAULT_SCRAMBLE);
   const [crossFace, setCrossFace] = useState("U");
-  const [useLegacyF2L, setUseLegacyF2L] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [generatingScramble, setGeneratingScramble] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SolveResponse | null>(null);
   const [showSummary, setShowSummary] = useState(false);
@@ -52,7 +53,6 @@ export default function App() {
       const nextResult = await solveCube({
         scramble,
         crossFace,
-        useLegacyF2L,
       });
       startTransition(() => {
         setResult(nextResult);
@@ -69,6 +69,25 @@ export default function App() {
   function handleShowSummary() {
     setShowSummary(true);
     setPendingSummaryScroll(true);
+  }
+
+  async function handleGenerateScramble() {
+    setGeneratingScramble(true);
+    setError(null);
+
+    try {
+      const nextScramble = await randomScrambleForEvent("333");
+      setScramble(nextScramble.toString());
+      setResult(null);
+      setShowSummary(false);
+      setPendingSummaryScroll(false);
+    } catch (scrambleError) {
+      const message =
+        scrambleError instanceof Error ? scrambleError.message : "Scramble generation failed";
+      setError(message);
+    } finally {
+      setGeneratingScramble(false);
+    }
   }
 
   function toggleTheme() {
@@ -104,7 +123,17 @@ export default function App() {
         <form className="solver-card" onSubmit={handleSubmit}>
           <div className="panel-heading">
             <p className="eyebrow">Scramble</p>
-            <h2>Input</h2>
+            <div className="panel-title-row">
+              <h2>Input</h2>
+              <button
+                className="generate-button"
+                type="button"
+                onClick={handleGenerateScramble}
+                disabled={generatingScramble}
+              >
+                {generatingScramble ? "Generating..." : "Generate WCA scramble"}
+              </button>
+            </div>
           </div>
 
           <label className="field">
@@ -116,27 +145,16 @@ export default function App() {
             />
           </label>
 
-          <div className="field-row">
-            <label className="field">
-              <span>Cross face</span>
-              <select value={crossFace} onChange={(event) => setCrossFace(event.target.value)}>
-                {FACE_OPTIONS.map((face) => (
-                  <option key={face} value={face}>
-                    {face}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="toggle">
-              <input
-                type="checkbox"
-                checked={useLegacyF2L}
-                onChange={(event) => setUseLegacyF2L(event.target.checked)}
-              />
-              <span>Use legacy F2L DB</span>
-            </label>
-          </div>
+          <label className="field">
+            <span>Cross face</span>
+            <select value={crossFace} onChange={(event) => setCrossFace(event.target.value)}>
+              {FACE_OPTIONS.map((face) => (
+                <option key={face} value={face}>
+                  {face}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <button className="solve-button" type="submit" disabled={loading}>
             {loading ? "Solving..." : "Solve scramble"}
@@ -185,8 +203,8 @@ export default function App() {
             <div className="summary-metrics">
               <Metric label="Total moves" value={String(result.totalMoveCount)} />
               <Metric label="Elapsed" value={`${result.elapsedMs.toFixed(3)} ms`} />
-              <Metric label="F2L mode" value={result.f2lMode} />
               <Metric label="Solved slots" value={result.solvedF2LSlots} />
+              <Metric label="Cross face" value={result.crossFace} />
             </div>
           </article>
 
@@ -195,8 +213,7 @@ export default function App() {
             <div className="summary-metrics">
               <Metric label="Setup cases" value={String(result.f2lSetupCaseCount)} />
               <Metric label="Insert cases" value={String(result.f2lInsertCaseCount)} />
-              <Metric label="Cross face" value={result.crossFace} />
-              <Metric label="Legacy mode" value={result.useLegacyF2L ? "yes" : "no"} />
+              <Metric label="F2L strategy" value="two-phase DB + fallback" />
             </div>
           </article>
 

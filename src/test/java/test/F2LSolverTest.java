@@ -1,6 +1,5 @@
 package test;
 
-import algorithms.F2LCaseDatabase;
 import cfop.CrossAnalyzer;
 import cfop.F2LAnalyzer;
 import cube.CubeState;
@@ -19,7 +18,7 @@ public class F2LSolverTest {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, "R U R' U'");
 
-        var solver = new F2LSolver(F2LCaseDatabase.seedBasicCases());
+        var solver = new F2LSolver();
         var solution = solver.solveAfterCross(cube, Face.D);
 
         MoveApplier.executeMoves(cube, solution.getMoves());
@@ -32,7 +31,7 @@ public class F2LSolverTest {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, "R U R'");
 
-        var solver = new F2LSolver(F2LCaseDatabase.seedBasicCases());
+        var solver = new F2LSolver();
         var solution = solver.solveAfterCross(cube, Face.D);
 
         MoveApplier.executeMoves(cube, solution.getMoves());
@@ -59,7 +58,7 @@ public class F2LSolverTest {
         MoveApplier.applyAlgorithm(cube, "R U' R' U' F U F'");
         assertTrue(CrossAnalyzer.isCrossSolved(cube));
 
-        var solver = new F2LSolver(F2LCaseDatabase.seedBasicCases());
+        var solver = new F2LSolver();
         var solution = solver.solveAfterCross(cube, Face.D);
 
         MoveApplier.executeMoves(cube, solution.getMoves());
@@ -76,7 +75,7 @@ public class F2LSolverTest {
     }
 
     @Test
-    void solveAfterCross_shouldUseDatabaseForUFaceCompositeCase() {
+    void solveAfterCross_shouldSolveUFaceCompositeCase() {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, "B' L B L2 D2 L D2");
 
@@ -86,7 +85,7 @@ public class F2LSolverTest {
 
         assertTrue(CrossAnalyzer.isCrossSolved(cube, Face.U));
 
-        var solver = new F2LSolver(F2LCaseDatabase.seedBasicCases());
+        var solver = new F2LSolver();
         var solution = solver.solveAfterCross(cube, Face.U);
 
         MoveApplier.executeMoves(cube, solution.getMoves());
@@ -104,7 +103,7 @@ public class F2LSolverTest {
         var crossSolution = crossSolver.solve(orientedCube.cubeState(), Face.U);
         orientedCube.applyMoves(crossSolution.getMoves());
 
-        var solver = new F2LSolver(F2LCaseDatabase.seedBasicCases());
+        var solver = new F2LSolver();
         var f2lSolution = solver.solve(orientedCube);
 
         assertFalse(f2lSolution.toString().startsWith("z2"),
@@ -116,7 +115,7 @@ public class F2LSolverTest {
     }
 
     @Test
-    void solveAfterCross_shouldUseDatabaseForFFaceSingleSlotCase() {
+    void solveAfterCross_shouldSolveFFaceSingleSlotCase() {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, "R B R'");
 
@@ -126,7 +125,7 @@ public class F2LSolverTest {
 
         assertTrue(CrossAnalyzer.isCrossSolved(cube, Face.F));
 
-        var solver = new F2LSolver(F2LCaseDatabase.seedBasicCases());
+        var solver = new F2LSolver();
         var solution = solver.solveAfterCross(cube, Face.F);
 
         MoveApplier.executeMoves(cube, solution.getMoves());
@@ -144,7 +143,7 @@ public class F2LSolverTest {
         assertTrue(CrossAnalyzer.isCrossSolved(cube, crossFace),
                 "cross should already be solved for face " + crossFace + " before F2L");
 
-        var f2lSolver = new F2LSolver(F2LCaseDatabase.seedBasicCases());
+        var f2lSolver = new F2LSolver();
         var f2lSolution = f2lSolver.solveAfterCross(cube, crossFace);
         MoveApplier.executeMoves(cube, f2lSolution.getMoves());
 

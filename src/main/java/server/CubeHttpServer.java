@@ -53,8 +53,7 @@ public class CubeHttpServer {
                 var body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 var request = new SolveApiRequest(
                         JsonSupport.readString(body, "scramble"),
-                        JsonSupport.readString(body, "crossFace"),
-                        JsonSupport.readBoolean(body, "useLegacyF2L", false)
+                        JsonSupport.readString(body, "crossFace")
                 );
                 var result = solveService.solve(request.toSolveRequest());
                 writeJson(exchange, 200, JsonSupport.solveResultJson(result));
@@ -84,7 +83,7 @@ public class CubeHttpServer {
             }
 
             if (frontendDistDir == null || !Files.isDirectory(frontendDistDir)) {
-                writePlainText(exchange, 200, "Frontend build not found. Run `npm install` and `npm run build` in `frontend/`.");
+                writePlainText(exchange, 200, "Frontend build not available.");
                 return;
             }
 

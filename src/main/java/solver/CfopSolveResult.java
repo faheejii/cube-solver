@@ -3,8 +3,6 @@ package solver;
 public record CfopSolveResult(
         String scramble,
         String crossFace,
-        boolean useLegacyF2L,
-        String f2lMode,
         int f2lSetupCaseCount,
         int f2lInsertCaseCount,
         CfopStageResult cross,

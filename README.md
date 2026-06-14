@@ -17,7 +17,6 @@ Implemented:
 - selected cross-face solving
 - shared CFOP orchestration through `CfopSolveService`
 - default 2-phase F2L solving with setup and insert phase databases
-- legacy F2L DB mode for comparison
 - OLL solving from seeded sticker-orientation signatures
 - PLL solving from seeded last-layer permutation signatures, including final AUF handling
 - validation-by-execution after DB lookup in F2L, OLL, and PLL
@@ -27,7 +26,6 @@ Implemented:
 Known limitations:
 
 - F2L is still experimental. The 2-phase setup/insert databases currently have partial case coverage.
-- The legacy F2L DB remains available via `-Df2l.legacy=true`, but it has known signature collisions and should not be treated as authoritative.
 - The frontend currently exposes one-scramble solve requests only.
 
 ## Requirements
@@ -113,12 +111,6 @@ mvn -q clean compile exec:java -Dexec.mainClass=solver.SolverMain -Dexec.args="U
 
 Supported cross-face arguments are `D`, `U`, `F`, `B`, `L`, and `R`.
 
-Use the legacy F2L DB path:
-
-```bash
-mvn -q clean compile exec:java -Dexec.mainClass=solver.SolverMain -Df2l.legacy=true
-```
-
 Enable F2L diagnostics:
 
 ```bash
@@ -139,6 +131,8 @@ The parser supports:
 - slice moves: `M E S`
 - cube rotations: `x y z`
 - lowercase wide moves: `r u f d l b`
+
+Runtime lowercase wide moves are frame-aware moves executed by `OrientedCube`. OLL and PLL case databases additionally normalize common last-layer alg notation at seed time, expanding lowercase wide moves into face plus slice turns before extracting signatures. This keeps human LL algs such as `r U R' U'` compatible with the repository's persistent frame model.
 
 Examples:
 
@@ -176,7 +170,6 @@ Case databases:
 
 - [`src/main/java/algorithms/F2LSetupCaseDatabase.java`](src/main/java/algorithms/F2LSetupCaseDatabase.java)
 - [`src/main/java/algorithms/F2LInsertCaseDatabase.java`](src/main/java/algorithms/F2LInsertCaseDatabase.java)
-- [`src/main/java/algorithms/F2LCaseDatabase.java`](src/main/java/algorithms/F2LCaseDatabase.java)
 - [`src/main/java/algorithms/OLLCaseDatabase.java`](src/main/java/algorithms/OLLCaseDatabase.java)
 - [`src/main/java/algorithms/PLLCaseDatabase.java`](src/main/java/algorithms/PLLCaseDatabase.java)
 
@@ -235,9 +228,13 @@ For insert cases, the seed algorithm should solve `insertSlot` from an insert-re
 
 ## OLL And PLL
 
-OLL signatures are sticker-orientation patterns, not cubie permutations. OLL lookup tries `""`, `U`, `U2`, and `U'`, then validates the candidate by execution.
+OLL signatures are sticker-orientation patterns, not cubie permutations. OLL lookup tries no prefix, AUF prefixes, and `y/y2/y'` plus AUF prefixes, then validates the candidate by execution. If a signature collision points at the wrong case, the solver scans all seeded OLL cases and accepts only an algorithm that preserves cross/F2L and solves OLL.
+
+OLL seed signatures are allowed to collide because signature lookup is treated as a fast hint, not as proof. Seeded OLL algorithms are still validated when the database is built: inverse setup must preserve cross/F2L, and the algorithm must solve OLL while preserving cross/F2L.
 
 PLL signatures track the logical last-layer corner and edge pieces occupying the four logical U-layer positions. PLL seeds each algorithm under the four possible final-AUF setup signatures, then the solver validates with possible post-AUF.
+
+PLL seed algorithms are also normalized as last-layer notation before seeding. Each generated final-AUF setup is validated when the database is built.
 
 Add cases here:
 
@@ -251,14 +248,14 @@ Request:
 ```json
 {
   "scramble": "R D R' D2 R D' R'",
-  "crossFace": "U",
-  "useLegacyF2L": false
+  "crossFace": "U"
 }
 ```
 
 Response fields include:
 
-- selected cross face and F2L mode
+- selected cross face
+- F2L setup and insert case counts
 - per-stage algorithm, move count, solved flag, and status
 - solved F2L slot summary
 - total move count
@@ -270,8 +267,8 @@ Example:
 {
   "scramble": "R D R' D2 R D' R'",
   "crossFace": "U",
-  "useLegacyF2L": false,
-  "f2lMode": "two-phase DB + fallback",
+  "f2lSetupCaseCount": 6,
+  "f2lInsertCaseCount": 3,
   "cross": { "algorithm": "z2", "moveCount": 0, "solved": true, "status": "ok" },
   "f2l": { "algorithm": "y2 R U R' U2 R U' R'", "moveCount": 7, "solved": true, "status": "ok" },
   "oll": { "algorithm": "", "moveCount": 0, "solved": true, "status": "ok" },

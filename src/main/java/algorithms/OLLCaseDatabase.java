@@ -1,5 +1,7 @@
 package algorithms;
 
+import cfop.CrossAnalyzer;
+import cfop.F2LAnalyzer;
 import cfop.OLLAnalyzer;
 import cfop.OLLCaseSignature;
 import cube.Algorithm;
@@ -15,6 +17,7 @@ import java.util.Optional;
 
 public class OLLCaseDatabase {
     private final Map<OLLCaseSignature, OLLCase> cases = new LinkedHashMap<>();
+    private final List<OLLCase> caseList = new ArrayList<>();
 
     public static OLLCaseDatabase empty() {
         return new OLLCaseDatabase();
@@ -22,9 +25,10 @@ public class OLLCaseDatabase {
 
     public static OLLCaseDatabase seedCases() {
         var database = new OLLCaseDatabase();
-        for (var ollCase : normalizeBySignatureKeepingFirst(seedCaseList())) {
+        for (var ollCase : seedCaseList()) {
             database.register(ollCase);
         }
+        database.validate();
         return database;
     }
 
@@ -54,12 +58,12 @@ public class OLLCaseDatabase {
                 "F R' F' R2 r' U R U' R' U' M'",        // 17
                 "r U R' U R U2 r2 U' R U' R' U2 r",     // 18
                 "r' R U R U R' U' M' R' F R F'",        // 19
-                "r U R' U' M2 U R U' R' U' M'",         // 20
+                "r U R' U' M2 U R U' R' U' M'",          // 20
                 "R U2 R' U' R U R' U' R U' R'",         // 21
                 "R U2 R2 U' R2 U' R2 U2 R",             // 22
                 "R2 D' R U2 R' D R U2 R",               // 23
                 "r U R' U' r' F R F'",                  // 24
-                "F' r U R' U' r' F R",                  // 25
+                "R' F R B' R' F' R B",                  // 25
                 "R U2 R' U' R U' R'",                   // 26
                 "R U R' U R U2 R'",                     // 27
                 "r U R' U' r' R U R U' R'",             // 28
@@ -99,10 +103,11 @@ public class OLLCaseDatabase {
     }
 
     private static OLLCase caseFromAlgorithm(String algorithm, String name) {
-        var alg = Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm));
+        var alg = parseLastLayerAlgorithm(algorithm);
         var setup = alg.inverse().toString();
         var orientedCube = new OrientedCube();
-        orientedCube.applyAlgorithm(NotationNormalizer.normalizePrimes(setup));
+        orientedCube.applyAlgorithm(setup);
+        validateSetupThenAlgorithm(orientedCube, alg, name);
         return new OLLCase(
                 OLLAnalyzer.extractSignature(orientedCube.cubeState(), orientedCube.orientation()),
                 alg,
@@ -111,11 +116,13 @@ public class OLLCaseDatabase {
     }
 
     private static OLLCase caseFromSetup(String setup, String algorithm, String name) {
+        var alg = parseLastLayerAlgorithm(algorithm);
         var orientedCube = new OrientedCube();
-        orientedCube.applyAlgorithm(NotationNormalizer.normalizePrimes(setup));
+        orientedCube.applyAlgorithm(NotationNormalizer.normalizeLastLayerAlgorithm(setup));
+        validateSetupThenAlgorithm(orientedCube, alg, name);
         return new OLLCase(
                 OLLAnalyzer.extractSignature(orientedCube.cubeState(), orientedCube.orientation()),
-                Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm)),
+                alg,
                 name
         );
     }
@@ -132,52 +139,59 @@ public class OLLCaseDatabase {
         if (ollCase == null) {
             throw new IllegalArgumentException("ollCase cannot be null");
         }
-        if (cases.containsKey(ollCase.signature())) {
-            throw new IllegalArgumentException("Duplicate OLL case signature: " + ollCase.signature());
-        }
-        cases.put(ollCase.signature(), ollCase);
+        cases.putIfAbsent(ollCase.signature(), ollCase);
+        caseList.add(ollCase);
     }
 
     public Optional<OLLCase> find(OLLCaseSignature signature) {
         return Optional.ofNullable(cases.get(signature));
     }
 
-    public boolean contains(OLLCaseSignature signature) {
-        return cases.containsKey(signature);
-    }
-
     public int size() {
-        return cases.size();
+        return caseList.size();
     }
 
     public Collection<OLLCase> allCases() {
-        return cases.values();
-    }
-
-    public OLLCaseDatabase normalizedBySignatureKeepingFirst() {
-        var normalized = new OLLCaseDatabase();
-        for (var ollCase : normalizeBySignatureKeepingFirst(allCases())) {
-            normalized.register(ollCase);
-        }
-        return normalized;
+        return List.copyOf(caseList);
     }
 
     public void validate() {
-        for (var ollCase : cases.values()) {
+        for (var ollCase : caseList) {
             for (var move : ollCase.algorithm().getMoves()) {
                 if (move.isCubeRotation()) {
                     throw new IllegalArgumentException("OLL DB algorithms must not contain cube rotations: " + ollCase.name());
                 }
             }
+            var orientedCube = new OrientedCube();
+            orientedCube.applyMoves(ollCase.algorithm().inverse().getMoves());
+            validateSetupThenAlgorithm(orientedCube, ollCase.algorithm(), ollCase.name());
         }
     }
 
-    private static List<OLLCase> normalizeBySignatureKeepingFirst(Collection<OLLCase> ollCases) {
-        var deduped = new LinkedHashMap<OLLCaseSignature, OLLCase>();
-        for (var ollCase : ollCases) {
-            deduped.putIfAbsent(ollCase.signature(), ollCase);
+    private static void validateSetupThenAlgorithm(OrientedCube setupCube, Algorithm algorithm, String name) {
+        if (!CrossAnalyzer.isCrossSolved(setupCube.cubeState(), setupCube.orientation())) {
+            throw new IllegalArgumentException("OLL setup must preserve cross: " + name);
         }
-        return List.copyOf(deduped.values());
+        if (!F2LAnalyzer.isF2LSolved(setupCube.cubeState(), setupCube.orientation())) {
+            throw new IllegalArgumentException("OLL setup must preserve F2L: " + name);
+        }
+
+        var solvedCube = new OrientedCube(setupCube.cubeState().copy(), setupCube.orientation());
+        solvedCube.applyMoves(algorithm.getMoves());
+        if (!CrossAnalyzer.isCrossSolved(solvedCube.cubeState(), solvedCube.orientation())) {
+            throw new IllegalArgumentException("OLL algorithm must preserve cross: " + name);
+        }
+        if (!F2LAnalyzer.isF2LSolved(solvedCube.cubeState(), solvedCube.orientation())) {
+            throw new IllegalArgumentException("OLL algorithm must preserve F2L: " + name);
+        }
+        if (!OLLAnalyzer.isOllSolved(solvedCube.cubeState(), solvedCube.orientation())) {
+            throw new IllegalArgumentException("OLL algorithm must solve OLL: " + name);
+        }
+    }
+
+    private static Algorithm parseLastLayerAlgorithm(String algorithm) {
+        var executable = Algorithm.parse(NotationNormalizer.normalizeLastLayerAlgorithm(algorithm));
+        return Algorithm.fromMoves(executable.getMoves(), NotationNormalizer.normalizePrimes(algorithm));
     }
 
     private static Map<OLLCaseSignature, List<OLLCase>> findDuplicateSignatures(Collection<OLLCase> ollCases) {

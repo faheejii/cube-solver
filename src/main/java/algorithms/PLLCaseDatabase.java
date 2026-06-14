@@ -1,5 +1,8 @@
 package algorithms;
 
+import cfop.CrossAnalyzer;
+import cfop.F2LAnalyzer;
+import cfop.OLLAnalyzer;
 import cfop.PLLAnalyzer;
 import cfop.PLLCaseSignature;
 import cube.Algorithm;
@@ -61,7 +64,7 @@ public class PLLCaseDatabase {
                 "R U R' U' R' F R2 U' R' U' R U R' F'",                   // T
                 "R U' R U R U R U' R' U' R2",                             // Ua
                 "R2 U R U R' U' R' U' R' U R'",                           // Ub
-                "R' U R' d' R' F' R2 U' R' U R' F R F",                   // V
+                "R' U R' U' y R' F' R2 U' R' U R' F R F",                 // V
                 "F R U' R' U' R U R' F' R U R' U' R' F R F'",             // Y
                 "M2 U M2 U M' U2 M2 U2 M'"                              // Z
         );
@@ -73,12 +76,13 @@ public class PLLCaseDatabase {
     }
 
     private static List<PLLCase> casesFromAlgorithm(String algorithm, String name) {
-        var alg = Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm));
+        var alg = parseLastLayerAlgorithm(algorithm);
         var pllCases = new ArrayList<PLLCase>();
         for (var finalAuf : FINAL_AUF_TRIALS) {
             var setup = alg.concat(finalAuf).inverse().toString();
             var orientedCube = new OrientedCube();
-            orientedCube.applyAlgorithm(NotationNormalizer.normalizePrimes(setup));
+            orientedCube.applyAlgorithm(setup);
+            validateSetupThenAlgorithm(orientedCube, alg.concat(finalAuf), name);
             pllCases.add(new PLLCase(
                     PLLAnalyzer.extractSignature(orientedCube.cubeState(), orientedCube.orientation()),
                     alg,
@@ -89,11 +93,13 @@ public class PLLCaseDatabase {
     }
 
     private static PLLCase caseFromSetup(String setup, String algorithm, String name) {
+        var alg = parseLastLayerAlgorithm(algorithm);
         var orientedCube = new OrientedCube();
-        orientedCube.applyAlgorithm(NotationNormalizer.normalizePrimes(setup));
+        orientedCube.applyAlgorithm(NotationNormalizer.normalizeLastLayerAlgorithm(setup));
+        validateSetupThenAlgorithm(orientedCube, alg, name);
         return new PLLCase(
                 PLLAnalyzer.extractSignature(orientedCube.cubeState(), orientedCube.orientation()),
-                Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm)),
+                alg,
                 name
         );
     }
@@ -122,16 +128,44 @@ public class PLLCaseDatabase {
         return Optional.ofNullable(cases.get(signature));
     }
 
-    public boolean contains(PLLCaseSignature signature) {
-        return cases.containsKey(signature);
-    }
-
     public int size() {
         return cases.size();
     }
 
     public Collection<PLLCase> allCases() {
         return cases.values();
+    }
+
+    private static void validateSetupThenAlgorithm(OrientedCube setupCube, Algorithm algorithm, String name) {
+        if (!CrossAnalyzer.isCrossSolved(setupCube.cubeState(), setupCube.orientation())) {
+            throw new IllegalArgumentException("PLL setup must preserve cross: " + name);
+        }
+        if (!F2LAnalyzer.isF2LSolved(setupCube.cubeState(), setupCube.orientation())) {
+            throw new IllegalArgumentException("PLL setup must preserve F2L: " + name);
+        }
+        if (!OLLAnalyzer.isOllSolved(setupCube.cubeState(), setupCube.orientation())) {
+            throw new IllegalArgumentException("PLL setup must preserve OLL: " + name);
+        }
+
+        var solvedCube = new OrientedCube(setupCube.cubeState().copy(), setupCube.orientation());
+        solvedCube.applyMoves(algorithm.getMoves());
+        if (!CrossAnalyzer.isCrossSolved(solvedCube.cubeState(), solvedCube.orientation())) {
+            throw new IllegalArgumentException("PLL algorithm must preserve cross: " + name);
+        }
+        if (!F2LAnalyzer.isF2LSolved(solvedCube.cubeState(), solvedCube.orientation())) {
+            throw new IllegalArgumentException("PLL algorithm must preserve F2L: " + name);
+        }
+        if (!OLLAnalyzer.isOllSolved(solvedCube.cubeState(), solvedCube.orientation())) {
+            throw new IllegalArgumentException("PLL algorithm must preserve OLL: " + name);
+        }
+        if (!PLLAnalyzer.isPllSolved(solvedCube.cubeState(), solvedCube.orientation())) {
+            throw new IllegalArgumentException("PLL algorithm must solve PLL: " + name);
+        }
+    }
+
+    private static Algorithm parseLastLayerAlgorithm(String algorithm) {
+        var executable = Algorithm.parse(NotationNormalizer.normalizeLastLayerAlgorithm(algorithm));
+        return Algorithm.fromMoves(executable.getMoves(), NotationNormalizer.normalizePrimes(algorithm));
     }
 
     private static List<PLLCase> normalizeBySignatureKeepingFirst(Collection<PLLCase> pllCases) {

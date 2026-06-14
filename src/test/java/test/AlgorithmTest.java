@@ -79,9 +79,14 @@ public class AlgorithmTest {
     }
 
     @Test
-    void getLast_shouldThrowWhenAlgorithmIsEmpty() {
-        Algorithm algorithm = new Algorithm();
+    void fromMoves_shouldPreserveDisplayNotationUntilMutated() {
+        Algorithm algorithm = Algorithm.fromMoves(List.of(Move.R, Move.M_PRIME), "r");
 
-        assertThrows(IllegalStateException.class, algorithm::getLast);
+        assertEquals(List.of(Move.R, Move.M_PRIME), algorithm.getMoves());
+        assertEquals("r", algorithm.toString());
+
+        algorithm.add(Move.U);
+
+        assertEquals("R M' U", algorithm.toString());
     }
 }

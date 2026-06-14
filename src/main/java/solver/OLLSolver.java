@@ -15,11 +15,23 @@ import cube.OrientedCube;
 import java.util.List;
 
 public class OLLSolver {
-    private static final Algorithm[] AUF_TRIALS = {
+    private static final Algorithm[] PREFIX_TRIALS = {
             new Algorithm(),
             Algorithm.fromMoves(List.of(Move.U)),
             Algorithm.fromMoves(List.of(Move.U2)),
-            Algorithm.fromMoves(List.of(Move.U_PRIME))
+            Algorithm.fromMoves(List.of(Move.U_PRIME)),
+            Algorithm.fromMoves(List.of(Move.Y)),
+            Algorithm.fromMoves(List.of(Move.Y, Move.U)),
+            Algorithm.fromMoves(List.of(Move.Y, Move.U2)),
+            Algorithm.fromMoves(List.of(Move.Y, Move.U_PRIME)),
+            Algorithm.fromMoves(List.of(Move.Y2)),
+            Algorithm.fromMoves(List.of(Move.Y2, Move.U)),
+            Algorithm.fromMoves(List.of(Move.Y2, Move.U2)),
+            Algorithm.fromMoves(List.of(Move.Y2, Move.U_PRIME)),
+            Algorithm.fromMoves(List.of(Move.Y_PRIME)),
+            Algorithm.fromMoves(List.of(Move.Y_PRIME, Move.U)),
+            Algorithm.fromMoves(List.of(Move.Y_PRIME, Move.U2)),
+            Algorithm.fromMoves(List.of(Move.Y_PRIME, Move.U_PRIME))
     };
 
     private final OLLCaseDatabase caseDatabase;
@@ -48,10 +60,6 @@ public class OLLSolver {
         return solveStage(cube.cubeState().copy(), cube.orientation());
     }
 
-    public Algorithm solveAfterF2L(CubeState cube, Face crossFace) {
-        return solve(cube, crossFace);
-    }
-
     private Algorithm solveStage(CubeState cube, CubeOrientation orientation) {
         if (caseDatabase == null || caseDatabase.size() == 0) {
             throw new IllegalStateException("OLL solver requires a non-empty OLL case database");
@@ -62,26 +70,38 @@ public class OLLSolver {
             return new Algorithm();
         }
 
-        for (var auf : AUF_TRIALS) {
+        for (var prefix : PREFIX_TRIALS) {
             var trialCube = cube.copy();
-            var resultingOrientation = executeAndReturnOrientation(trialCube, orientation, auf.getMoves());
+            var resultingOrientation = executeAndReturnOrientation(trialCube, orientation, prefix.getMoves());
             var signature = OLLAnalyzer.extractSignature(trialCube, resultingOrientation);
             var match = caseDatabase.find(signature);
-            if (match.isEmpty()) {
-                continue;
+            if (match.isPresent()) {
+                var candidate = prefix.concat(match.get().algorithm());
+                if (solvesOll(cube, orientation, candidate)) {
+                    return candidate;
+                }
             }
 
-            var candidate = auf.concat(match.get().algorithm());
-            var validationCube = cube.copy();
-            var finalOrientation = executeAndReturnOrientation(validationCube, orientation, candidate.getMoves());
-            if (CrossAnalyzer.isCrossSolved(validationCube, finalOrientation)
-                    && F2LAnalyzer.isF2LSolved(validationCube, finalOrientation)
-                    && OLLAnalyzer.isOllSolved(validationCube, finalOrientation)) {
-                return candidate;
+            for (var ollCase : caseDatabase.allCases()) {
+                if (match.isPresent() && ollCase == match.get()) {
+                    continue;
+                }
+                var candidate = prefix.concat(ollCase.algorithm());
+                if (solvesOll(cube, orientation, candidate)) {
+                    return candidate;
+                }
             }
         }
 
         throw new IllegalStateException("No OLL case match found for current last-layer orientation");
+    }
+
+    private static boolean solvesOll(CubeState cube, CubeOrientation orientation, Algorithm candidate) {
+        var validationCube = cube.copy();
+        var finalOrientation = executeAndReturnOrientation(validationCube, orientation, candidate.getMoves());
+        return CrossAnalyzer.isCrossSolved(validationCube, finalOrientation)
+                && F2LAnalyzer.isF2LSolved(validationCube, finalOrientation)
+                && OLLAnalyzer.isOllSolved(validationCube, finalOrientation);
     }
 
     private static void ensurePreconditions(CubeState cube, CubeOrientation orientation) {
