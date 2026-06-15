@@ -80,6 +80,23 @@ npm run dev
 The Vite app proxies `/api` to `http://localhost:8080`, so run the Java API server alongside it.
 The cube visualization uses `cubing.js` and can animate the full solution or individual CFOP stages.
 
+Current frontend behavior:
+
+- generates a WCA 3x3 scramble on initial load and on demand
+- computes the solve in the background for the currently committed scramble
+- keeps the scramble read-only by default, with an explicit edit mode
+- includes a timer with inspection behavior similar to common cube timers
+- reveals the solution only when requested
+- supports per-stage playback and playback speed changes
+- includes a dark mode toggle
+
+Timer controls:
+
+- `Space`: arm, start inspection, start solve, or stop solve
+- `Enter`: after a stopped solve, generate the next scramble
+- inspection over 15 seconds applies `+2`
+- inspection over 17 seconds applies `DNF`
+
 Build the frontend:
 
 ```bash
@@ -110,6 +127,8 @@ mvn -q clean compile exec:java -Dexec.mainClass=solver.SolverMain -Dexec.args="U
 ```
 
 Supported cross-face arguments are `D`, `U`, `F`, `B`, `L`, and `R`.
+
+If no scramble arguments are passed, `SolverMain` uses its built-in default scramble list.
 
 Enable F2L diagnostics:
 
@@ -268,6 +287,8 @@ Request:
 }
 ```
 
+`crossFace` is optional in practice. If it is missing or blank, the API defaults to `U`.
+
 Response fields include:
 
 - selected cross face
@@ -290,9 +311,16 @@ Example:
   "oll": { "algorithm": "", "moveCount": 0, "solved": true, "status": "ok" },
   "pll": { "algorithm": "", "moveCount": 0, "solved": true, "status": "ok" },
   "fullySolved": true,
-  "totalMoveCount": 7
+  "totalMoveCount": 7,
+  "elapsedMs": 2.341
 }
 ```
+
+Error behavior:
+
+- `POST /api/solve` returns `400` for invalid scramble or face input
+- `POST /api/solve` returns `500` for unexpected internal failures
+- non-`POST` requests to `/api/solve` return `405`
 
 ## Useful Targeted Tests
 
