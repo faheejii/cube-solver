@@ -195,6 +195,22 @@ Frontend:
 - [`frontend/src/api.ts`](frontend/src/api.ts)
 - [`frontend/vite.config.ts`](frontend/vite.config.ts)
 
+## Cross
+
+Cross is solved first and remains frame-aware throughout the pipeline.
+
+The solver accepts a selected cross face (`D`, `U`, `F`, `B`, `L`, or `R`) and normalizes that choice through `OrientationFrames`. In runtime terms, cube rotations such as `x/y/z` are not applied as physical cubie mutations. They update the solver frame through `OrientedCube`, and later stages continue working in that persistent oriented frame.
+
+Current cross behavior:
+
+1. Convert the selected cross face into the solver's D-cross frame.
+2. For U-cross and other non-D choices, keep that normalization as part of the returned cross algorithm.
+3. Search for a cross using no-`B` face turns only.
+4. Try no rotation, `y`, `y2`, and `y'` prefixes and keep the first shortest solution found by depth.
+5. Hand the resulting oriented state to F2L without collapsing the frame back into a physically rotated cube.
+
+This keeps cross output aligned with the rest of the CFOP pipeline and avoids the older class of bugs where F2L case meaning changed because global rotations were treated as physical moves instead of frame changes.
+
 ## F2L
 
 Default F2L flow:
