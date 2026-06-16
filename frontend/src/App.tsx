@@ -1,11 +1,20 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 import { randomScrambleForEvent } from "cubing/scramble";
+import { Check, Eye, EyeOff, ListTree, Moon, Pencil, RefreshCw, Sun, X } from "lucide-react";
 import CubeAnimator from "./CubeAnimator";
 import { solveCube } from "./api";
 import type { SolveResponse, SolveStage } from "./types";
 
 const DEFAULT_SCRAMBLE = "R D R' D2 R D' R'";
-const FACE_OPTIONS = ["U", "D", "F", "B", "L", "R"] as const;
+const FACE_OPTIONS = [
+  { value: "U", label: "U" },
+  { value: "D", label: "D" },
+  { value: "F", label: "F" },
+  { value: "B", label: "B" },
+  { value: "L", label: "L" },
+  { value: "R", label: "R" },
+  { value: "CN", label: "Color Neutral" },
+] as const;
 const INSPECTION_PLUS_TWO_MS = 15_000;
 const INSPECTION_DNF_MS = 17_000;
 
@@ -14,6 +23,7 @@ type SolutionStatus = "idle" | "loading" | "ready" | "error";
 type TimerPhase = "idle" | "armed" | "inspection" | "running" | "stopped";
 type ArmedSource = "idle" | "stopped" | "inspection" | null;
 type TimerPenalty = "none" | "+2" | "dnf";
+type F2LMode = "greedy" | "optimized";
 
 function initialTheme(): Theme {
   const savedTheme = window.localStorage.getItem("cube-solver-theme");
@@ -27,6 +37,7 @@ export default function App() {
   const [committedScramble, setCommittedScramble] = useState("");
   const [draftScramble, setDraftScramble] = useState("");
   const [crossFace, setCrossFace] = useState("U");
+  const [f2lMode, setF2LMode] = useState<F2LMode>("greedy");
   const [isEditingScramble, setIsEditingScramble] = useState(false);
   const [generatingScramble, setGeneratingScramble] = useState(false);
   const [solutionStatus, setSolutionStatus] = useState<SolutionStatus>("idle");
@@ -97,6 +108,7 @@ export default function App() {
     void solveCube({
       scramble: committedScramble,
       crossFace,
+      f2lMode,
     })
       .then((nextResult) => {
         if (requestIdRef.current !== requestId) {
@@ -116,7 +128,7 @@ export default function App() {
         setResult(null);
         setSolutionStatus("error");
       });
-  }, [committedScramble, crossFace]);
+  }, [committedScramble, crossFace, f2lMode]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -305,6 +317,13 @@ export default function App() {
     resetTimer();
   }
 
+  function handleF2LModeChange(nextMode: F2LMode) {
+    setF2LMode(nextMode);
+    setSolutionVisible(false);
+    setSummaryVisible(false);
+    resetTimer();
+  }
+
   function handleTimerPointerDown() {
     if (isEditingScramble) {
       return;
@@ -335,61 +354,57 @@ export default function App() {
   return (
     <main className={summaryVisible ? "page-shell summary-open" : "page-shell"}>
       <header className="app-header">
-        <div>
-          <p className="eyebrow">CFOP Timer</p>
+        <div className="brand-lockup">
+          <span className="brand-mark" aria-hidden="true">
+            CF
+          </span>
           <h1>Cube Solver</h1>
+          <span className={result?.fullySolved ? "status-chip solved" : "status-chip"}>
+            {solutionStatus === "loading" ? "Solving" : result?.fullySolved ? "Solved" : "Ready"}
+          </span>
         </div>
-        <div className="header-actions">
+        <div className="top-controls">
+          <label className="compact-control">
+            <span>Cross</span>
+            <select value={crossFace} onChange={(event) => handleCrossFaceChange(event.target.value)}>
+              {FACE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="mode-toggle" aria-label="F2L mode">
+            <button
+              type="button"
+              className={f2lMode === "greedy" ? "mode-option active" : "mode-option"}
+              onClick={() => handleF2LModeChange("greedy")}
+            >
+              Fast
+            </button>
+            <button
+              type="button"
+              className={f2lMode === "optimized" ? "mode-option active" : "mode-option"}
+              onClick={() => handleF2LModeChange("optimized")}
+            >
+              Optimized
+            </button>
+          </div>
           <button
-            className="theme-toggle"
+            className="icon-button"
             type="button"
             onClick={toggleTheme}
             aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
           >
-            <span className="theme-toggle-track">
-              <span className="theme-toggle-thumb" />
-            </span>
-            <span>{theme === "dark" ? "Dark" : "Light"}</span>
+            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-          <div className={result?.fullySolved ? "system-pill ready" : "system-pill"}>
-            {solutionStatus === "loading" ? "Solving" : result?.fullySolved ? "Solved" : "Ready"}
-          </div>
         </div>
       </header>
 
       <section className="scramble-header">
-        <div className="scramble-panel compact">
-          <div className="scramble-panel-header">
-            <div>
-              <p className="eyebrow">Scramble</p>
-              <h2>{isEditingScramble ? "Edit scramble" : "Current scramble"}</h2>
-            </div>
-            <div className="scramble-actions">
-              <button
-                className="generate-button"
-                type="button"
-                onClick={handleGenerateScramble}
-                disabled={generatingScramble}
-              >
-                {generatingScramble ? "Generating..." : "Generate WCA scramble"}
-              </button>
-              {isEditingScramble ? (
-                <>
-                  <button className="utility-button" type="button" onClick={handleCancelEdit}>
-                    Cancel
-                  </button>
-                  <button className="solve-button compact" type="button" onClick={handleSaveEdit}>
-                    Save
-                  </button>
-                </>
-              ) : (
-                <button className="utility-button" type="button" onClick={handleEnterEditMode}>
-                  Edit
-                </button>
-              )}
-            </div>
-          </div>
-
+        <div className="scramble-panel">
+          <span className="section-label">{isEditingScramble ? "Edit scramble" : "Scramble"}</span>
           {isEditingScramble ? (
             <label className="field scramble-edit-field">
               <textarea
@@ -401,24 +416,33 @@ export default function App() {
               />
             </label>
           ) : (
-            <p className="scramble-text compact">{committedScramble || "Preparing scramble..."}</p>
+            <p className="scramble-text">{committedScramble || "Preparing scramble..."}</p>
           )}
 
-          <div className="scramble-meta">
-            <label className="field compact-field">
-              <span>Cross face</span>
-              <select value={crossFace} onChange={(event) => handleCrossFaceChange(event.target.value)}>
-                {FACE_OPTIONS.map((face) => (
-                  <option key={face} value={face}>
-                    {face}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="solve-status">
-              <span className="eyebrow">Hidden solution</span>
-              <strong>{solutionStatusLabel(solutionStatus)}</strong>
-            </div>
+          <div className="scramble-actions">
+            <button
+              className="tool-button"
+              type="button"
+              onClick={handleGenerateScramble}
+              disabled={generatingScramble}
+            >
+              <RefreshCw size={16} />
+              <span>{generatingScramble ? "Generating" : "New"}</span>
+            </button>
+            {isEditingScramble ? (
+              <>
+                <button className="icon-button" type="button" onClick={handleCancelEdit} aria-label="Cancel edit" title="Cancel edit">
+                  <X size={17} />
+                </button>
+                <button className="icon-button primary" type="button" onClick={handleSaveEdit} aria-label="Save scramble" title="Save scramble">
+                  <Check size={17} />
+                </button>
+              </>
+            ) : (
+              <button className="icon-button" type="button" onClick={handleEnterEditMode} aria-label="Edit scramble" title="Edit scramble">
+                <Pencil size={17} />
+              </button>
+            )}
           </div>
         </div>
       </section>
@@ -436,7 +460,7 @@ export default function App() {
               onPointerCancel={handleTimerPointerUp}
             >
               <div className="timer-panel-header">
-                <p className="eyebrow">Timer</p>
+                <p className="section-label">Timer</p>
                 <span className="timer-status">{solutionStatusLabel(solutionStatus)}</span>
               </div>
               <div className="timer-readout">
@@ -447,11 +471,7 @@ export default function App() {
                 {timerPhase === "stopped" ? (
                   <span>{timerResultLabel(stoppedElapsedMs, finalPenalty)}</span>
                 ) : (
-                  <span>
-                    {isEditingScramble
-                      ? "Finish editing to use the timer"
-                      : "Space or hold to control. Press Enter after stopping for next scramble."}
-                  </span>
+                  <span>{isEditingScramble ? "Editing locked" : solveReadinessLabel(solutionStatus)}</span>
                 )}
               </div>
             </section>
@@ -467,29 +487,30 @@ export default function App() {
 
       <section className="action-row">
         <button
-          className="summary-button"
+          className="tool-button primary"
           type="button"
           onClick={handleShowSolution}
           disabled={solutionStatus !== "ready" || result === null}
         >
-          {solutionVisible ? "Hide solution" : "Show solution"}
+          {solutionVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+          <span>{solutionVisible ? "Hide solution" : "Show solution"}</span>
         </button>
         {solutionVisible ? (
           <button
-            className="summary-button secondary"
+            className="tool-button"
             type="button"
             onClick={() => setSummaryVisible((current) => !current)}
           >
-            {summaryVisible ? "Hide solve summary" : "Show solve summary"}
+            <ListTree size={17} />
+            <span>{summaryVisible ? "Hide summary" : "Show summary"}</span>
           </button>
         ) : null}
-        <p className="summary-note">{revealStatusMessage(solutionStatus, solutionVisible, summaryVisible)}</p>
       </section>
 
       {solutionVisible && summaryVisible && result ? (
         <section className="results-grid">
           <article className="summary-card">
-            <p className="eyebrow">Solve Summary</p>
+            <p className="section-label">Solve Summary</p>
             <h2>{result.fullySolved ? "Solved in current frame" : "Partial solve result"}</h2>
             <div className="summary-metrics">
               <Metric label="Total moves" value={String(result.totalMoveCount)} />
@@ -500,10 +521,11 @@ export default function App() {
           </article>
 
           <article className="database-card">
-            <p className="eyebrow">F2L Case Coverage</p>
+            <p className="section-label">F2L Case Coverage</p>
             <div className="summary-metrics">
               <Metric label="Setup cases" value={String(result.f2lSetupCaseCount)} />
               <Metric label="Insert cases" value={String(result.f2lInsertCaseCount)} />
+              <Metric label="F2L mode" value={f2lModeLabel(result.f2lMode || f2lMode)} />
               <Metric label="F2L strategy" value="two-phase DB + fallback" />
             </div>
           </article>
@@ -522,7 +544,7 @@ function StageCard({ stage, accent }: { stage: SolveStage; accent: string }) {
   return (
     <article className={`stage-card accent-${accent}`}>
       <div className="stage-header">
-        <p className="eyebrow">{stage.name.toUpperCase()}</p>
+        <p className="section-label">{stage.name.toUpperCase()}</p>
         <span className={stage.solved ? "stage-pill solved" : "stage-pill pending"}>
           {stage.solved ? "Solved" : "Pending"}
         </span>
@@ -545,37 +567,31 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-function revealStatusMessage(
-  solutionStatus: SolutionStatus,
-  solutionVisible: boolean,
-  summaryVisible: boolean,
-): string {
-  if (summaryVisible) {
-    return "Solve summary is expanded below. Hide it to return to the fixed viewport layout.";
-  }
-  if (solutionVisible) {
-    return "The solution is shown in the main panel. Hide it to return to the timer.";
-  }
-  if (solutionStatus === "loading") {
-    return "Computing the solution in the background.";
-  }
-  if (solutionStatus === "error") {
-    return "A valid solution is not available yet.";
-  }
-  if (solutionStatus === "ready") {
-    return "The solution is ready but stays hidden until you reveal it.";
-  }
-  return "Generate a scramble to prepare a hidden solution.";
+function f2lModeLabel(mode: string): string {
+  return mode === "optimized" ? "Optimized" : "Fast";
 }
 
 function solutionStatusLabel(status: SolutionStatus): string {
   switch (status) {
     case "loading":
-      return "Computing now";
+      return "Computing";
     case "ready":
-      return "Ready to reveal";
+      return "Ready";
     case "error":
-      return "Unavailable";
+      return "Error";
+    default:
+      return "Waiting";
+  }
+}
+
+function solveReadinessLabel(status: SolutionStatus): string {
+  switch (status) {
+    case "loading":
+      return "Solving";
+    case "ready":
+      return "Solution ready";
+    case "error":
+      return "Solve unavailable";
     default:
       return "Waiting";
   }
@@ -610,15 +626,15 @@ function timerHint(
   }
   if (timerPhase === "inspection") {
     if (inspectionPenalty === "dnf") {
-      return "Inspection over 17s. Result will be DNF.";
+      return "Inspection DNF";
     }
     if (inspectionPenalty === "+2") {
-      return "Inspection over 15s. Result will be +2.";
+      return "Inspection +2";
     }
-    return "Inspection running. Hold and release to start the solve.";
+    return "Inspection";
   }
   if (timerPhase === "running") {
-    return "Solve running. Press space or tap to stop.";
+    return "Running";
   }
   if (timerPhase === "stopped") {
     if (finalPenalty === "dnf") {
@@ -627,9 +643,9 @@ function timerHint(
     if (finalPenalty === "+2") {
       return "Inspection penalty: +2";
     }
-    return "Ready for the next solve.";
+    return "Stopped";
   }
-  return "Hold and release to begin inspection.";
+  return "Ready";
 }
 
 function timerResultLabel(stoppedElapsedMs: number | null, finalPenalty: TimerPenalty): string {

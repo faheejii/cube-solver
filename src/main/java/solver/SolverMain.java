@@ -13,8 +13,11 @@ public class SolverMain {
     );
 
     public static void main(String[] args) {
-        var crossFace = args.length > 0 ? Face.fromNotation(args[0].charAt(0)) : Face.U;
-        var scrambles = args.length > 1 ? parseScrambles(args, 1) : DEFAULT_SCRAMBLES;
+        var colorNeutral = args.length > 0 && isColorNeutralArg(args[0]);
+        var crossFace = args.length > 0 && !colorNeutral ? Face.fromNotation(args[0].charAt(0)) : Face.U;
+        var f2lMode = args.length > 1 && isF2LModeArg(args[1]) ? F2LMode.fromApiValue(args[1]) : F2LMode.GREEDY;
+        var scrambleStartIndex = f2lMode == F2LMode.GREEDY && !(args.length > 1 && isF2LModeArg(args[1])) ? 1 : 2;
+        var scrambles = args.length > scrambleStartIndex ? parseScrambles(args, scrambleStartIndex) : DEFAULT_SCRAMBLES;
 
         var ollCollisions = OLLCaseDatabase.duplicateSeedCases();
         var pllCollisions = PLLCaseDatabase.duplicateSeedCases();
@@ -23,28 +26,33 @@ public class SolverMain {
         System.out.println("OLL signature collisions handled by validation: " + ollCollisions.size());
         System.out.println("PLL collisions: " + pllCollisions);
         System.out.println("F2L mode: two-phase DB + fallback");
-        System.out.println("Selected face: " + crossFace);
+        System.out.println("F2L search mode: " + f2lMode.apiValue());
+        System.out.println("Selected face: " + (colorNeutral ? "Color Neutral" : crossFace));
         System.out.println("Scramble count: " + scrambles.size());
 
         for (int i = 0; i < scrambles.size(); i++) {
-            solveScramble(solveService, scrambles.get(i), crossFace, i + 1, scrambles.size());
+            var request = colorNeutral
+                    ? CfopSolveRequest.colorNeutral(scrambles.get(i), f2lMode)
+                    : new CfopSolveRequest(scrambles.get(i), crossFace, f2lMode);
+            solveScramble(solveService, request, i + 1, scrambles.size());
         }
     }
 
     private static void solveScramble(
             CfopSolveService solveService,
-            String scramble,
-            Face crossFace,
+            CfopSolveRequest request,
             int index,
             int total
     ) {
-        var result = solveService.solve(new CfopSolveRequest(scramble, crossFace));
+        var result = solveService.solve(request);
 
         System.out.println();
         System.out.println("=== Scramble " + index + "/" + total + " ===");
-        System.out.println("Scramble: " + scramble);
+        System.out.println("Scramble: " + request.scramble());
+        System.out.println("Chosen cross face: " + result.crossFace());
         System.out.println("F2L setup phase cases: " + result.f2lSetupCaseCount());
         System.out.println("F2L insert phase cases: " + result.f2lInsertCaseCount());
+        System.out.println("F2L search mode: " + result.f2lMode());
         System.out.println("Cross solution: " + result.cross().algorithm());
         System.out.println("Cross solved for selected face: " + result.cross().solved());
         System.out.println("F2L solution: " + result.f2l().algorithm());
@@ -60,6 +68,23 @@ public class SolverMain {
         System.out.println("PLL solution length: " + result.pll().moveCount());
         System.out.println("Total solution length: " + result.totalMoveCount());
         System.out.printf("Elapsed time: %.3f ms%n", result.elapsedMs());
+    }
+
+    private static boolean isColorNeutralArg(String value) {
+        var normalized = value.trim()
+                .replace("-", "")
+                .replace("_", "")
+                .replace(" ", "")
+                .toUpperCase();
+        return normalized.equals("CN") || normalized.equals("COLORNEUTRAL");
+    }
+
+    private static boolean isF2LModeArg(String value) {
+        var normalized = value.trim().replace("-", "_").toUpperCase();
+        return normalized.equals("GREEDY")
+                || normalized.equals("FAST")
+                || normalized.equals("OPTIMIZED")
+                || normalized.equals("OPTIMISED");
     }
 
     private static List<String> parseScrambles(String[] args, int startIndex) {

@@ -29,6 +29,9 @@ public class CrossSolver {
             Algorithm.fromMoves(List.of(Move.Y2)),
             Algorithm.fromMoves(List.of(Move.Y_PRIME))
     };
+    private static final Face[] COLOR_NEUTRAL_FACE_ORDER = {
+            Face.U, Face.D, Face.F, Face.B, Face.L, Face.R
+    };
 
     private static final Edge[] D_CROSS_POSITIONS = {Edge.DF, Edge.DR, Edge.DB, Edge.DL};
 
@@ -40,6 +43,18 @@ public class CrossSolver {
         var orientation = OrientationFrames.orientedFrameFor(crossFace);
         return OrientationFrames.orientationToD(crossFace)
                 .concat(solveForTargetCross(cube.copy(), orientation, targetCrossForOrientation(orientation)));
+    }
+
+    public CrossSolution solveColorNeutral(CubeState cube) {
+        CrossSolution best = null;
+        for (var face : COLOR_NEUTRAL_FACE_ORDER) {
+            var algorithm = solve(cube, face);
+            var candidate = new CrossSolution(face, algorithm);
+            if (best == null || algorithm.getMoveCount() < best.algorithm().getMoveCount()) {
+                best = candidate;
+            }
+        }
+        return best;
     }
 
     private Algorithm solveForTargetCross(CubeState cube, CubeOrientation orientation, Edge[] targetCross) {

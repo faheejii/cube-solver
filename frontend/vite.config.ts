@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig({
   plugins: [react()],
   optimizeDeps: {
+    exclude: ["cubing"],
     esbuildOptions: {
       target: "es2022",
     },

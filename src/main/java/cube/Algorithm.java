@@ -41,6 +41,26 @@ public class Algorithm {
         return algorithm;
     }
 
+    public static Algorithm normalize(Algorithm algorithm) {
+        if (algorithm == null || algorithm.isEmpty()) {
+            return new Algorithm();
+        }
+
+        var normalized = new ArrayList<Move>();
+        for (var move : algorithm.moves) {
+            var lastIndex = normalized.size() - 1;
+            if (lastIndex >= 0 && sameMoveFamily(normalized.get(lastIndex), move)) {
+                var combined = combine(normalized.remove(lastIndex), move);
+                if (combined != null) {
+                    normalized.add(combined);
+                }
+            } else {
+                normalized.add(move);
+            }
+        }
+        return Algorithm.fromMoves(normalized);
+    }
+
     public List<Move> getMoves() {
         return List.copyOf(this.moves);
     }
@@ -123,5 +143,40 @@ public class Algorithm {
             return normalizeDisplay(first);
         }
         return first + " " + second;
+    }
+
+    private static boolean sameMoveFamily(Move first, Move second) {
+        return familyIndex(first) == familyIndex(second);
+    }
+
+    private static Move combine(Move first, Move second) {
+        var familyIndex = familyIndex(first);
+        var turnAmount = (turnAmount(first) + turnAmount(second)) % 4;
+        if (turnAmount == 0) {
+            return null;
+        }
+        return Move.values()[familyIndex * 3 + moveOffset(turnAmount)];
+    }
+
+    private static int familyIndex(Move move) {
+        return move.ordinal() / 3;
+    }
+
+    private static int turnAmount(Move move) {
+        return switch (move.ordinal() % 3) {
+            case 0 -> 1;
+            case 1 -> 2;
+            case 2 -> 3;
+            default -> throw new IllegalStateException("Unexpected move ordinal: " + move);
+        };
+    }
+
+    private static int moveOffset(int turnAmount) {
+        return switch (turnAmount) {
+            case 1 -> 0;
+            case 2 -> 1;
+            case 3 -> 2;
+            default -> throw new IllegalArgumentException("Unexpected turn amount: " + turnAmount);
+        };
     }
 }

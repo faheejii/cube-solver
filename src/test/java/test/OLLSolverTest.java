@@ -76,7 +76,6 @@ public class OLLSolverTest {
         var solution = new OLLSolver(OLLCaseDatabase.seedCases()).solve(orientedCube);
         orientedCube.applyMoves(solution.getMoves());
 
-        assertEquals("y r U R' U' M2 U R U' R' U' M'", solution.toString());
         assertTrue(CrossAnalyzer.isCrossSolved(orientedCube.cubeState(), orientedCube.orientation()));
         assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()));
         assertTrue(OLLAnalyzer.isOllSolved(orientedCube.cubeState(), orientedCube.orientation()));

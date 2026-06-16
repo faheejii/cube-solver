@@ -57,18 +57,23 @@ public class CfopSolveService {
 
         var orientedCube = new OrientedCube(cube);
 
-        var crossSolution = new CrossSolver().solve(orientedCube.cubeState(), request.crossFace());
+        var crossSolve = solveCross(orientedCube.cubeState(), request);
+        var crossFace = crossSolve.face();
+        var crossSolution = crossSolve.algorithm();
         orientedCube.applyMoves(crossSolution.getMoves());
         var crossResult = new CfopStageResult(
                 "cross",
                 crossSolution.toString(),
                 crossSolution.getMoveCount(),
-                CrossAnalyzer.isCrossSolved(cube, request.crossFace()),
+                CrossAnalyzer.isCrossSolved(cube, crossFace),
                 "ok"
         );
 
         var f2lSolver = new F2LSolver(f2lSetupDatabase, f2lInsertDatabase);
-        var f2lSolution = f2lSolver.solve(orientedCube);
+        var f2lSolution = switch (request.f2lMode()) {
+            case GREEDY -> f2lSolver.solve(orientedCube);
+            case OPTIMIZED -> f2lSolver.solveOptimized(orientedCube);
+        };
         orientedCube.applyMoves(f2lSolution.getMoves());
         var f2lResult = new CfopStageResult(
                 "f2l",
@@ -83,17 +88,26 @@ public class CfopSolveService {
 
         return new CfopSolveResult(
                 request.scramble(),
-                request.crossFace().toString(),
+                crossFace.toString(),
+                request.f2lMode().apiValue(),
                 f2lSetupDatabase.size(),
                 f2lInsertDatabase.size(),
                 crossResult,
                 f2lResult,
                 ollSolve,
                 pllSolve,
-                solvedSlotSummary(cube, request.crossFace()),
+                solvedSlotSummary(cube, crossFace),
                 isFullySolved(cube, orientedCube),
                 (System.nanoTime() - startTime) / 1_000_000.0
         );
+    }
+
+    private CrossSolution solveCross(CubeState cube, CfopSolveRequest request) {
+        var crossSolver = new CrossSolver();
+        if (request.colorNeutralCross()) {
+            return crossSolver.solveColorNeutral(cube);
+        }
+        return new CrossSolution(request.crossFace(), crossSolver.solve(cube, request.crossFace()));
     }
 
     private CfopStageResult solveOll(CubeState cube, OrientedCube orientedCube) {
