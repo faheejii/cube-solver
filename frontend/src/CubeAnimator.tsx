@@ -21,7 +21,7 @@ export default function CubeAnimator({ result }: { result: SolveResponse }) {
     <section className="visualizer-section" aria-label="Cube animation">
       <div className="visualizer-toolbar">
         <div>
-          <p className="eyebrow">Playback</p>
+          <p className="section-label">Playback</p>
           <h2>3D Cube</h2>
         </div>
 

@@ -89,4 +89,22 @@ public class AlgorithmTest {
 
         assertEquals("R M' U", algorithm.toString());
     }
+
+    @Test
+    void normalize_shouldCombineAdjacentMovesInSameFamily() {
+        Algorithm algorithm = Algorithm.parse("R' U R R U R'");
+
+        Algorithm normalized = Algorithm.normalize(algorithm);
+
+        assertEquals("R' U R2 U R'", normalized.toString());
+    }
+
+    @Test
+    void normalize_shouldCancelAdjacentInverseMovesAndHandleRotations() {
+        Algorithm algorithm = Algorithm.parse("U U' R2 R2 y y R R");
+
+        Algorithm normalized = Algorithm.normalize(algorithm);
+
+        assertEquals("y2 R2", normalized.toString());
+    }
 }

@@ -61,6 +61,25 @@ public class CrossSolverTest {
         assertEquals("z2", solution.toString());
     }
 
+    @Test
+    void solveColorNeutral_shouldChooseShortestCrossAcrossAllFaces() {
+        var solver = new CrossSolver();
+        var cube = new CubeState();
+        MoveApplier.applyAlgorithm(cube, "R U F' L2 D B'");
+
+        var solution = solver.solveColorNeutral(cube);
+
+        for (var face : Face.values()) {
+            var fixedFaceSolution = solver.solve(cube, face);
+            assertTrue(solution.algorithm().getMoveCount() <= fixedFaceSolution.getMoveCount(),
+                    "color-neutral cross should not be longer than fixed face " + face);
+        }
+
+        var solvedCube = cube.copy();
+        MoveApplier.executeMoves(solvedCube, solution.algorithm().getMoves());
+        assertTrue(CrossAnalyzer.isCrossSolved(solvedCube, solution.face()));
+    }
+
     private static void assertSelectedFaceCrossSolvedAfterApplyingSolution(String scramble, Face crossFace) {
         var solver = new CrossSolver();
         var cube = new CubeState();

@@ -53,7 +53,8 @@ public class CubeHttpServer {
                 var body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
                 var request = new SolveApiRequest(
                         JsonSupport.readString(body, "scramble"),
-                        JsonSupport.readString(body, "crossFace")
+                        JsonSupport.readString(body, "crossFace"),
+                        JsonSupport.readString(body, "f2lMode")
                 );
                 var result = solveService.solve(request.toSolveRequest());
                 writeJson(exchange, 200, JsonSupport.solveResultJson(result));

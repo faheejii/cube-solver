@@ -25,7 +25,9 @@ Implemented:
 
 Known limitations:
 
-- F2L is still experimental. The 2-phase setup/insert databases currently have partial case coverage.
+- F2L setup and insert case coverage is intended to be complete enough for normal solves without IDA* fallback, but some seeded algorithms are not yet optimal.
+- The IDA* fallback remains in place as a safety net for unexpected F2L misses.
+- Optimized F2L can be significantly slower than fast mode on some scrambles because it evaluates multiple DB-backed branch lines before choosing a result.
 - The frontend currently exposes one-scramble solve requests only.
 
 ## Requirements
@@ -85,6 +87,8 @@ Current frontend behavior:
 - generates a WCA 3x3 scramble on initial load and on demand
 - computes the solve in the background for the currently committed scramble
 - keeps the scramble read-only by default, with an explicit edit mode
+- supports fixed-face cross solving or color-neutral cross selection
+- supports fast greedy F2L or optimized F2L branch search
 - includes a timer with inspection behavior similar to common cube timers
 - reveals the solution only when requested
 - supports per-stage playback and playback speed changes
@@ -126,7 +130,8 @@ mvn -q clean compile exec:java -Dexec.mainClass=solver.SolverMain -Dexec.args="U
 mvn -q clean compile exec:java -Dexec.mainClass=solver.SolverMain -Dexec.args="U R U R'; F R U R' U' F'"
 ```
 
-Supported cross-face arguments are `D`, `U`, `F`, `B`, `L`, and `R`.
+Supported cross-face arguments are `D`, `U`, `F`, `B`, `L`, `R`, and `CN`.
+Use `CN` to try every cross face and continue with the shortest cross solution.
 
 If no scramble arguments are passed, `SolverMain` uses its built-in default scramble list.
 
@@ -220,7 +225,7 @@ Cross is solved first and remains frame-aware throughout the pipeline.
 
 The solver accepts a selected cross face (`D`, `U`, `F`, `B`, `L`, or `R`) and normalizes that choice through `OrientationFrames`. In runtime terms, cube rotations such as `x/y/z` are not applied as physical cubie mutations. They update the solver frame through `OrientedCube`, and later stages continue working in that persistent oriented frame.
 
-Current cross behavior:
+Current fixed-face cross behavior:
 
 1. Convert the selected cross face into the solver's D-cross frame.
 2. For U-cross and other non-D choices, keep that normalization as part of the returned cross algorithm.
@@ -230,6 +235,8 @@ Current cross behavior:
 
 This keeps cross output aligned with the rest of the CFOP pipeline and avoids the older class of bugs where F2L case meaning changed because global rotations were treated as physical moves instead of frame changes.
 
+Color-neutral cross mode tries all six fixed faces, chooses the candidate with the lowest reported cross move count, and then runs the rest of CFOP using that chosen concrete face.
+
 ## F2L
 
 Default F2L flow:
@@ -238,7 +245,16 @@ Default F2L flow:
 2. Try insert DB directly with prefixes: no prefix, AUF, and `y/y'/y2` plus AUF.
 3. If insert misses, try a validated setup+insert DB path.
 4. If no combined case works, try setup DB as a standalone phase.
-5. Fall back to bounded one-slot search when no phase DB case works.
+5. Fall back to bounded one-slot search only if no phase DB case works.
+
+The setup and insert databases are expected to cover normal F2L solving without using the fallback path. The fallback remains deliberately available as a defensive path for unexpected signatures, invalid seed coverage, or future case-database changes.
+
+The API and frontend expose two F2L search modes:
+
+- `greedy`: the default fast mode, choosing the best available next slot at each step
+- `optimized`: recursively tries viable DB-backed slot choices, completes each branch, and picks the shortest normalized F2L solution
+
+Optimized mode has a branch-state limit and falls back to greedy behavior if it cannot complete a branch within that search limit. Candidate generation can still be expensive, so use fast mode when responsiveness matters.
 
 Setup and insert cases are keyed by:
 
@@ -283,11 +299,14 @@ Request:
 ```json
 {
   "scramble": "R D R' D2 R D' R'",
-  "crossFace": "U"
+  "crossFace": "U",
+  "f2lMode": "greedy"
 }
 ```
 
 `crossFace` is optional in practice. If it is missing or blank, the API defaults to `U`.
+Use `"CN"` or `"Color Neutral"` to enable color-neutral cross selection. Responses always return the concrete face that was actually chosen.
+`f2lMode` is also optional and defaults to `"greedy"`. Use `"optimized"` to run the branching F2L search.
 
 Response fields include:
 
@@ -304,8 +323,9 @@ Example:
 {
   "scramble": "R D R' D2 R D' R'",
   "crossFace": "U",
-  "f2lSetupCaseCount": 6,
-  "f2lInsertCaseCount": 3,
+  "f2lMode": "greedy",
+  "f2lSetupCaseCount": 121,
+  "f2lInsertCaseCount": 14,
   "cross": { "algorithm": "z2", "moveCount": 0, "solved": true, "status": "ok" },
   "f2l": { "algorithm": "y2 R U R' U2 R U' R'", "moveCount": 7, "solved": true, "status": "ok" },
   "oll": { "algorithm": "", "moveCount": 0, "solved": true, "status": "ok" },

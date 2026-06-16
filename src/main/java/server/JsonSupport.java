@@ -19,6 +19,7 @@ final class JsonSupport {
         return "{"
                 + "\"scramble\":\"" + escape(result.scramble()) + "\","
                 + "\"crossFace\":\"" + escape(result.crossFace()) + "\","
+                + "\"f2lMode\":\"" + escape(result.f2lMode()) + "\","
                 + "\"f2lSetupCaseCount\":" + result.f2lSetupCaseCount() + ","
                 + "\"f2lInsertCaseCount\":" + result.f2lInsertCaseCount() + ","
                 + "\"cross\":" + stageJson(result.cross()) + ","
