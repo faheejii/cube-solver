@@ -1,9 +1,22 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 import { randomScrambleForEvent } from "cubing/scramble";
-import { Check, Eye, EyeOff, ListTree, Moon, Pencil, RefreshCw, Sun, X } from "lucide-react";
+import { Check, Eye, EyeOff, History, ListTree, Moon, Pencil, RefreshCw, Save, Sun, X } from "lucide-react";
 import CubeAnimator from "./CubeAnimator";
-import { solveCube } from "./api";
-import type { SolveResponse, SolveStage } from "./types";
+import {
+  createSolveAttempt,
+  fetchSolveHistory,
+  fetchSolveHistoryDetail,
+  saveSolveSolution,
+  solveCube,
+} from "./api";
+import type {
+  SaveSolutionRequest,
+  SavedSolution,
+  SolveHistoryDetail,
+  SolveHistoryEntry,
+  SolveResponse,
+  SolveStage,
+} from "./types";
 
 const DEFAULT_SCRAMBLE = "R D R' D2 R D' R'";
 const FACE_OPTIONS = [
@@ -24,6 +37,18 @@ type TimerPhase = "idle" | "armed" | "inspection" | "running" | "stopped";
 type ArmedSource = "idle" | "stopped" | "inspection" | null;
 type TimerPenalty = "none" | "+2" | "dnf";
 type F2LMode = "greedy" | "optimized";
+type HistoryStatus = "idle" | "loading" | "ready" | "error";
+type AttemptSaveStatus = "idle" | "saving" | "saved" | "error";
+type ModalStatus = "idle" | "loading" | "ready" | "error";
+type CompletedAttemptSnapshot = {
+  clientAttemptId: string;
+  scramble: string;
+  crossFace: string;
+  f2lMode: F2LMode;
+  elapsedMs: number;
+  penalty: TimerPenalty;
+  result: SolveResponse | null;
+};
 
 function initialTheme(): Theme {
   const savedTheme = window.localStorage.getItem("cube-solver-theme");
@@ -34,7 +59,9 @@ function initialTheme(): Theme {
 }
 
 export default function App() {
+  const [userId] = useState(() => getOrCreateClientUserId());
   const [committedScramble, setCommittedScramble] = useState("");
+  const [clientAttemptId, setClientAttemptId] = useState(() => crypto.randomUUID());
   const [draftScramble, setDraftScramble] = useState("");
   const [crossFace, setCrossFace] = useState("U");
   const [f2lMode, setF2LMode] = useState<F2LMode>("greedy");
@@ -45,6 +72,22 @@ export default function App() {
   const [result, setResult] = useState<SolveResponse | null>(null);
   const [solutionVisible, setSolutionVisible] = useState(false);
   const [summaryVisible, setSummaryVisible] = useState(false);
+  const [historyVisible, setHistoryVisible] = useState(false);
+  const [historyStatus, setHistoryStatus] = useState<HistoryStatus>("idle");
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<SolveHistoryEntry[]>([]);
+  const [attemptSaveStatus, setAttemptSaveStatus] = useState<AttemptSaveStatus>("idle");
+  const [attemptSaveError, setAttemptSaveError] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [modalStatus, setModalStatus] = useState<ModalStatus>("idle");
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [modalDetail, setModalDetail] = useState<SolveHistoryDetail | null>(null);
+  const [modalMode, setModalMode] = useState<F2LMode>("greedy");
+  const [modalCrossFace, setModalCrossFace] = useState("U");
+  const [modalResult, setModalResult] = useState<SolveResponse | null>(null);
+  const [modalDirty, setModalDirty] = useState(false);
+  const [modalComputing, setModalComputing] = useState(false);
+  const [modalSaving, setModalSaving] = useState(false);
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [timerPhase, setTimerPhase] = useState<TimerPhase>("idle");
   const [armedSource, setArmedSource] = useState<ArmedSource>(null);
@@ -54,11 +97,14 @@ export default function App() {
   const [finalPenalty, setFinalPenalty] = useState<TimerPenalty>("none");
   const [clockMs, setClockMs] = useState(0);
   const requestIdRef = useRef(0);
+  const attemptSavingRef = useRef<string | null>(null);
+  const completedAttemptRef = useRef<CompletedAttemptSnapshot | null>(null);
 
   const inspectionElapsedMs =
     inspectionStartedAt === null ? 0 : Math.max(0, clockMs - inspectionStartedAt);
   const inspectionPenalty = penaltyForInspectionElapsed(inspectionElapsedMs);
   const runningElapsedMs = runStartedAt === null ? 0 : Math.max(0, clockMs - runStartedAt);
+  const attemptLocked = attemptSaveStatus === "saving" || attemptSaveStatus === "error";
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -67,11 +113,12 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    document.body.style.overflow = summaryVisible ? "" : "hidden";
+    document.body.style.overflow =
+      modalStatus !== "idle" ? "hidden" : summaryVisible || historyVisible ? "" : "hidden";
     return () => {
       document.body.style.overflow = "";
     };
-  }, [summaryVisible]);
+  }, [summaryVisible, historyVisible, modalStatus]);
 
   useEffect(() => {
     if (timerPhase !== "inspection" && timerPhase !== "running") {
@@ -90,6 +137,7 @@ export default function App() {
 
   useEffect(() => {
     void initializeScramble();
+    void loadHistory();
   }, []);
 
   useEffect(() => {
@@ -131,7 +179,34 @@ export default function App() {
   }, [committedScramble, crossFace, f2lMode]);
 
   useEffect(() => {
+    if (timerPhase !== "stopped" || stoppedElapsedMs === null) {
+      return;
+    }
+    void persistCompletedAttempt();
+  }, [timerPhase, stoppedElapsedMs]);
+
+  useEffect(() => {
+    if (modalStatus === "idle") {
+      return;
+    }
+    const handleModalKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeSolutionModal();
+      }
+    };
+    window.addEventListener("keydown", handleModalKeyDown);
+    return () => window.removeEventListener("keydown", handleModalKeyDown);
+  }, [modalStatus, modalDirty]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (modalStatus !== "idle") {
+        return;
+      }
+      if (attemptSaveStatus === "saving" || attemptSaveStatus === "error") {
+        return;
+      }
       if (isInteractiveTarget(event.target)) {
         return;
       }
@@ -156,18 +231,12 @@ export default function App() {
         return;
       }
 
-      if (
-        event.code === "Enter" &&
-        timerPhase === "stopped" &&
-        !generatingScramble &&
-        !isEditingScramble
-      ) {
-        event.preventDefault();
-        void handleGenerateScramble();
-      }
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
+      if (modalStatus !== "idle") {
+        return;
+      }
       if (event.code !== "Space" || isInteractiveTarget(event.target)) {
         return;
       }
@@ -184,7 +253,23 @@ export default function App() {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [timerPhase, armedSource, inspectionStartedAt, runStartedAt, generatingScramble, isEditingScramble]);
+  }, [
+    timerPhase,
+    armedSource,
+    inspectionStartedAt,
+    runStartedAt,
+    generatingScramble,
+    isEditingScramble,
+    modalStatus,
+    attemptSaveStatus,
+    committedScramble,
+    crossFace,
+    f2lMode,
+    solutionStatus,
+    result,
+    clientAttemptId,
+    finalPenalty,
+  ]);
 
   async function initializeScramble() {
     setGeneratingScramble(true);
@@ -201,6 +286,167 @@ export default function App() {
     }
   }
 
+  async function loadHistory() {
+    setHistoryStatus("loading");
+    setHistoryError(null);
+    try {
+      const entries = await fetchSolveHistory(userId, 20);
+      setHistoryEntries(entries);
+      setHistoryStatus("ready");
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : "History request failed";
+      setHistoryError(message);
+      setHistoryStatus("error");
+    }
+  }
+
+  async function openHistorySolution(entry: SolveHistoryEntry) {
+    setModalStatus("loading");
+    setModalError(null);
+    setModalDirty(false);
+    setModalDetail(null);
+    setModalResult(null);
+    try {
+      const detail = await fetchSolveHistoryDetail(userId, entry.id);
+      const saved = detail.solutions[0];
+      const nextMode = (saved?.mode ?? f2lMode) as F2LMode;
+      const nextCross = saved?.crossFaceRequested ?? crossFace;
+      setModalDetail(detail);
+      setModalMode(nextMode);
+      setModalCrossFace(nextCross);
+      setModalStatus("ready");
+      if (saved) {
+        setModalResult(savedSolutionResult(detail.scramble, saved));
+      } else {
+        await computeModalSolution(detail, nextMode, nextCross, true);
+      }
+    } catch (openError) {
+      const message = openError instanceof Error ? openError.message : "Solve detail request failed";
+      setModalError(message);
+      setModalStatus("error");
+    }
+  }
+
+  async function computeModalSolution(
+    detail: SolveHistoryDetail,
+    mode: F2LMode,
+    requestedCross: string,
+    autoSave: boolean,
+  ) {
+    setModalComputing(true);
+    setModalError(null);
+    try {
+      const computed = await solveCube({
+        scramble: detail.scramble,
+        crossFace: requestedCross,
+        f2lMode: mode,
+      });
+      setModalResult(computed);
+      if (autoSave) {
+        const saved = await saveSolveSolution(
+          detail.id,
+          mode,
+          buildSaveSolutionRequest(userId, requestedCross, computed),
+        );
+        updateModalSavedSolution(saved);
+        setModalDirty(false);
+        await loadHistory();
+      } else {
+        setModalDirty(true);
+      }
+    } catch (computeError) {
+      const message = computeError instanceof Error ? computeError.message : "Solution computation failed";
+      setModalError(message);
+    } finally {
+      setModalComputing(false);
+    }
+  }
+
+  function updateModalSavedSolution(saved: SavedSolution) {
+    setModalDetail((current) => {
+      if (!current) {
+        return current;
+      }
+      return {
+        ...current,
+        solutions: [
+          ...current.solutions.filter((solution) => solution.mode !== saved.mode),
+          saved,
+        ].sort((left, right) => (left.mode === "greedy" ? -1 : right.mode === "greedy" ? 1 : 0)),
+      };
+    });
+  }
+
+  function confirmDiscardModalPreview(): boolean {
+    return !modalDirty || window.confirm("Discard the unsaved solution preview?");
+  }
+
+  async function handleModalModeChange(nextMode: F2LMode) {
+    if (nextMode === modalMode || !modalDetail || !confirmDiscardModalPreview()) {
+      return;
+    }
+    const saved = modalDetail.solutions.find((solution) => solution.mode === nextMode);
+    setModalMode(nextMode);
+    setModalDirty(false);
+    setModalError(null);
+    if (saved) {
+      setModalCrossFace(saved.crossFaceRequested);
+      setModalResult(savedSolutionResult(modalDetail.scramble, saved));
+      return;
+    }
+    await computeModalSolution(modalDetail, nextMode, modalCrossFace, true);
+  }
+
+  async function handleModalCrossChange(nextCross: string) {
+    if (nextCross === modalCrossFace || !modalDetail || !confirmDiscardModalPreview()) {
+      return;
+    }
+    setModalCrossFace(nextCross);
+    setModalDirty(false);
+    setModalError(null);
+    const saved = modalDetail.solutions.find((solution) => solution.mode === modalMode);
+    if (saved?.crossFaceRequested === nextCross) {
+      setModalResult(savedSolutionResult(modalDetail.scramble, saved));
+      return;
+    }
+    await computeModalSolution(modalDetail, modalMode, nextCross, false);
+  }
+
+  async function saveModalReplacement() {
+    if (!modalDetail || !modalResult || !modalDirty) {
+      return;
+    }
+    setModalSaving(true);
+    setModalError(null);
+    try {
+      const saved = await saveSolveSolution(
+        modalDetail.id,
+        modalMode,
+        buildSaveSolutionRequest(userId, modalCrossFace, modalResult),
+      );
+      updateModalSavedSolution(saved);
+      setModalResult(savedSolutionResult(modalDetail.scramble, saved));
+      setModalDirty(false);
+      await loadHistory();
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : "Solution save failed";
+      setModalError(message);
+    } finally {
+      setModalSaving(false);
+    }
+  }
+
+  function closeSolutionModal() {
+    if (!confirmDiscardModalPreview()) {
+      return;
+    }
+    setModalStatus("idle");
+    setModalDetail(null);
+    setModalResult(null);
+    setModalDirty(false);
+    setModalError(null);
+  }
+
   function resetTimer() {
     setTimerPhase("idle");
     setArmedSource(null);
@@ -214,10 +460,15 @@ export default function App() {
   function commitScramble(nextScramble: string) {
     const normalized = nextScramble.trim();
     setCommittedScramble(normalized);
+    setClientAttemptId(crypto.randomUUID());
     setDraftScramble(normalized);
     setIsEditingScramble(false);
     setSolutionVisible(false);
     setSummaryVisible(false);
+    setAttemptSaveStatus("idle");
+    setAttemptSaveError(null);
+    attemptSavingRef.current = null;
+    completedAttemptRef.current = null;
     resetTimer();
   }
 
@@ -262,10 +513,81 @@ export default function App() {
       return;
     }
     const now = window.performance.now();
+    const elapsedMs = now - runStartedAt;
+    completedAttemptRef.current = {
+      clientAttemptId,
+      scramble: committedScramble,
+      crossFace,
+      f2lMode,
+      elapsedMs,
+      penalty: finalPenalty,
+      result: solutionStatus === "ready" && result?.scramble === committedScramble ? result : null,
+    };
     setTimerPhase("stopped");
-    setStoppedElapsedMs(now - runStartedAt);
+    setStoppedElapsedMs(elapsedMs);
     setRunStartedAt(null);
     setClockMs(now);
+  }
+
+  async function persistCompletedAttempt() {
+    const snapshot = completedAttemptRef.current;
+    if (!snapshot || attemptSavingRef.current === snapshot.clientAttemptId) {
+      return;
+    }
+
+    attemptSavingRef.current = snapshot.clientAttemptId;
+    setAttemptSaveStatus("saving");
+    setAttemptSaveError(null);
+
+    try {
+      const savedAttempt = await createSolveAttempt({
+        userId,
+        clientAttemptId: snapshot.clientAttemptId,
+        scramble: snapshot.scramble,
+        crossFaceRequested: snapshot.crossFace,
+        timerMs: Math.round(snapshot.elapsedMs),
+        penalty: snapshot.penalty,
+        officialMs: officialTimeMs(snapshot.elapsedMs, snapshot.penalty),
+        dnf: snapshot.penalty === "dnf",
+      });
+
+      setHistoryEntries((current) => [
+        savedAttempt,
+        ...current.filter((entry) => entry.id !== savedAttempt.id),
+      ].slice(0, 20));
+      setHistoryStatus("ready");
+      setAttemptSaveStatus("saved");
+      setSaveNotice(`Solve saved · ${formatHistoryTime(savedAttempt.officialMs, savedAttempt.penalty, savedAttempt.dnf)}`);
+
+      const solutionPromise = snapshot.result
+        ? Promise.resolve(snapshot.result)
+        : solveCube({
+            scramble: snapshot.scramble,
+            crossFace: snapshot.crossFace,
+            f2lMode: snapshot.f2lMode,
+          });
+      void solutionPromise
+        .then((completedResult) =>
+          saveSolveSolution(
+            savedAttempt.id,
+            snapshot.f2lMode,
+            buildSaveSolutionRequest(userId, snapshot.crossFace, completedResult),
+          ),
+        )
+        .then(() => loadHistory())
+        .catch((solutionError) => {
+          const message =
+            solutionError instanceof Error ? solutionError.message : "Solution save failed";
+          setHistoryError(message);
+        });
+
+      await handleGenerateScramble();
+    } catch (saveError) {
+      const message = saveError instanceof Error ? saveError.message : "Attempt save failed";
+      setAttemptSaveStatus("error");
+      setAttemptSaveError(message);
+      attemptSavingRef.current = null;
+    }
   }
 
   async function handleGenerateScramble() {
@@ -325,7 +647,11 @@ export default function App() {
   }
 
   function handleTimerPointerDown() {
-    if (isEditingScramble) {
+    if (
+      isEditingScramble
+      || attemptSaveStatus === "saving"
+      || attemptSaveStatus === "error"
+    ) {
       return;
     }
     if (timerPhase === "idle" || timerPhase === "stopped") {
@@ -352,7 +678,7 @@ export default function App() {
   }
 
   return (
-    <main className={summaryVisible ? "page-shell summary-open" : "page-shell"}>
+    <main className={summaryVisible || historyVisible ? "page-shell summary-open" : "page-shell"}>
       <header className="app-header">
         <div className="brand-lockup">
           <span className="brand-mark" aria-hidden="true">
@@ -366,7 +692,11 @@ export default function App() {
         <div className="top-controls">
           <label className="compact-control">
             <span>Cross</span>
-            <select value={crossFace} onChange={(event) => handleCrossFaceChange(event.target.value)}>
+            <select
+              value={crossFace}
+              onChange={(event) => handleCrossFaceChange(event.target.value)}
+              disabled={attemptLocked}
+            >
               {FACE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -379,6 +709,7 @@ export default function App() {
               type="button"
               className={f2lMode === "greedy" ? "mode-option active" : "mode-option"}
               onClick={() => handleF2LModeChange("greedy")}
+              disabled={attemptLocked}
             >
               Fast
             </button>
@@ -386,6 +717,7 @@ export default function App() {
               type="button"
               className={f2lMode === "optimized" ? "mode-option active" : "mode-option"}
               onClick={() => handleF2LModeChange("optimized")}
+              disabled={attemptLocked}
             >
               Optimized
             </button>
@@ -424,7 +756,7 @@ export default function App() {
               className="tool-button"
               type="button"
               onClick={handleGenerateScramble}
-              disabled={generatingScramble}
+              disabled={generatingScramble || attemptLocked}
             >
               <RefreshCw size={16} />
               <span>{generatingScramble ? "Generating" : "New"}</span>
@@ -439,7 +771,14 @@ export default function App() {
                 </button>
               </>
             ) : (
-              <button className="icon-button" type="button" onClick={handleEnterEditMode} aria-label="Edit scramble" title="Edit scramble">
+              <button
+                className="icon-button"
+                type="button"
+                onClick={handleEnterEditMode}
+                aria-label="Edit scramble"
+                title="Edit scramble"
+                disabled={attemptLocked}
+              >
                 <Pencil size={17} />
               </button>
             )}
@@ -484,6 +823,19 @@ export default function App() {
           <strong>Request failed.</strong> {error}
         </section>
       ) : null}
+      {attemptSaveStatus === "error" ? (
+        <section className="status-banner status-error save-status">
+          <span><strong>Could not save solve.</strong> {attemptSaveError}</span>
+          <button className="tool-button" type="button" onClick={() => void persistCompletedAttempt()}>
+            Retry save
+          </button>
+        </section>
+      ) : null}
+      {saveNotice ? (
+        <section className="status-banner status-success" onClick={() => setSaveNotice(null)}>
+          {saveNotice}
+        </section>
+      ) : null}
 
       <section className="action-row">
         <button
@@ -505,6 +857,14 @@ export default function App() {
             <span>{summaryVisible ? "Hide summary" : "Show summary"}</span>
           </button>
         ) : null}
+        <button
+          className="tool-button"
+          type="button"
+          onClick={() => setHistoryVisible((current) => !current)}
+        >
+          <History size={17} />
+          <span>{historyVisible ? "Hide history" : "History"}</span>
+        </button>
       </section>
 
       {solutionVisible && summaryVisible && result ? (
@@ -535,6 +895,151 @@ export default function App() {
           <StageCard stage={result.oll} accent="rust" />
           <StageCard stage={result.pll} accent="ink" />
         </section>
+      ) : null}
+
+      {historyVisible ? (
+        <section className="history-panel">
+          <div className="history-panel-header">
+            <div>
+              <p className="section-label">Solve History</p>
+              <h2>Recent solves</h2>
+            </div>
+            <button className="tool-button" type="button" onClick={() => void loadHistory()}>
+              <RefreshCw size={16} />
+              <span>Refresh</span>
+            </button>
+          </div>
+          {historyStatus === "loading" ? <p className="history-empty">Loading history...</p> : null}
+          {historyStatus === "error" ? <p className="history-empty">{historyError ?? "History unavailable"}</p> : null}
+          {historyStatus !== "loading" && historyEntries.length === 0 ? (
+            <p className="history-empty">No solves saved yet.</p>
+          ) : null}
+          {historyEntries.length > 0 ? (
+            <div className="history-list">
+              {historyEntries.map((entry) => (
+                <article className="history-entry" key={entry.id}>
+                  <div className="history-entry-top">
+                    <strong>{formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}</strong>
+                    <span>{new Date(entry.createdAt).toLocaleString()}</span>
+                  </div>
+                  <div className="history-entry-meta">
+                    <span>Attempt cross {crossFaceLabel(entry.crossFaceRequested)}</span>
+                    <span>{entry.fastCrossFaceRequested ? `Fast ${crossFaceLabel(entry.fastCrossFaceRequested)}` : "Fast not saved"}</span>
+                    <span>{entry.optimizedCrossFaceRequested ? `Optimized ${crossFaceLabel(entry.optimizedCrossFaceRequested)}` : "Optimized not saved"}</span>
+                  </div>
+                  <p className="history-scramble">{entry.scramble}</p>
+                  <button
+                    className="tool-button history-solution-button"
+                    type="button"
+                    onClick={() => void openHistorySolution(entry)}
+                  >
+                    <Eye size={16} />
+                    <span>Show solution</span>
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {modalStatus !== "idle" ? (
+        <div className="solution-modal-backdrop" role="presentation" onMouseDown={closeSolutionModal}>
+          <section
+            className="solution-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Solve solution"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="solution-modal-header">
+              <div>
+                <p className="section-label">History Solution</p>
+                <h2>{modalDetail ? formatHistoryTime(modalDetail.officialMs, modalDetail.penalty, modalDetail.dnf) : "Loading"}</h2>
+              </div>
+              <button className="icon-button" type="button" onClick={closeSolutionModal} aria-label="Close solution">
+                <X size={18} />
+              </button>
+            </div>
+
+            {modalStatus === "loading" ? <p className="modal-message">Loading saved solution...</p> : null}
+            {modalStatus === "error" ? <p className="modal-message error-text">{modalError}</p> : null}
+
+            {modalDetail ? (
+              <>
+                <div className="solution-modal-controls">
+                  <div className="mode-toggle" aria-label="History F2L mode">
+                    <button
+                      className={modalMode === "greedy" ? "mode-option active" : "mode-option"}
+                      type="button"
+                      onClick={() => void handleModalModeChange("greedy")}
+                      disabled={modalComputing || modalSaving}
+                    >
+                      Fast
+                    </button>
+                    <button
+                      className={modalMode === "optimized" ? "mode-option active" : "mode-option"}
+                      type="button"
+                      onClick={() => void handleModalModeChange("optimized")}
+                      disabled={modalComputing || modalSaving}
+                    >
+                      Optimized
+                    </button>
+                  </div>
+                  <label className="compact-control">
+                    <span>Cross</span>
+                    <select
+                      value={modalCrossFace}
+                      onChange={(event) => void handleModalCrossChange(event.target.value)}
+                      disabled={modalComputing || modalSaving}
+                    >
+                      {FACE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {modalDirty ? (
+                    <button
+                      className="tool-button primary"
+                      type="button"
+                      onClick={() => void saveModalReplacement()}
+                      disabled={modalSaving || modalComputing}
+                      title={modalOverwriteMessage(modalDetail, modalMode, modalCrossFace)}
+                    >
+                      <Save size={16} />
+                      <span>{modalSaving ? "Saving" : "Save replacement"}</span>
+                    </button>
+                  ) : null}
+                </div>
+
+                <p className="modal-scramble">{modalDetail.scramble}</p>
+                {modalDirty ? (
+                  <p className="modal-warning">{modalOverwriteMessage(modalDetail, modalMode, modalCrossFace)}</p>
+                ) : null}
+                {modalComputing ? <p className="modal-message">Computing {f2lModeLabel(modalMode)} solution...</p> : null}
+                {modalError ? <p className="modal-message error-text">{modalError}</p> : null}
+
+                {modalResult ? (
+                  <div className="solution-modal-content">
+                    <CubeAnimator result={modalResult} />
+                    <div className="modal-summary">
+                      <Metric label="Total moves" value={String(modalResult.totalMoveCount)} />
+                      <Metric label="Cross requested" value={crossFaceLabel(modalCrossFace)} />
+                      <Metric label="Cross chosen" value={modalResult.crossFace} />
+                      <Metric label="F2L mode" value={f2lModeLabel(modalResult.f2lMode)} />
+                      <StageCard stage={modalResult.cross} accent="amber" />
+                      <StageCard stage={modalResult.f2l} accent="teal" />
+                      <StageCard stage={modalResult.oll} accent="rust" />
+                      <StageCard stage={modalResult.pll} accent="ink" />
+                    </div>
+                  </div>
+                ) : null}
+              </>
+            ) : null}
+          </section>
+        </div>
       ) : null}
     </main>
   );
@@ -569,6 +1074,100 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function f2lModeLabel(mode: string): string {
   return mode === "optimized" ? "Optimized" : "Fast";
+}
+
+function getOrCreateClientUserId(): string {
+  const existing = window.localStorage.getItem("cube-solver-user-id");
+  if (existing && existing.trim().length > 0) {
+    return existing;
+  }
+  const generated = `anon-${crypto.randomUUID()}`;
+  window.localStorage.setItem("cube-solver-user-id", generated);
+  return generated;
+}
+
+function buildSaveSolutionRequest(
+  userId: string,
+  crossFaceRequested: string,
+  result: SolveResponse,
+): SaveSolutionRequest {
+  return {
+    userId,
+    crossFaceRequested,
+    crossFaceChosen: result.crossFace,
+    f2lMode: result.f2lMode,
+    f2lSetupCaseCount: result.f2lSetupCaseCount,
+    f2lInsertCaseCount: result.f2lInsertCaseCount,
+    solvedF2LSlots: result.solvedF2LSlots,
+    totalMoves: result.totalMoveCount,
+    fullySolved: result.fullySolved,
+    solveElapsedMs: result.elapsedMs,
+    crossAlgorithm: result.cross.algorithm,
+    crossMoves: result.cross.moveCount,
+    crossSolved: result.cross.solved,
+    crossStatus: result.cross.status,
+    f2lAlgorithm: result.f2l.algorithm,
+    f2lMoves: result.f2l.moveCount,
+    f2lSolved: result.f2l.solved,
+    f2lStatus: result.f2l.status,
+    ollAlgorithm: result.oll.algorithm,
+    ollMoves: result.oll.moveCount,
+    ollSolved: result.oll.solved,
+    ollStatus: result.oll.status,
+    pllAlgorithm: result.pll.algorithm,
+    pllMoves: result.pll.moveCount,
+    pllSolved: result.pll.solved,
+    pllStatus: result.pll.status,
+  };
+}
+
+function savedSolutionResult(scramble: string, saved: SavedSolution): SolveResponse {
+  return {
+    scramble,
+    crossFace: saved.crossFace,
+    f2lMode: saved.f2lMode,
+    f2lSetupCaseCount: saved.f2lSetupCaseCount,
+    f2lInsertCaseCount: saved.f2lInsertCaseCount,
+    cross: saved.cross,
+    f2l: saved.f2l,
+    oll: saved.oll,
+    pll: saved.pll,
+    solvedF2LSlots: saved.solvedF2LSlots,
+    fullySolved: saved.fullySolved,
+    totalMoveCount: saved.totalMoveCount,
+    elapsedMs: saved.elapsedMs,
+  };
+}
+
+function crossFaceLabel(face: string): string {
+  return face === "CN" ? "Color Neutral" : face;
+}
+
+function modalOverwriteMessage(
+  detail: SolveHistoryDetail,
+  mode: F2LMode,
+  nextCross: string,
+): string {
+  const saved = detail.solutions.find((solution) => solution.mode === mode);
+  const oldCross = saved ? crossFaceLabel(saved.crossFaceRequested) : "none";
+  return `Saving will replace the saved ${f2lModeLabel(mode)} solution (${oldCross}) with this ${crossFaceLabel(nextCross)} solution.`;
+}
+
+function officialTimeMs(stoppedElapsedMs: number, penalty: TimerPenalty): number | null {
+  if (penalty === "dnf") {
+    return null;
+  }
+  return penalty === "+2" ? Math.round(stoppedElapsedMs + 2_000) : Math.round(stoppedElapsedMs);
+}
+
+function formatHistoryTime(officialMs: number | null, penalty: string, dnf: boolean): string {
+  if (dnf || penalty === "dnf" || officialMs === null) {
+    return "DNF";
+  }
+  if (penalty === "+2") {
+    return `${formatSolveTime(officialMs)}+`;
+  }
+  return formatSolveTime(officialMs);
 }
 
 function solutionStatusLabel(status: SolutionStatus): string {

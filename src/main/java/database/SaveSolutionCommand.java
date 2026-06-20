@@ -1,0 +1,35 @@
+package database;
+
+public record SaveSolutionCommand(
+        String userExternalId,
+        long solveId,
+        String mode,
+        String crossFaceRequested,
+        String crossFaceChosen,
+        String solution,
+        String normalizedSolution,
+        int f2lSetupCaseCount,
+        int f2lInsertCaseCount,
+        String solvedF2LSlots,
+        int totalMoves,
+        boolean fullySolved,
+        double solveElapsedMs,
+        String crossAlgorithm,
+        int crossMoves,
+        boolean crossSolved,
+        String crossStatus,
+        String f2lAlgorithm,
+        int f2lMoves,
+        boolean f2lSolved,
+        String f2lStatus,
+        String ollAlgorithm,
+        int ollMoves,
+        boolean ollSolved,
+        String ollStatus,
+        String pllAlgorithm,
+        int pllMoves,
+        boolean pllSolved,
+        String pllStatus,
+        String solverVersion
+) {
+}

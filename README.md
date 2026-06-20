@@ -28,7 +28,7 @@ Known limitations:
 - F2L setup and insert case coverage is intended to be complete enough for normal solves without IDA* fallback, but some seeded algorithms are not yet optimal.
 - The IDA* fallback remains in place as a safety net for unexpected F2L misses.
 - Optimized F2L can be significantly slower than fast mode on some scrambles because it evaluates multiple DB-backed branch lines before choosing a result.
-- The frontend currently exposes one-scramble solve requests only.
+- Solve history currently uses a browser-local anonymous user ID. It is suitable for local persistence but is not a secure account or authentication system.
 
 ## Requirements
 
@@ -55,14 +55,45 @@ mvn -q compile exec:java -Dexec.mainClass=server.ApiServerMain
 This starts:
 
 - `POST /api/solve`
+- `POST /api/solves`
+- `GET /api/solves`
+- `GET /api/solves/{id}`
+- `PUT /api/solves/{id}/solutions/{mode}`
 - `GET /api/health`
 - static frontend serving from `frontend/dist` when a frontend build exists
+
+Postgres is optional at startup. If `DATABASE_URL` is set, the server validates the connection and creates the initial solve-history tables automatically.
+
+The server automatically reads a root-level `.env` file if present. A simple local setup is:
+
+```bash
+DATABASE_URL='postgresql://USER:PASSWORD@HOST/neondb?sslmode=require&channel_binding=require'
+```
+
+Configuration precedence is:
+
+- `-Ddatabase.url=...`
+- real environment variables such as `DATABASE_URL`
+- root `.env`
+
+The server also accepts `-Ddatabase.url=...` if you prefer a JVM system property.
 
 The default port is `8080`. Override it with:
 
 ```bash
 mvn -q compile exec:java -Dexec.mainClass=server.ApiServerMain -Dserver.port=9090
 ```
+
+`GET /api/health` now reports database status as well as API status.
+
+Solve history uses separate attempt and generated-solution records:
+
+- `solves` stores the user's scramble, timer result, penalty, and timestamp.
+- `solve_solutions` stores generated CFOP output keyed by `(solve_id, mode)`.
+
+This allows one timed solve to have independent Fast and Optimized solutions. Each mode stores one requested cross configuration and can be replaced independently from the other mode. Startup migration upgrades the earlier combined `solves` schema automatically.
+
+The frontend creates an idempotent timed attempt before advancing to the next scramble. Its current solution is then stored separately. History rows open a solution dialog where missing modes are computed on demand; changing the saved cross creates a preview that must be explicitly saved to replace that mode.
 
 ## Frontend Development
 
@@ -90,6 +121,8 @@ Current frontend behavior:
 - supports fixed-face cross solving or color-neutral cross selection
 - supports fast greedy F2L or optimized F2L branch search
 - includes a timer with inspection behavior similar to common cube timers
+- saves completed attempts to Postgres and advances to the next scramble automatically
+- includes persistent solve history with Fast/Optimized and cross-specific solution review
 - reveals the solution only when requested
 - supports per-stage playback and playback speed changes
 - includes a dark mode toggle
@@ -97,7 +130,6 @@ Current frontend behavior:
 Timer controls:
 
 - `Space`: arm, start inspection, start solve, or stop solve
-- `Enter`: after a stopped solve, generate the next scramble
 - inspection over 15 seconds applies `+2`
 - inspection over 17 seconds applies `DNF`
 
@@ -211,6 +243,12 @@ API / server:
 - [`src/main/java/api/SolveApiRequest.java`](src/main/java/api/SolveApiRequest.java)
 - [`src/main/java/server/CubeHttpServer.java`](src/main/java/server/CubeHttpServer.java)
 - [`src/main/java/server/ApiServerMain.java`](src/main/java/server/ApiServerMain.java)
+
+Persistence:
+
+- [`src/main/java/database/DatabaseManager.java`](src/main/java/database/DatabaseManager.java)
+- [`src/main/java/database/SolveHistoryRepository.java`](src/main/java/database/SolveHistoryRepository.java)
+- [`src/main/java/config/Dotenv.java`](src/main/java/config/Dotenv.java)
 
 Frontend:
 
