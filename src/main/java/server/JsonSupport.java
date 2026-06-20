@@ -1,8 +1,13 @@
 package server;
 
+import database.DatabaseHealth;
+import database.SavedSolution;
+import database.SolveHistoryDetail;
+import database.SolveHistoryEntry;
 import solver.CfopSolveResult;
 import solver.CfopStageResult;
 
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -37,6 +42,123 @@ final class JsonSupport {
         return "{\"error\":\"" + escape(message) + "\"}";
     }
 
+    static Integer readInteger(String json, String fieldName) {
+        var matcher = numberFieldMatcher(json, fieldName);
+        return matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
+    }
+
+    static int requireInteger(String json, String fieldName) {
+        var value = readInteger(json, fieldName);
+        if (value == null) {
+            throw new IllegalArgumentException(fieldName + " cannot be null");
+        }
+        return value;
+    }
+
+    static Double readDouble(String json, String fieldName) {
+        var matcher = decimalFieldMatcher(json, fieldName);
+        return matcher.find() ? Double.valueOf(matcher.group(1)) : null;
+    }
+
+    static double requireDouble(String json, String fieldName) {
+        var value = readDouble(json, fieldName);
+        if (value == null) {
+            throw new IllegalArgumentException(fieldName + " cannot be null");
+        }
+        return value;
+    }
+
+    static boolean readBoolean(String json, String fieldName) {
+        var matcher = booleanFieldMatcher(json, fieldName);
+        if (!matcher.find()) {
+            return false;
+        }
+        return Boolean.parseBoolean(matcher.group(1));
+    }
+
+    static String healthJson(DatabaseHealth health) {
+        var status = "error".equals(health.status()) ? "error" : "ok";
+        return "{"
+                + "\"status\":\"" + status + "\","
+                + "\"database\":{"
+                + "\"status\":\"" + escape(health.status()) + "\","
+                + "\"message\":\"" + escape(health.message()) + "\""
+                + "}"
+                + "}";
+    }
+
+    static String solveHistoryEntryJson(SolveHistoryEntry entry) {
+        return "{"
+                + "\"id\":" + entry.id() + ","
+                + "\"clientAttemptId\":\"" + escape(entry.clientAttemptId()) + "\","
+                + "\"scramble\":\"" + escape(entry.scramble()) + "\","
+                + "\"crossFaceRequested\":\"" + escape(entry.crossFaceRequested()) + "\","
+                + "\"timerMs\":" + nullableInteger(entry.timerMs()) + ","
+                + "\"officialMs\":" + nullableInteger(entry.officialMs()) + ","
+                + "\"penalty\":\"" + escape(entry.penalty()) + "\","
+                + "\"dnf\":" + entry.dnf() + ","
+                + "\"fastCrossFaceRequested\":" + nullableString(entry.fastCrossFaceRequested()) + ","
+                + "\"optimizedCrossFaceRequested\":" + nullableString(entry.optimizedCrossFaceRequested()) + ","
+                + "\"createdAt\":\"" + escape(entry.createdAt().toString()) + "\""
+                + "}";
+    }
+
+    static String solveHistoryListJson(List<SolveHistoryEntry> entries) {
+        var builder = new StringBuilder();
+        builder.append("{\"items\":[");
+        for (int i = 0; i < entries.size(); i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append(solveHistoryEntryJson(entries.get(i)));
+        }
+        builder.append("]}");
+        return builder.toString();
+    }
+
+    static String solveHistoryDetailJson(SolveHistoryDetail detail) {
+        var builder = new StringBuilder();
+        builder.append('{')
+                .append("\"id\":").append(detail.id()).append(',')
+                .append("\"clientAttemptId\":\"").append(escape(detail.clientAttemptId())).append("\",")
+                .append("\"scramble\":\"").append(escape(detail.scramble())).append("\",")
+                .append("\"crossFaceRequested\":\"").append(escape(detail.crossFaceRequested())).append("\",")
+                .append("\"timerMs\":").append(nullableInteger(detail.timerMs())).append(',')
+                .append("\"officialMs\":").append(nullableInteger(detail.officialMs())).append(',')
+                .append("\"penalty\":\"").append(escape(detail.penalty())).append("\",")
+                .append("\"dnf\":").append(detail.dnf()).append(',')
+                .append("\"createdAt\":\"").append(escape(detail.createdAt().toString())).append("\",")
+                .append("\"solutions\":[");
+        for (int i = 0; i < detail.solutions().size(); i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append(savedSolutionJson(detail.solutions().get(i)));
+        }
+        return builder.append("]}").toString();
+    }
+
+    static String savedSolutionJson(SavedSolution solution) {
+        return "{"
+                + "\"mode\":\"" + escape(solution.mode()) + "\","
+                + "\"crossFaceRequested\":\"" + escape(solution.crossFaceRequested()) + "\","
+                + "\"crossFace\":\"" + escape(solution.crossFaceChosen()) + "\","
+                + "\"f2lMode\":\"" + escape(solution.mode()) + "\","
+                + "\"f2lSetupCaseCount\":" + solution.f2lSetupCaseCount() + ","
+                + "\"f2lInsertCaseCount\":" + solution.f2lInsertCaseCount() + ","
+                + "\"cross\":" + stageJson(solution.cross()) + ","
+                + "\"f2l\":" + stageJson(solution.f2l()) + ","
+                + "\"oll\":" + stageJson(solution.oll()) + ","
+                + "\"pll\":" + stageJson(solution.pll()) + ","
+                + "\"solvedF2LSlots\":\"" + escape(solution.solvedF2LSlots()) + "\","
+                + "\"fullySolved\":" + solution.fullySolved() + ","
+                + "\"totalMoveCount\":" + solution.totalMoves() + ","
+                + "\"elapsedMs\":" + String.format(java.util.Locale.US, "%.3f", solution.elapsedMs()) + ","
+                + "\"solverVersion\":" + nullableString(solution.solverVersion()) + ","
+                + "\"updatedAt\":\"" + escape(solution.updatedAt().toString()) + "\""
+                + "}";
+    }
+
     private static String stageJson(CfopStageResult stage) {
         return "{"
                 + "\"name\":\"" + escape(stage.name()) + "\","
@@ -49,6 +171,18 @@ final class JsonSupport {
 
     private static Matcher stringFieldMatcher(String json, String fieldName) {
         return Pattern.compile("\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*\"((?:\\\\.|[^\"])*)\"").matcher(json);
+    }
+
+    private static Matcher numberFieldMatcher(String json, String fieldName) {
+        return Pattern.compile("\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?\\d+)").matcher(json);
+    }
+
+    private static Matcher decimalFieldMatcher(String json, String fieldName) {
+        return Pattern.compile("\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)").matcher(json);
+    }
+
+    private static Matcher booleanFieldMatcher(String json, String fieldName) {
+        return Pattern.compile("\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(true|false)").matcher(json);
     }
 
     private static String escape(String value) {
@@ -65,5 +199,13 @@ final class JsonSupport {
                 .replace("\\r", "\r")
                 .replace("\\\"", "\"")
                 .replace("\\\\", "\\");
+    }
+
+    private static String nullableInteger(Integer value) {
+        return value == null ? "null" : value.toString();
+    }
+
+    private static String nullableString(String value) {
+        return value == null ? "null" : "\"" + escape(value) + "\"";
     }
 }
