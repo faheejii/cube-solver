@@ -2,8 +2,10 @@ import { useState } from "react";
 import "cubing/twisty";
 import type { SolveResponse, SolveStage } from "./types";
 
+export type PlaybackStageId = "full" | "cross" | "f2l" | "oll" | "pll";
+
 type StageOption = {
-  id: string;
+  id: PlaybackStageId;
   label: string;
   setupAlgorithm: string;
   algorithm: string;
@@ -11,14 +13,34 @@ type StageOption = {
 
 const PLAYBACK_SPEEDS = [0.5, 1, 1.5, 2, 3] as const;
 
-export default function CubeAnimator({ result }: { result: SolveResponse }) {
+type Props = {
+  result: SolveResponse;
+  selectedStage?: PlaybackStageId;
+  onSelectedStageChange?: (stage: PlaybackStageId) => void;
+  compact?: boolean;
+};
+
+export default function CubeAnimator({
+  result,
+  selectedStage,
+  onSelectedStageChange,
+  compact = false,
+}: Props) {
   const options = stageOptions(result);
-  const [selectedId, setSelectedId] = useState(options[0]?.id ?? "full");
+  const [internalSelectedId, setInternalSelectedId] = useState<PlaybackStageId>("full");
   const [playbackSpeed, setPlaybackSpeed] = useState<(typeof PLAYBACK_SPEEDS)[number]>(1);
+  const selectedId = selectedStage ?? internalSelectedId;
   const selected = options.find((option) => option.id === selectedId) ?? options[0];
 
+  function selectStage(stage: PlaybackStageId) {
+    if (selectedStage === undefined) {
+      setInternalSelectedId(stage);
+    }
+    onSelectedStageChange?.(stage);
+  }
+
   return (
-    <section className="visualizer-section" aria-label="Cube animation">
+    <section className={compact ? "visualizer-section compact" : "visualizer-section"} aria-label="Cube animation">
       <div className="visualizer-toolbar">
         <div>
           <p className="section-label">Playback</p>
@@ -32,7 +54,7 @@ export default function CubeAnimator({ result }: { result: SolveResponse }) {
                 key={option.id}
                 type="button"
                 className={option.id === selected.id ? "stage-tab active" : "stage-tab"}
-                onClick={() => setSelectedId(option.id)}
+                onClick={() => selectStage(option.id)}
               >
                 {option.label}
               </button>
@@ -72,10 +94,12 @@ export default function CubeAnimator({ result }: { result: SolveResponse }) {
         />
       </div>
 
-      <div className="visualizer-footer">
-        <span>Setup: {selected.setupAlgorithm || "Solved cube"}</span>
-        <span>Solution: {selected.algorithm || "No moves for this stage"}</span>
-      </div>
+      {!compact ? (
+        <div className="visualizer-footer">
+          <span>Setup: {selected.setupAlgorithm || "Solved cube"}</span>
+          <span>Solution: {selected.algorithm || "No moves for this stage"}</span>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -107,7 +131,7 @@ function stageOptions(result: SolveResponse): StageOption[] {
 
 function stageOption(stage: SolveStage, setupAlgorithm: string): StageOption {
   return {
-    id: stage.name,
+    id: stage.name as Exclude<PlaybackStageId, "full">,
     label: stage.name.toUpperCase(),
     setupAlgorithm,
     algorithm: stage.algorithm,

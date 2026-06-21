@@ -1,21 +1,40 @@
 import { startTransition, useEffect, useRef, useState } from "react";
 import { randomScrambleForEvent } from "cubing/scramble";
-import { Check, Eye, EyeOff, History, ListTree, Moon, Pencil, RefreshCw, Save, Sun, X } from "lucide-react";
-import CubeAnimator from "./CubeAnimator";
+import { Save, X } from "lucide-react";
+import ActiveSolutionsView from "./ActiveSolutionsView";
+import DashboardSidebar, { type DashboardView } from "./DashboardSidebar";
+import HistoryView from "./HistoryView";
+import SolutionResultBody from "./SolutionResultBody";
+import StatisticsRail from "./StatisticsRail";
+import TimerWorkspace from "./TimerWorkspace";
 import {
   createSolveAttempt,
+  deleteSolve,
+  cancelSolveJob,
+  fetchSolveJob,
   fetchSolveHistory,
   fetchSolveHistoryDetail,
+  fetchSolveStatistics,
   saveSolveSolution,
-  solveCube,
+  startSolveJob,
 } from "./api";
+import {
+  crossFaceLabel,
+  f2lModeLabel,
+  formatHistoryTime,
+  formatSolveTime,
+} from "./format";
 import type {
+  SolutionProcess,
+  SolutionProcessSource,
+  SolveJob,
+  SolveJobRequest,
   SaveSolutionRequest,
   SavedSolution,
   SolveHistoryDetail,
   SolveHistoryEntry,
   SolveResponse,
-  SolveStage,
+  SolveStatistics,
 } from "./types";
 
 const DEFAULT_SCRAMBLE = "R D R' D2 R D' R'";
@@ -55,7 +74,7 @@ function initialTheme(): Theme {
   if (savedTheme === "light" || savedTheme === "dark") {
     return savedTheme;
   }
-  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  return "dark";
 }
 
 export default function App() {
@@ -70,12 +89,18 @@ export default function App() {
   const [solutionStatus, setSolutionStatus] = useState<SolutionStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<SolveResponse | null>(null);
-  const [solutionVisible, setSolutionVisible] = useState(false);
-  const [summaryVisible, setSummaryVisible] = useState(false);
-  const [historyVisible, setHistoryVisible] = useState(false);
+  const [timerSolutionOpen, setTimerSolutionOpen] = useState(false);
+  const [activeView, setActiveView] = useState<DashboardView>("timer");
+  const [processes, setProcesses] = useState<SolutionProcess[]>([]);
+  const [processPreview, setProcessPreview] = useState<SolutionProcess | null>(null);
   const [historyStatus, setHistoryStatus] = useState<HistoryStatus>("idle");
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyEntries, setHistoryEntries] = useState<SolveHistoryEntry[]>([]);
+  const [historyCursor, setHistoryCursor] = useState<string | null>(null);
+  const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
+  const [deletingSolveId, setDeletingSolveId] = useState<number | null>(null);
+  const [statistics, setStatistics] = useState<SolveStatistics | null>(null);
+  const [statisticsLoading, setStatisticsLoading] = useState(true);
   const [attemptSaveStatus, setAttemptSaveStatus] = useState<AttemptSaveStatus>("idle");
   const [attemptSaveError, setAttemptSaveError] = useState<string | null>(null);
   const [saveNotice, setSaveNotice] = useState<string | null>(null);
@@ -87,6 +112,14 @@ export default function App() {
   const [modalResult, setModalResult] = useState<SolveResponse | null>(null);
   const [modalDirty, setModalDirty] = useState(false);
   const [modalComputing, setModalComputing] = useState(false);
+  const [modalJobStatus, setModalJobStatus] = useState<"queued" | "running" | null>(null);
+  const [modalStatesExplored, setModalStatesExplored] = useState(0);
+  const [modalStatesPruned, setModalStatesPruned] = useState(0);
+  const [modalDuplicateStates, setModalDuplicateStates] = useState(0);
+  const [modalBestMoves, setModalBestMoves] = useState(-1);
+  const [modalCompletedCandidates, setModalCompletedCandidates] = useState(0);
+  const [modalCandidatesEvaluated, setModalCandidatesEvaluated] = useState(0);
+  const [modalBestTotalMoves, setModalBestTotalMoves] = useState(-1);
   const [modalSaving, setModalSaving] = useState(false);
   const [theme, setTheme] = useState<Theme>(initialTheme);
   const [timerPhase, setTimerPhase] = useState<TimerPhase>("idle");
@@ -99,12 +132,13 @@ export default function App() {
   const requestIdRef = useRef(0);
   const attemptSavingRef = useRef<string | null>(null);
   const completedAttemptRef = useRef<CompletedAttemptSnapshot | null>(null);
+  const modalJobRequestIdRef = useRef(0);
 
   const inspectionElapsedMs =
     inspectionStartedAt === null ? 0 : Math.max(0, clockMs - inspectionStartedAt);
   const inspectionPenalty = penaltyForInspectionElapsed(inspectionElapsedMs);
   const runningElapsedMs = runStartedAt === null ? 0 : Math.max(0, clockMs - runStartedAt);
-  const attemptLocked = attemptSaveStatus === "saving" || attemptSaveStatus === "error";
+  const attemptLocked = attemptSaveStatus === "saving" && timerPhase === "stopped";
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -113,12 +147,15 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
-    document.body.style.overflow =
-      modalStatus !== "idle" ? "hidden" : summaryVisible || historyVisible ? "" : "hidden";
+    const overlayOpen = modalStatus !== "idle" || processPreview !== null || timerSolutionOpen;
+    document.body.style.overflow = activeView === "timer" || overlayOpen ? "hidden" : "";
+    if (activeView === "timer") {
+      window.scrollTo({ top: 0, left: 0 });
+    }
     return () => {
       document.body.style.overflow = "";
     };
-  }, [summaryVisible, historyVisible, modalStatus]);
+  }, [activeView, modalStatus, processPreview, timerSolutionOpen]);
 
   useEffect(() => {
     if (timerPhase !== "inspection" && timerPhase !== "running") {
@@ -138,6 +175,7 @@ export default function App() {
   useEffect(() => {
     void initializeScramble();
     void loadHistory();
+    void loadStatistics();
   }, []);
 
   useEffect(() => {
@@ -150,14 +188,15 @@ export default function App() {
     setSolutionStatus("loading");
     setError(null);
     setResult(null);
-    setSolutionVisible(false);
-    setSummaryVisible(false);
+    setTimerSolutionOpen(false);
 
-    void solveCube({
+    const solveRequest: SolveJobRequest = {
       scramble: committedScramble,
       crossFace,
       f2lMode,
-    })
+    };
+
+    void runTrackedSolve(solveRequest, "timer")
       .then((nextResult) => {
         if (requestIdRef.current !== requestId) {
           return;
@@ -200,14 +239,52 @@ export default function App() {
   }, [modalStatus, modalDirty]);
 
   useEffect(() => {
+    if (!processPreview) {
+      return;
+    }
+    const closePreview = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setProcessPreview(null);
+      }
+    };
+    window.addEventListener("keydown", closePreview);
+    return () => window.removeEventListener("keydown", closePreview);
+  }, [processPreview]);
+
+  useEffect(() => {
+    if (!timerSolutionOpen) {
+      return;
+    }
+    const closeTimerSolution = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setTimerSolutionOpen(false);
+      }
+    };
+    window.addEventListener("keydown", closeTimerSolution);
+    return () => window.removeEventListener("keydown", closeTimerSolution);
+  }, [timerSolutionOpen]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (modalStatus !== "idle") {
+      const overlayOpen = modalStatus !== "idle" || processPreview !== null || timerSolutionOpen;
+      if (overlayOpen) {
+        if (event.code === "Space") {
+          event.preventDefault();
+        }
+        return;
+      }
+      if (
+        activeView !== "timer"
+        || isEditingScramble
+      ) {
         return;
       }
       if (attemptSaveStatus === "saving" || attemptSaveStatus === "error") {
         return;
       }
-      if (isInteractiveTarget(event.target)) {
+      if (isTextEntryTarget(event.target)) {
         return;
       }
 
@@ -217,6 +294,7 @@ export default function App() {
         }
 
         event.preventDefault();
+        blurFocusedButton();
         if (timerPhase === "idle" || timerPhase === "stopped") {
           armTimer(timerPhase);
           return;
@@ -234,14 +312,25 @@ export default function App() {
     };
 
     const handleKeyUp = (event: KeyboardEvent) => {
-      if (modalStatus !== "idle") {
+      const overlayOpen = modalStatus !== "idle" || processPreview !== null || timerSolutionOpen;
+      if (overlayOpen) {
+        if (event.code === "Space") {
+          event.preventDefault();
+        }
         return;
       }
-      if (event.code !== "Space" || isInteractiveTarget(event.target)) {
+      if (
+        activeView !== "timer"
+        || isEditingScramble
+      ) {
+        return;
+      }
+      if (event.code !== "Space" || isTextEntryTarget(event.target)) {
         return;
       }
 
       event.preventDefault();
+      blurFocusedButton();
       if (timerPhase === "armed") {
         releaseArmedTimer();
       }
@@ -260,7 +349,10 @@ export default function App() {
     runStartedAt,
     generatingScramble,
     isEditingScramble,
+    activeView,
     modalStatus,
+    processPreview,
+    timerSolutionOpen,
     attemptSaveStatus,
     committedScramble,
     crossFace,
@@ -290,13 +382,45 @@ export default function App() {
     setHistoryStatus("loading");
     setHistoryError(null);
     try {
-      const entries = await fetchSolveHistory(userId, 20);
-      setHistoryEntries(entries);
+      const page = await fetchSolveHistory(userId, 25);
+      setHistoryEntries(page.items);
+      setHistoryCursor(page.nextCursor);
       setHistoryStatus("ready");
     } catch (loadError) {
       const message = loadError instanceof Error ? loadError.message : "History request failed";
       setHistoryError(message);
       setHistoryStatus("error");
+    }
+  }
+
+  async function loadMoreHistory() {
+    if (!historyCursor || historyLoadingMore) {
+      return;
+    }
+    setHistoryLoadingMore(true);
+    try {
+      const page = await fetchSolveHistory(userId, 25, historyCursor);
+      setHistoryEntries((current) => [
+        ...current,
+        ...page.items.filter((entry) => current.every((existing) => existing.id !== entry.id)),
+      ]);
+      setHistoryCursor(page.nextCursor);
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : "History request failed";
+      setHistoryError(message);
+    } finally {
+      setHistoryLoadingMore(false);
+    }
+  }
+
+  async function loadStatistics() {
+    setStatisticsLoading(true);
+    try {
+      setStatistics(await fetchSolveStatistics(userId));
+    } catch {
+      setStatistics(null);
+    } finally {
+      setStatisticsLoading(false);
     }
   }
 
@@ -327,30 +451,86 @@ export default function App() {
     }
   }
 
+  async function handleDeleteSolve(entry: SolveHistoryEntry) {
+    if (deletingSolveId !== null) {
+      return;
+    }
+    const displayedTime = formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf);
+    if (!window.confirm(
+      `Delete the ${displayedTime} solve permanently?\n\nThis also deletes all saved Fast and Optimized solutions.`
+    )) {
+      return;
+    }
+
+    setDeletingSolveId(entry.id);
+    setHistoryError(null);
+    try {
+      await deleteSolve(userId, entry.id);
+      setHistoryEntries((current) => current.filter((solve) => solve.id !== entry.id));
+      setSaveNotice("Solve deleted");
+      await Promise.all([loadHistory(), loadStatistics()]);
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : "Solve deletion failed";
+      setHistoryError(message);
+    } finally {
+      setDeletingSolveId(null);
+    }
+  }
+
   async function computeModalSolution(
     detail: SolveHistoryDetail,
     mode: F2LMode,
     requestedCross: string,
     autoSave: boolean,
   ) {
+    const requestId = modalJobRequestIdRef.current + 1;
+    modalJobRequestIdRef.current = requestId;
     setModalComputing(true);
+    setModalJobStatus(mode === "optimized" ? "queued" : null);
+    setModalStatesExplored(0);
+    setModalStatesPruned(0);
+    setModalDuplicateStates(0);
+    setModalBestMoves(-1);
+    setModalCompletedCandidates(0);
+    setModalCandidatesEvaluated(0);
+    setModalBestTotalMoves(-1);
     setModalError(null);
+    setModalResult(null);
     try {
-      const computed = await solveCube({
+      const computed = await runTrackedSolve({
         scramble: detail.scramble,
         crossFace: requestedCross,
         f2lMode: mode,
+        userId: autoSave ? userId : undefined,
+        solveId: autoSave ? detail.id : undefined,
+        saveOnComplete: autoSave,
+      }, "history", (progress) => {
+        if (modalJobRequestIdRef.current !== requestId) {
+          return;
+        }
+        setModalJobStatus(progress.status === "queued" ? "queued" : "running");
+        setModalStatesExplored(progress.statesExplored);
+        setModalStatesPruned(progress.statesPruned);
+        setModalDuplicateStates(progress.duplicateStates);
+        setModalBestMoves(progress.bestMoves);
+        setModalCompletedCandidates(progress.completedCandidates);
+        setModalCandidatesEvaluated(progress.candidatesEvaluated);
+        setModalBestTotalMoves(progress.bestTotalMoves);
       });
+      if (modalJobRequestIdRef.current !== requestId) {
+        if (autoSave) {
+          void loadHistory();
+          void loadStatistics();
+        }
+        return;
+      }
       setModalResult(computed);
       if (autoSave) {
-        const saved = await saveSolveSolution(
-          detail.id,
-          mode,
-          buildSaveSolutionRequest(userId, requestedCross, computed),
-        );
-        updateModalSavedSolution(saved);
+        const refreshedDetail = await fetchSolveHistoryDetail(userId, detail.id);
+        setModalDetail(refreshedDetail);
         setModalDirty(false);
         await loadHistory();
+        await loadStatistics();
       } else {
         setModalDirty(true);
       }
@@ -358,7 +538,10 @@ export default function App() {
       const message = computeError instanceof Error ? computeError.message : "Solution computation failed";
       setModalError(message);
     } finally {
-      setModalComputing(false);
+      if (modalJobRequestIdRef.current === requestId) {
+        setModalComputing(false);
+        setModalJobStatus(null);
+      }
     }
   }
 
@@ -436,15 +619,34 @@ export default function App() {
     }
   }
 
+  function retryModalSolution() {
+    if (!modalDetail || modalComputing) {
+      return;
+    }
+    const saved = modalDetail.solutions.find((solution) => solution.mode === modalMode);
+    const autoSave = !saved;
+    void computeModalSolution(modalDetail, modalMode, modalCrossFace, autoSave);
+  }
+
   function closeSolutionModal() {
     if (!confirmDiscardModalPreview()) {
       return;
     }
     setModalStatus("idle");
+    modalJobRequestIdRef.current++;
     setModalDetail(null);
     setModalResult(null);
     setModalDirty(false);
     setModalError(null);
+    setModalComputing(false);
+    setModalJobStatus(null);
+    setModalStatesExplored(0);
+    setModalStatesPruned(0);
+    setModalDuplicateStates(0);
+    setModalBestMoves(-1);
+    setModalCompletedCandidates(0);
+    setModalCandidatesEvaluated(0);
+    setModalBestTotalMoves(-1);
   }
 
   function resetTimer() {
@@ -463,12 +665,10 @@ export default function App() {
     setClientAttemptId(crypto.randomUUID());
     setDraftScramble(normalized);
     setIsEditingScramble(false);
-    setSolutionVisible(false);
-    setSummaryVisible(false);
+    setTimerSolutionOpen(false);
     setAttemptSaveStatus("idle");
     setAttemptSaveError(null);
     attemptSavingRef.current = null;
-    completedAttemptRef.current = null;
     resetTimer();
   }
 
@@ -538,6 +738,9 @@ export default function App() {
     attemptSavingRef.current = snapshot.clientAttemptId;
     setAttemptSaveStatus("saving");
     setAttemptSaveError(null);
+    if (timerPhase === "stopped") {
+      void handleGenerateScramble();
+    }
 
     try {
       const savedAttempt = await createSolveAttempt({
@@ -558,30 +761,32 @@ export default function App() {
       setHistoryStatus("ready");
       setAttemptSaveStatus("saved");
       setSaveNotice(`Solve saved · ${formatHistoryTime(savedAttempt.officialMs, savedAttempt.penalty, savedAttempt.dnf)}`);
+      void loadStatistics();
 
       const solutionPromise = snapshot.result
-        ? Promise.resolve(snapshot.result)
-        : solveCube({
+        ? saveSolveSolution(
+            savedAttempt.id,
+            snapshot.f2lMode,
+            buildSaveSolutionRequest(userId, snapshot.crossFace, snapshot.result),
+          )
+        : runTrackedSolve({
             scramble: snapshot.scramble,
             crossFace: snapshot.crossFace,
             f2lMode: snapshot.f2lMode,
-          });
+            userId,
+            solveId: savedAttempt.id,
+            saveOnComplete: true,
+          }, "background");
       void solutionPromise
-        .then((completedResult) =>
-          saveSolveSolution(
-            savedAttempt.id,
-            snapshot.f2lMode,
-            buildSaveSolutionRequest(userId, snapshot.crossFace, completedResult),
-          ),
-        )
         .then(() => loadHistory())
         .catch((solutionError) => {
           const message =
             solutionError instanceof Error ? solutionError.message : "Solution save failed";
           setHistoryError(message);
         });
-
-      await handleGenerateScramble();
+      if (completedAttemptRef.current?.clientAttemptId === snapshot.clientAttemptId) {
+        completedAttemptRef.current = null;
+      }
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : "Attempt save failed";
       setAttemptSaveStatus("error");
@@ -609,13 +814,7 @@ export default function App() {
     if (solutionStatus !== "ready" || !result) {
       return;
     }
-    setSolutionVisible((current) => {
-      const next = !current;
-      if (!next) {
-        setSummaryVisible(false);
-      }
-      return next;
-    });
+    setTimerSolutionOpen(true);
   }
 
   function handleEnterEditMode() {
@@ -634,15 +833,13 @@ export default function App() {
 
   function handleCrossFaceChange(nextFace: string) {
     setCrossFace(nextFace);
-    setSolutionVisible(false);
-    setSummaryVisible(false);
+    setTimerSolutionOpen(false);
     resetTimer();
   }
 
   function handleF2LModeChange(nextMode: F2LMode) {
     setF2LMode(nextMode);
-    setSolutionVisible(false);
-    setSummaryVisible(false);
+    setTimerSolutionOpen(false);
     resetTimer();
   }
 
@@ -677,270 +874,224 @@ export default function App() {
     setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
   }
 
+  function runTrackedSolve(
+    request: SolveJobRequest,
+    source: SolutionProcessSource,
+    onProgress?: (job: SolveJob) => void,
+  ): Promise<SolveResponse> {
+    const processId = crypto.randomUUID();
+    const now = Date.now();
+    const initial: SolutionProcess = {
+      id: processId,
+      jobId: null,
+      source,
+      request,
+      status: "queued",
+      statesExplored: 0,
+      statesPruned: 0,
+      duplicateStates: 0,
+      bestMoves: -1,
+      completedCandidates: 0,
+      candidatesEvaluated: 0,
+      bestTotalMoves: -1,
+      createdAt: now,
+      updatedAt: now,
+      result: null,
+      error: null,
+      cancelling: false,
+    };
+    setProcesses((current) => [initial, ...current]);
+
+    return startSolveJob(request)
+      .then((job) => {
+        updateProcessFromJob(processId, job);
+        return waitForSolveJob(job, (progress) => {
+          updateProcessFromJob(processId, progress);
+          onProgress?.(progress);
+        });
+      })
+      .catch((solveError) => {
+        const message = solveError instanceof Error ? solveError.message : "Solve request failed";
+        setProcesses((current) => trimFinishedProcesses(current.map((process) =>
+          process.id === processId && !isTerminalProcess(process)
+            ? {
+                ...process,
+                status: solveError instanceof SolveJobCancelledError ? "cancelled" : "failed",
+                error: message,
+                cancelling: false,
+                updatedAt: Date.now(),
+              }
+            : process
+        )));
+        throw solveError;
+      });
+  }
+
+  function updateProcessFromJob(processId: string, job: SolveJob) {
+    setProcesses((current) => trimFinishedProcesses(current.map((process) =>
+      process.id === processId
+        ? {
+            ...process,
+            jobId: job.id,
+            status: job.status,
+            statesExplored: job.statesExplored,
+            statesPruned: job.statesPruned,
+            duplicateStates: job.duplicateStates,
+            bestMoves: job.bestMoves,
+            completedCandidates: job.completedCandidates,
+            candidatesEvaluated: job.candidatesEvaluated,
+            bestTotalMoves: job.bestTotalMoves,
+            result: job.result,
+            error: job.error,
+            cancelling: isTerminalProcess({ ...process, status: job.status })
+              ? false
+              : process.cancelling,
+            updatedAt: Date.now(),
+          }
+        : process
+    )));
+  }
+
+  async function terminateProcess(process: SolutionProcess) {
+    if (!process.jobId || isTerminalProcess(process)) {
+      return;
+    }
+    setProcesses((current) => current.map((entry) =>
+      entry.id === process.id ? { ...entry, cancelling: true } : entry
+    ));
+    try {
+      updateProcessFromJob(process.id, await cancelSolveJob(process.jobId));
+    } catch (cancelError) {
+      const message = cancelError instanceof Error ? cancelError.message : "Cancellation failed";
+      setProcesses((current) => current.map((entry) =>
+        entry.id === process.id ? { ...entry, cancelling: false, error: message } : entry
+      ));
+    }
+  }
+
+  function retryProcess(process: SolutionProcess) {
+    void runTrackedSolve(process.request, process.source);
+  }
+
+  function dismissProcess(processId: string) {
+    setProcesses((current) => current.filter((process) => process.id !== processId));
+  }
+
+  function clearFinishedProcesses() {
+    setProcesses((current) => current.filter((process) => !isTerminalProcess(process)));
+  }
+
   return (
-    <main className={summaryVisible || historyVisible ? "page-shell summary-open" : "page-shell"}>
-      <header className="app-header">
-        <div className="brand-lockup">
-          <span className="brand-mark" aria-hidden="true">
-            CF
-          </span>
-          <h1>Cube Solver</h1>
-          <span className={result?.fullySolved ? "status-chip solved" : "status-chip"}>
-            {solutionStatus === "loading" ? "Solving" : result?.fullySolved ? "Solved" : "Ready"}
-          </span>
-        </div>
-        <div className="top-controls">
-          <label className="compact-control">
-            <span>Cross</span>
-            <select
-              value={crossFace}
-              onChange={(event) => handleCrossFaceChange(event.target.value)}
-              disabled={attemptLocked}
-            >
-              {FACE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="mode-toggle" aria-label="F2L mode">
-            <button
-              type="button"
-              className={f2lMode === "greedy" ? "mode-option active" : "mode-option"}
-              onClick={() => handleF2LModeChange("greedy")}
-              disabled={attemptLocked}
-            >
-              Fast
-            </button>
-            <button
-              type="button"
-              className={f2lMode === "optimized" ? "mode-option active" : "mode-option"}
-              onClick={() => handleF2LModeChange("optimized")}
-              disabled={attemptLocked}
-            >
-              Optimized
-            </button>
-          </div>
-          <button
-            className="icon-button"
-            type="button"
-            onClick={toggleTheme}
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          >
-            {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
-          </button>
-        </div>
-      </header>
+    <main className={`dashboard-shell view-${activeView}`}>
+      <DashboardSidebar
+        activeView={activeView}
+        theme={theme}
+        activeProcessCount={processes.filter((process) => !isTerminalProcess(process)).length}
+        onViewChange={setActiveView}
+        onToggleTheme={toggleTheme}
+      />
 
-      <section className="scramble-header">
-        <div className="scramble-panel">
-          <span className="section-label">{isEditingScramble ? "Edit scramble" : "Scramble"}</span>
-          {isEditingScramble ? (
-            <label className="field scramble-edit-field">
-              <textarea
-                rows={3}
-                value={draftScramble}
-                onChange={(event) => setDraftScramble(event.target.value)}
-                placeholder="Enter a scramble like R U R' U'"
-                autoFocus
-              />
-            </label>
-          ) : (
-            <p className="scramble-text">{committedScramble || "Preparing scramble..."}</p>
-          )}
+      <div className="dashboard-center">
+        {activeView === "timer" ? (
+          <>
+            <TimerWorkspace
+              scramble={committedScramble}
+              draftScramble={draftScramble}
+              crossFace={crossFace}
+              f2lMode={f2lMode}
+              faceOptions={FACE_OPTIONS}
+              isEditingScramble={isEditingScramble}
+              generatingScramble={generatingScramble}
+              attemptLocked={attemptLocked}
+              solutionStatus={solutionStatus}
+              result={result}
+              statistics={statistics}
+              timerPhase={timerPhase}
+              timerValue={timerText(
+                timerPhase,
+                inspectionElapsedMs,
+                runningElapsedMs,
+                stoppedElapsedMs,
+                finalPenalty,
+              )}
+              timerHint={timerHint(timerPhase, inspectionPenalty, finalPenalty)}
+              timerDetail={
+                timerPhase === "stopped"
+                  ? timerResultLabel(stoppedElapsedMs, finalPenalty)
+                  : isEditingScramble
+                    ? "Editing locked"
+                    : solveReadinessLabel(solutionStatus)
+              }
+              onDraftChange={setDraftScramble}
+              onCrossFaceChange={handleCrossFaceChange}
+              onF2LModeChange={handleF2LModeChange}
+              onGenerateScramble={() => void handleGenerateScramble()}
+              onEnterEdit={handleEnterEditMode}
+              onCancelEdit={handleCancelEdit}
+              onSaveEdit={handleSaveEdit}
+              onShowSolution={handleShowSolution}
+              onTimerPointerDown={handleTimerPointerDown}
+              onTimerPointerUp={handleTimerPointerUp}
+            />
 
-          <div className="scramble-actions">
-            <button
-              className="tool-button"
-              type="button"
-              onClick={handleGenerateScramble}
-              disabled={generatingScramble || attemptLocked}
-            >
-              <RefreshCw size={16} />
-              <span>{generatingScramble ? "Generating" : "New"}</span>
-            </button>
-            {isEditingScramble ? (
-              <>
-                <button className="icon-button" type="button" onClick={handleCancelEdit} aria-label="Cancel edit" title="Cancel edit">
-                  <X size={17} />
-                </button>
-                <button className="icon-button primary" type="button" onClick={handleSaveEdit} aria-label="Save scramble" title="Save scramble">
-                  <Check size={17} />
-                </button>
-              </>
-            ) : (
-              <button
-                className="icon-button"
-                type="button"
-                onClick={handleEnterEditMode}
-                aria-label="Edit scramble"
-                title="Edit scramble"
-                disabled={attemptLocked}
-              >
-                <Pencil size={17} />
-              </button>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="workspace">
-        <section className="main-viewport">
-          {solutionVisible && result ? (
-            <CubeAnimator result={result} />
-          ) : (
-            <section
-              className={`timer-panel viewport phase-${timerPhase}`}
-              aria-label="Solve timer"
-              onPointerDown={handleTimerPointerDown}
-              onPointerUp={handleTimerPointerUp}
-              onPointerCancel={handleTimerPointerUp}
-            >
-              <div className="timer-panel-header">
-                <p className="section-label">Timer</p>
-                <span className="timer-status">{solutionStatusLabel(solutionStatus)}</span>
-              </div>
-              <div className="timer-readout">
-                {timerText(timerPhase, inspectionElapsedMs, runningElapsedMs, stoppedElapsedMs, finalPenalty)}
-              </div>
-              <div className="timer-subline">
-                <span>{timerHint(timerPhase, inspectionPenalty, finalPenalty)}</span>
-                {timerPhase === "stopped" ? (
-                  <span>{timerResultLabel(stoppedElapsedMs, finalPenalty)}</span>
-                ) : (
-                  <span>{isEditingScramble ? "Editing locked" : solveReadinessLabel(solutionStatus)}</span>
-                )}
-              </div>
-            </section>
-          )}
-        </section>
-      </section>
-
-      {error ? (
-        <section className="status-banner status-error">
-          <strong>Request failed.</strong> {error}
-        </section>
-      ) : null}
-      {attemptSaveStatus === "error" ? (
-        <section className="status-banner status-error save-status">
-          <span><strong>Could not save solve.</strong> {attemptSaveError}</span>
-          <button className="tool-button" type="button" onClick={() => void persistCompletedAttempt()}>
-            Retry save
-          </button>
-        </section>
-      ) : null}
-      {saveNotice ? (
-        <section className="status-banner status-success" onClick={() => setSaveNotice(null)}>
-          {saveNotice}
-        </section>
-      ) : null}
-
-      <section className="action-row">
-        <button
-          className="tool-button primary"
-          type="button"
-          onClick={handleShowSolution}
-          disabled={solutionStatus !== "ready" || result === null}
-        >
-          {solutionVisible ? <EyeOff size={17} /> : <Eye size={17} />}
-          <span>{solutionVisible ? "Hide solution" : "Show solution"}</span>
-        </button>
-        {solutionVisible ? (
-          <button
-            className="tool-button"
-            type="button"
-            onClick={() => setSummaryVisible((current) => !current)}
-          >
-            <ListTree size={17} />
-            <span>{summaryVisible ? "Hide summary" : "Show summary"}</span>
-          </button>
-        ) : null}
-        <button
-          className="tool-button"
-          type="button"
-          onClick={() => setHistoryVisible((current) => !current)}
-        >
-          <History size={17} />
-          <span>{historyVisible ? "Hide history" : "History"}</span>
-        </button>
-      </section>
-
-      {solutionVisible && summaryVisible && result ? (
-        <section className="results-grid">
-          <article className="summary-card">
-            <p className="section-label">Solve Summary</p>
-            <h2>{result.fullySolved ? "Solved in current frame" : "Partial solve result"}</h2>
-            <div className="summary-metrics">
-              <Metric label="Total moves" value={String(result.totalMoveCount)} />
-              <Metric label="Elapsed" value={`${result.elapsedMs.toFixed(3)} ms`} />
-              <Metric label="Solved slots" value={result.solvedF2LSlots} />
-              <Metric label="Cross face" value={result.crossFace} />
-            </div>
-          </article>
-
-          <article className="database-card">
-            <p className="section-label">F2L Case Coverage</p>
-            <div className="summary-metrics">
-              <Metric label="Setup cases" value={String(result.f2lSetupCaseCount)} />
-              <Metric label="Insert cases" value={String(result.f2lInsertCaseCount)} />
-              <Metric label="F2L mode" value={f2lModeLabel(result.f2lMode || f2lMode)} />
-              <Metric label="F2L strategy" value="two-phase DB + fallback" />
-            </div>
-          </article>
-
-          <StageCard stage={result.cross} accent="amber" />
-          <StageCard stage={result.f2l} accent="teal" />
-          <StageCard stage={result.oll} accent="rust" />
-          <StageCard stage={result.pll} accent="ink" />
-        </section>
-      ) : null}
-
-      {historyVisible ? (
-        <section className="history-panel">
-          <div className="history-panel-header">
-            <div>
-              <p className="section-label">Solve History</p>
-              <h2>Recent solves</h2>
-            </div>
-            <button className="tool-button" type="button" onClick={() => void loadHistory()}>
-              <RefreshCw size={16} />
-              <span>Refresh</span>
-            </button>
-          </div>
-          {historyStatus === "loading" ? <p className="history-empty">Loading history...</p> : null}
-          {historyStatus === "error" ? <p className="history-empty">{historyError ?? "History unavailable"}</p> : null}
-          {historyStatus !== "loading" && historyEntries.length === 0 ? (
-            <p className="history-empty">No solves saved yet.</p>
-          ) : null}
-          {historyEntries.length > 0 ? (
-            <div className="history-list">
-              {historyEntries.map((entry) => (
-                <article className="history-entry" key={entry.id}>
-                  <div className="history-entry-top">
-                    <strong>{formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}</strong>
-                    <span>{new Date(entry.createdAt).toLocaleString()}</span>
+            {error || attemptSaveStatus === "error" || saveNotice ? (
+              <div className="timer-notices">
+                {error ? <div className="dashboard-alert error"><strong>Request failed.</strong> {error}</div> : null}
+                {attemptSaveStatus === "error" ? (
+                  <div className="dashboard-alert error save-status">
+                    <span><strong>Could not save solve.</strong> {attemptSaveError}</span>
+                    <button className="dashboard-secondary-button" type="button" onClick={() => void persistCompletedAttempt()}>
+                      Retry save
+                    </button>
                   </div>
-                  <div className="history-entry-meta">
-                    <span>Attempt cross {crossFaceLabel(entry.crossFaceRequested)}</span>
-                    <span>{entry.fastCrossFaceRequested ? `Fast ${crossFaceLabel(entry.fastCrossFaceRequested)}` : "Fast not saved"}</span>
-                    <span>{entry.optimizedCrossFaceRequested ? `Optimized ${crossFaceLabel(entry.optimizedCrossFaceRequested)}` : "Optimized not saved"}</span>
-                  </div>
-                  <p className="history-scramble">{entry.scramble}</p>
-                  <button
-                    className="tool-button history-solution-button"
-                    type="button"
-                    onClick={() => void openHistorySolution(entry)}
-                  >
-                    <Eye size={16} />
-                    <span>Show solution</span>
+                ) : null}
+                {saveNotice ? (
+                  <button className="dashboard-toast" type="button" onClick={() => setSaveNotice(null)}>
+                    {saveNotice}
                   </button>
-                </article>
-              ))}
-            </div>
-          ) : null}
-        </section>
+                ) : null}
+              </div>
+            ) : null}
+
+          </>
+        ) : activeView === "history" ? (
+          <HistoryView
+            entries={historyEntries}
+            loading={historyStatus === "loading"}
+            loadingMore={historyLoadingMore}
+            error={historyError}
+            hasMore={historyCursor !== null}
+            deletingSolveId={deletingSolveId}
+            onRefresh={() => void loadHistory()}
+            onLoadMore={() => void loadMoreHistory()}
+            onOpenSolve={(entry) => void openHistorySolution(entry)}
+            onDeleteSolve={(entry) => void handleDeleteSolve(entry)}
+          />
+        ) : (
+          <ActiveSolutionsView
+            processes={processes}
+            onCancel={(process) => void terminateProcess(process)}
+            onRetry={retryProcess}
+            onPreview={setProcessPreview}
+            onDismiss={dismissProcess}
+            onClearFinished={clearFinishedProcesses}
+          />
+        )}
+      </div>
+
+      {activeView === "timer" ? (
+        <StatisticsRail
+          statistics={statistics}
+          loading={statisticsLoading}
+          onOpenHistory={() => setActiveView("history")}
+          onOpenSolve={(entry) => void openHistorySolution(entry)}
+        />
+      ) : null}
+
+      {activeView !== "timer" && saveNotice ? (
+        <button className="dashboard-toast global-toast" type="button" onClick={() => setSaveNotice(null)}>
+          {saveNotice}
+        </button>
       ) : null}
 
       {modalStatus !== "idle" ? (
@@ -1018,62 +1169,98 @@ export default function App() {
                 {modalDirty ? (
                   <p className="modal-warning">{modalOverwriteMessage(modalDetail, modalMode, modalCrossFace)}</p>
                 ) : null}
-                {modalComputing ? <p className="modal-message">Computing {f2lModeLabel(modalMode)} solution...</p> : null}
-                {modalError ? <p className="modal-message error-text">{modalError}</p> : null}
+                {modalComputing ? (
+                  <p className="modal-message">
+                    {modalMode === "optimized"
+                      ? modalJobStatus === "queued"
+                        ? "Optimized solve queued..."
+                        : modalCandidatesEvaluated > 0
+                          ? `Evaluating last layer... ${modalCandidatesEvaluated}/${modalCompletedCandidates} · Best total: ${modalBestTotalMoves < 0 ? "pending" : `${modalBestTotalMoves} moves`}`
+                          : `Searching F2L... States: ${modalStatesExplored.toLocaleString()} · Pruned: ${modalStatesPruned.toLocaleString()} · Duplicates: ${modalDuplicateStates.toLocaleString()} · Best F2L: ${modalBestMoves < 0 ? "pending" : `${modalBestMoves} moves`}`
+                      : `Computing ${f2lModeLabel(modalMode)} solution...`}
+                  </p>
+                ) : null}
+                {modalError ? (
+                  <div className="modal-message error-text">
+                    <span>{modalError}</span>
+                    <button
+                      className="dashboard-secondary-button compact"
+                      type="button"
+                      onClick={retryModalSolution}
+                      disabled={modalComputing}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : null}
 
                 {modalResult ? (
-                  <div className="solution-modal-content">
-                    <CubeAnimator result={modalResult} />
-                    <div className="modal-summary">
-                      <Metric label="Total moves" value={String(modalResult.totalMoveCount)} />
-                      <Metric label="Cross requested" value={crossFaceLabel(modalCrossFace)} />
-                      <Metric label="Cross chosen" value={modalResult.crossFace} />
-                      <Metric label="F2L mode" value={f2lModeLabel(modalResult.f2lMode)} />
-                      <StageCard stage={modalResult.cross} accent="amber" />
-                      <StageCard stage={modalResult.f2l} accent="teal" />
-                      <StageCard stage={modalResult.oll} accent="rust" />
-                      <StageCard stage={modalResult.pll} accent="ink" />
-                    </div>
-                  </div>
+                  <SolutionResultBody result={modalResult} requestedCross={modalCrossFace} />
                 ) : null}
               </>
             ) : null}
           </section>
         </div>
       ) : null}
+
+      {timerSolutionOpen && result ? (
+        <div className="solution-modal-backdrop" role="presentation" onMouseDown={() => setTimerSolutionOpen(false)}>
+          <section
+            className="solution-modal timer-solution-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Timer solution"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="solution-modal-header">
+              <div>
+                <p className="section-label">Current scramble</p>
+                <h2>Solution and summary</h2>
+                <span className="solution-modal-context">
+                  {f2lModeLabel(result.f2lMode)} · Cross {crossFaceLabel(crossFace)}
+                </span>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setTimerSolutionOpen(false)} aria-label="Close solution">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="modal-scramble">{result.scramble}</p>
+            <SolutionResultBody result={result} requestedCross={crossFace} />
+          </section>
+        </div>
+      ) : null}
+
+      {processPreview?.result ? (
+        <div className="solution-modal-backdrop" role="presentation" onMouseDown={() => setProcessPreview(null)}>
+          <section
+            className="solution-modal process-preview-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Solution process result"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="solution-modal-header">
+              <div>
+                <p className="section-label">Completed process</p>
+                <h2>{f2lModeLabel(processPreview.request.f2lMode)} solution</h2>
+                <span className="solution-modal-context">
+                  Cross {crossFaceLabel(processPreview.request.crossFace)}
+                </span>
+              </div>
+              <button className="icon-button" type="button" onClick={() => setProcessPreview(null)} aria-label="Close solution">
+                <X size={18} />
+              </button>
+            </div>
+            <p className="modal-scramble">{processPreview.request.scramble}</p>
+            <SolutionResultBody
+              result={processPreview.result}
+              requestedCross={processPreview.request.crossFace}
+            />
+          </section>
+        </div>
+      ) : null}
     </main>
   );
-}
-
-function StageCard({ stage, accent }: { stage: SolveStage; accent: string }) {
-  return (
-    <article className={`stage-card accent-${accent}`}>
-      <div className="stage-header">
-        <p className="section-label">{stage.name.toUpperCase()}</p>
-        <span className={stage.solved ? "stage-pill solved" : "stage-pill pending"}>
-          {stage.solved ? "Solved" : "Pending"}
-        </span>
-      </div>
-      <p className="stage-algorithm">{stage.algorithm || "No algorithm returned"}</p>
-      <div className="stage-footer">
-        <span>{stage.moveCount} moves</span>
-        <span>{stage.status}</span>
-      </div>
-    </article>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function f2lModeLabel(mode: string): string {
-  return mode === "optimized" ? "Optimized" : "Fast";
 }
 
 function getOrCreateClientUserId(): string {
@@ -1139,8 +1326,49 @@ function savedSolutionResult(scramble: string, saved: SavedSolution): SolveRespo
   };
 }
 
-function crossFaceLabel(face: string): string {
-  return face === "CN" ? "Color Neutral" : face;
+async function waitForSolveJob(
+  initialJob: SolveJob,
+  onProgress?: (job: SolveJob) => void,
+): Promise<SolveResponse> {
+  let job = initialJob;
+  while (true) {
+    onProgress?.(job);
+    if (job.status === "completed") {
+      if (!job.result) {
+        throw new Error("Optimized solve completed without a result");
+      }
+      return job.result;
+    }
+    if (job.status === "failed") {
+      throw new Error(job.error ?? "Solve failed");
+    }
+    if (job.status === "cancelled") {
+      throw new SolveJobCancelledError();
+    }
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+    job = await fetchSolveJob(job.id);
+  }
+}
+
+class SolveJobCancelledError extends Error {
+  constructor() {
+    super("Solve cancelled");
+  }
+}
+
+function isTerminalProcess(process: SolutionProcess): boolean {
+  return process.status === "completed"
+    || process.status === "failed"
+    || process.status === "cancelled";
+}
+
+function trimFinishedProcesses(processes: SolutionProcess[]): SolutionProcess[] {
+  const active = processes.filter((process) => !isTerminalProcess(process));
+  const finished = processes
+    .filter(isTerminalProcess)
+    .sort((left, right) => right.updatedAt - left.updatedAt)
+    .slice(0, 20);
+  return [...active, ...finished];
 }
 
 function modalOverwriteMessage(
@@ -1158,29 +1386,6 @@ function officialTimeMs(stoppedElapsedMs: number, penalty: TimerPenalty): number
     return null;
   }
   return penalty === "+2" ? Math.round(stoppedElapsedMs + 2_000) : Math.round(stoppedElapsedMs);
-}
-
-function formatHistoryTime(officialMs: number | null, penalty: string, dnf: boolean): string {
-  if (dnf || penalty === "dnf" || officialMs === null) {
-    return "DNF";
-  }
-  if (penalty === "+2") {
-    return `${formatSolveTime(officialMs)}+`;
-  }
-  return formatSolveTime(officialMs);
-}
-
-function solutionStatusLabel(status: SolutionStatus): string {
-  switch (status) {
-    case "loading":
-      return "Computing";
-    case "ready":
-      return "Ready";
-    case "error":
-      return "Error";
-    default:
-      return "Waiting";
-  }
 }
 
 function solveReadinessLabel(status: SolutionStatus): string {
@@ -1281,18 +1486,6 @@ function formatStoppedTime(elapsedMs: number, penalty: TimerPenalty): string {
   return formatSolveTime(elapsedMs);
 }
 
-function formatSolveTime(elapsedMs: number): string {
-  const totalCentiseconds = Math.max(0, Math.floor(elapsedMs / 10));
-  const minutes = Math.floor(totalCentiseconds / 6_000);
-  const seconds = Math.floor((totalCentiseconds % 6_000) / 100);
-  const centiseconds = totalCentiseconds % 100;
-
-  if (minutes > 0) {
-    return `${minutes}:${String(seconds).padStart(2, "0")}.${String(centiseconds).padStart(2, "0")}`;
-  }
-  return `${seconds}.${String(centiseconds).padStart(2, "0")}`;
-}
-
 function penaltyForInspectionElapsed(inspectionElapsedMs: number): TimerPenalty {
   if (inspectionElapsedMs > INSPECTION_DNF_MS) {
     return "dnf";
@@ -1303,9 +1496,15 @@ function penaltyForInspectionElapsed(inspectionElapsedMs: number): TimerPenalty 
   return "none";
 }
 
-function isInteractiveTarget(target: EventTarget | null): boolean {
+function isTextEntryTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
     return false;
   }
-  return Boolean(target.closest("input, textarea, select, button, [contenteditable='true']"));
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
+function blurFocusedButton() {
+  if (document.activeElement instanceof HTMLButtonElement) {
+    document.activeElement.blur();
+  }
 }
