@@ -31,6 +31,8 @@ import java.util.Set;
 import java.util.function.Predicate;
 import java.util.function.ToIntFunction;
 import java.util.function.ToLongFunction;
+import java.util.function.LongConsumer;
+import java.util.function.Consumer;
 
 import static cfop.F2LGeometry.ensureCrossSolved;
 import static cfop.F2LGeometry.isPairConnected;
@@ -42,11 +44,10 @@ import static cfop.F2LGeometry.targetSlotsForOrientation;
 import static cfop.F2LGeometry.visibleSlotForTarget;
 
 public class F2LSolver {
+    private static final int MAX_PATHS_PER_STATE = 3;
     private static final boolean DEBUG_DB = Boolean.getBoolean("f2l.debug");
     private static final boolean DEBUG_VERBOSE = Boolean.getBoolean("f2l.debug.verbose");
     private static final int MAX_SLOT_SEARCH_DEPTH = 12;
-    private static final int MAX_OPTIMIZED_BRANCH_STATES = 500;
-    private static final int MAX_OPTIMIZED_CANDIDATES_PER_STATE = 12;
     private static final Comparator<Algorithm> ALGORITHM_COMPARATOR = Comparator
             .comparingInt(Algorithm::getMoveCount)
             .thenComparingInt(algorithm -> algorithm.getMoves().size())
@@ -112,7 +113,29 @@ public class F2LSolver {
     }
 
     public Algorithm solveOptimized(OrientedCube cube) {
-        return solveOptimizedStage(cube.cubeState().copy(), cube.orientation());
+        return solveOptimizedWithProgress(cube, ignored -> {
+        });
+    }
+
+    public Algorithm solveOptimized(OrientedCube cube, LongConsumer progressListener) {
+        return solveOptimizedWithProgress(
+                cube,
+                progress -> progressListener.accept(progress.statesExplored())
+        );
+    }
+
+    public Algorithm solveOptimizedWithProgress(
+            OrientedCube cube,
+            Consumer<F2LSearchProgress> progressListener
+    ) {
+        var candidates = solveOptimizedCandidates(cube, progressListener);
+        if (candidates.isEmpty()) {
+            return solve(cube);
+        }
+        return candidates.stream()
+                .map(F2LCandidate::algorithm)
+                .min(ALGORITHM_COMPARATOR)
+                .orElseThrow();
     }
 
     public Algorithm solve(CubeState cube, Face crossFace) {
@@ -221,15 +244,25 @@ public class F2LSolver {
         return Algorithm.normalize(solution);
     }
 
-    private Algorithm solveOptimizedStage(CubeState cube, CubeOrientation initialOrientation) {
+    public List<F2LCandidate> solveOptimizedCandidates(
+            OrientedCube cube,
+            Consumer<F2LSearchProgress> progressListener
+    ) {
+        var initialCube = cube.cubeState().copy();
+        var initialOrientation = cube.orientation();
         var targetSlots = targetSlotsForOrientation(initialOrientation);
-        var workingCube = cube.copy();
-        var protectedSlots = initiallyProtectedSlots(workingCube, targetSlots);
-        ensureCrossSolved(workingCube, targetCrossForOrientation(initialOrientation));
+        var protectedSlots = initiallyProtectedSlots(initialCube, targetSlots);
+        ensureCrossSolved(initialCube, targetCrossForOrientation(initialOrientation));
 
-        var search = new OptimizedSearch(targetSlots);
-        var result = search.search(new OptimizedState(
-                workingCube,
+        var greedyUpperBound = solveForTargets(initialCube.copy(), initialOrientation.copy());
+        var search = new OptimizedSearch(
+                targetSlots,
+                progressListener == null ? ignored -> {
+                } : progressListener,
+                greedyUpperBound
+        );
+        search.search(new OptimizedState(
+                initialCube,
                 initialOrientation.copy(),
                 protectedSlots,
                 new Algorithm()
@@ -237,14 +270,12 @@ public class F2LSolver {
 
         if (DEBUG_DB) {
             System.out.println("[F2L OPTIMIZED] visited=" + search.visitedStates()
-                    + " exhausted=" + search.exhausted()
-                    + " result=" + (result == null ? "<greedy fallback>" : result.algorithm()));
+                    + " pruned=" + search.prunedStates()
+                    + " duplicates=" + search.duplicateStates()
+                    + " completed=" + search.completedCandidates().size());
         }
 
-        if (result == null) {
-            return solveForTargets(cube, initialOrientation);
-        }
-        return Algorithm.normalize(result.algorithm());
+        return search.completedCandidates();
     }
 
     private static List<TargetSlot> initiallyProtectedSlots(CubeState cube, TargetSlot[] targetSlots) {
@@ -375,25 +406,6 @@ public class F2LSolver {
         return candidates.stream().findFirst();
     }
 
-    private List<PhaseSlotSolution> findSetupDatabaseSlotSolutions(
-            CubeState cube,
-            CubeOrientation orientation,
-            TargetSlot[] targetSlots,
-            List<TargetSlot> protectedSlots
-    ) {
-        var candidates = new ArrayList<PhaseSlotSolution>();
-        for (var targetSlot : targetSlots) {
-            if (protectedSlots.contains(targetSlot) || isTargetSlotSolved(cube, targetSlot)) {
-                continue;
-            }
-            for (var algorithm : findPrefixedSetupDatabaseSolutions(cube, orientation, targetSlot, protectedSlots)) {
-                candidates.add(new PhaseSlotSolution(targetSlot, algorithm));
-            }
-        }
-        candidates.sort(RAW_PHASE_SOLUTION_COMPARATOR);
-        return distinctPhaseSolutions(candidates);
-    }
-
     private Optional<Algorithm> findPrefixedSetupThenInsertDatabaseSolution(
             CubeState cube,
             CubeOrientation orientation,
@@ -435,14 +447,6 @@ public class F2LSolver {
 
         var candidates = new ArrayList<Algorithm>();
         for (var setup : findPrefixedSetupDatabaseSolutions(cube, orientation, targetSlot, protectedSlots)) {
-            var setupCube = cube.copy();
-            var setupOrientation = executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
-            for (var insert : findPrefixedInsertDatabaseSolutions(setupCube, setupOrientation, targetSlot, protectedSlots, false)) {
-                candidates.add(Algorithm.normalize(setup.concat(insert)));
-            }
-        }
-
-        for (var setup : findPrefixedValidatedSetupAlgorithms(cube, orientation, targetSlot, protectedSlots)) {
             var setupCube = cube.copy();
             var setupOrientation = executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
             for (var insert : findPrefixedInsertDatabaseSolutions(setupCube, setupOrientation, targetSlot, protectedSlots, false)) {
@@ -798,6 +802,7 @@ public class F2LSolver {
         var path = new ArrayList<Move>();
         int bound = goal.heuristic(cube);
         while (bound <= MAX_SLOT_SEARCH_DEPTH) {
+            SolveCancellation.throwIfCancelled();
             var outcome = idaSearch(
                     cube.copy(),
                     faceTurns,
@@ -831,6 +836,7 @@ public class F2LSolver {
             int bound,
             Map<Long, Integer> visitedDepth
     ) {
+        SolveCancellation.throwIfCancelled();
         int estimate = depth + goal.heuristic(cube);
         if (estimate > bound) {
             return new SearchOutcome(null, estimate);
@@ -1091,68 +1097,106 @@ public class F2LSolver {
         return true;
     }
 
-    private String optimizedStateKey(OptimizedState state, TargetSlot[] targetSlots) {
-        var protectedFlags = new StringBuilder();
-        for (var targetSlot : targetSlots) {
-            protectedFlags.append(state.protectedSlots().contains(targetSlot) ? '1' : '0');
-        }
-        return Arrays.toString(state.cube().cornerPerm)
-                + Arrays.toString(state.cube().cornerOri)
-                + Arrays.toString(state.cube().edgePerm)
-                + Arrays.toString(state.cube().edgeOri)
-                + state.orientation()
-                + protectedFlags;
-    }
-
     private final class OptimizedSearch {
         private final TargetSlot[] targetSlots;
-        private final Map<String, Integer> bestCostByState = new HashMap<>();
-        private int visitedStates;
-        private boolean exhausted;
+        private final Consumer<F2LSearchProgress> progressListener;
+        private final Map<String, List<Algorithm>> pathsByState = new HashMap<>();
+        private final Map<String, List<F2LCandidate>> completedByState = new LinkedHashMap<>();
+        private Algorithm bestAlgorithm;
+        private long visitedStates;
+        private long prunedStates;
+        private long duplicateStates;
 
-        private OptimizedSearch(TargetSlot[] targetSlots) {
+        private OptimizedSearch(
+                TargetSlot[] targetSlots,
+                Consumer<F2LSearchProgress> progressListener,
+                Algorithm initialBest
+        ) {
             this.targetSlots = targetSlots;
+            this.progressListener = progressListener;
+            this.bestAlgorithm = Algorithm.normalize(initialBest);
         }
 
-        private OptimizedResult search(OptimizedState state) {
+        private void search(OptimizedState state) {
+            SolveCancellation.throwIfCancelled();
+            visitedStates++;
+            publishProgress();
+
             if (areAllTargetsSolved(state.cube(), targetSlots)) {
-                return new OptimizedResult(Algorithm.normalize(state.solution()));
-            }
-            if (visitedStates >= MAX_OPTIMIZED_BRANCH_STATES) {
-                exhausted = true;
-                return null;
+                var completed = Algorithm.normalize(state.solution());
+                registerCompletedCandidate(state, completed);
+                if (ALGORITHM_COMPARATOR.compare(completed, bestAlgorithm) < 0) {
+                    bestAlgorithm = completed;
+                } else {
+                    prunedStates++;
+                }
+                publishProgress();
+                return;
             }
 
-            var stateKey = optimizedStateKey(state, targetSlots);
-            var currentCost = state.solution().getMoveCount();
-            var bestSeenCost = bestCostByState.get(stateKey);
-            if (bestSeenCost != null && bestSeenCost <= currentCost) {
-                return null;
+            var stateKey = optimizedStateKey(state);
+            if (!registerStatePath(stateKey, state.solution())) {
+                duplicateStates++;
+                publishProgress();
+                return;
             }
-            bestCostByState.put(stateKey, currentCost);
-            visitedStates++;
 
             var candidates = optimizedCandidates(state);
             if (candidates.isEmpty()) {
-                return searchFallback(state);
-            }
-            if (candidates.size() > MAX_OPTIMIZED_CANDIDATES_PER_STATE) {
-                candidates = candidates.subList(0, MAX_OPTIMIZED_CANDIDATES_PER_STATE);
+                prunedStates++;
+                publishProgress();
+                return;
             }
 
-            OptimizedResult best = null;
             for (var candidate : candidates) {
-                var nextCube = state.cube().copy();
-                var nextOrientation = executeAndReturnOrientation(nextCube, state.orientation(), candidate.algorithm().getMoves());
-                var nextProtectedSlots = updateProtectedSlots(nextCube, targetSlots, state.protectedSlots());
                 var nextSolution = Algorithm.normalize(state.solution().concat(candidate.algorithm()));
-                var result = search(new OptimizedState(nextCube, nextOrientation, nextProtectedSlots, nextSolution));
-                best = betterOptimizedResult(best, result);
+                search(new OptimizedState(
+                        candidate.cube(),
+                        candidate.orientation(),
+                        candidate.protectedSlots(),
+                        nextSolution
+                ));
             }
-            return best;
+            publishProgress();
         }
 
-        private List<PhaseSlotSolution> optimizedCandidates(OptimizedState state) {
+        private boolean registerStatePath(String stateKey, Algorithm path) {
+            var paths = new ArrayList<>(pathsByState.getOrDefault(stateKey, List.of()));
+            if (paths.stream().anyMatch(existing -> existing.toString().equals(path.toString()))) {
+                return false;
+            }
+            paths.add(path);
+            paths.sort(ALGORITHM_COMPARATOR);
+            if (paths.size() > MAX_PATHS_PER_STATE) {
+                var removed = paths.remove(paths.size() - 1);
+                if (removed == path) {
+                    return false;
+                }
+            }
+            pathsByState.put(stateKey, List.copyOf(paths));
+            return true;
+        }
+
+        private void registerCompletedCandidate(OptimizedState state, Algorithm algorithm) {
+            var key = optimizedResultStateKey(state.cube(), state.orientation(), state.protectedSlots());
+            var candidates = new ArrayList<>(completedByState.getOrDefault(key, List.of()));
+            if (candidates.stream().anyMatch(existing -> existing.algorithm().toString().equals(algorithm.toString()))) {
+                duplicateStates++;
+                return;
+            }
+            candidates.add(new F2LCandidate(
+                    algorithm,
+                    state.cube().copy(),
+                    state.orientation().copy()
+            ));
+            candidates.sort(Comparator.comparing(F2LCandidate::algorithm, ALGORITHM_COMPARATOR));
+            if (candidates.size() > MAX_PATHS_PER_STATE) {
+                candidates.remove(candidates.size() - 1);
+            }
+            completedByState.put(key, List.copyOf(candidates));
+        }
+
+        private List<OptimizedTransition> optimizedCandidates(OptimizedState state) {
             var candidates = new ArrayList<PhaseSlotSolution>();
             candidates.addAll(findInsertDatabaseSlotSolutions(
                     state.cube(),
@@ -1166,56 +1210,113 @@ public class F2LSolver {
                     targetSlots,
                     state.protectedSlots()
             ));
-            candidates.addAll(findSetupDatabaseSlotSolutions(
-                    state.cube(),
-                    state.orientation(),
-                    targetSlots,
-                    state.protectedSlots()
-            ));
             candidates.sort(PHASE_SOLUTION_COMPARATOR);
-            return distinctPhaseSolutions(candidates);
+            return slotCompletingTransitions(state, distinctPhaseSolutions(candidates));
         }
 
-        private OptimizedResult searchFallback(OptimizedState state) {
-            var fallbackTarget = firstUnsolvedTarget(state.cube(), targetSlots, state.protectedSlots());
-            if (fallbackTarget.isEmpty()) {
-                return new OptimizedResult(Algorithm.normalize(state.solution()));
+        private List<OptimizedTransition> slotCompletingTransitions(
+                OptimizedState state,
+                List<PhaseSlotSolution> candidates
+        ) {
+            var completingByState = new LinkedHashMap<String, OptimizedTransition>();
+            for (var candidate : candidates) {
+                var trialCube = state.cube().copy();
+                var trialOrientation = executeAndReturnOrientation(
+                        trialCube,
+                        state.orientation(),
+                        candidate.algorithm().getMoves()
+                );
+                if (isTargetSlotSolved(trialCube, candidate.targetSlot())
+                        && areProtectedTargetsSolved(
+                        trialCube,
+                        targetCrossForOrientation(trialOrientation),
+                        state.protectedSlots()
+                )) {
+                    var nextProtectedSlots = updateProtectedSlots(
+                            trialCube,
+                            targetSlots,
+                            state.protectedSlots()
+                    );
+                    if (nextProtectedSlots.size() <= state.protectedSlots().size()) {
+                        continue;
+                    }
+                    var transition = new OptimizedTransition(
+                            candidate.algorithm(),
+                            trialCube,
+                            trialOrientation,
+                            nextProtectedSlots
+                    );
+                    var key = optimizedResultStateKey(trialCube, trialOrientation, nextProtectedSlots);
+                    var existing = completingByState.get(key);
+                    if (existing == null
+                            || ALGORITHM_COMPARATOR.compare(transition.algorithm(), existing.algorithm()) < 0) {
+                        if (existing != null) {
+                            duplicateStates++;
+                        }
+                        completingByState.put(key, transition);
+                    } else {
+                        duplicateStates++;
+                    }
+                }
             }
-
-            var targetCross = targetCrossForOrientation(state.orientation());
-            var targetSlot = fallbackTarget.get();
-            var slotSolution = solveSlotInternal(
-                    state.cube(),
-                    state.orientation(),
-                    targetCross,
-                    targetSlot,
-                    state.protectedSlots(),
-                    mapFaceTurns(state.orientation())
-            );
-            var nextCube = state.cube().copy();
-            var nextOrientation = executeAndReturnOrientation(nextCube, state.orientation(), slotSolution.getMoves());
-            var nextProtectedSlots = updateProtectedSlots(nextCube, targetSlots, state.protectedSlots());
-            var nextSolution = Algorithm.normalize(state.solution().concat(slotSolution));
-            return search(new OptimizedState(nextCube, nextOrientation, nextProtectedSlots, nextSolution));
+            var completing = new ArrayList<>(completingByState.values());
+            completing.sort(Comparator.comparing(OptimizedTransition::algorithm, ALGORITHM_COMPARATOR));
+            return List.copyOf(completing);
         }
 
-        private int visitedStates() {
+        private String optimizedStateKey(OptimizedState state) {
+            return optimizedResultStateKey(state.cube(), state.orientation(), state.protectedSlots());
+        }
+
+        private String optimizedResultStateKey(
+                CubeState cube,
+                CubeOrientation orientation,
+                List<TargetSlot> protectedSlots
+        ) {
+            var protectedFlags = new StringBuilder();
+            for (var targetSlot : targetSlots) {
+                protectedFlags.append(protectedSlots.contains(targetSlot) ? '1' : '0');
+            }
+            return Arrays.toString(cube.cornerPerm)
+                    + Arrays.toString(cube.cornerOri)
+                    + Arrays.toString(cube.edgePerm)
+                    + Arrays.toString(cube.edgeOri)
+                    + "|U=" + orientation.faceAt(Face.U)
+                    + "|R=" + orientation.faceAt(Face.R)
+                    + "|F=" + orientation.faceAt(Face.F)
+                    + "|slots=" + protectedFlags;
+        }
+
+        private void publishProgress() {
+            progressListener.accept(new F2LSearchProgress(
+                    visitedStates,
+                    prunedStates,
+                    duplicateStates,
+                    bestAlgorithm.getMoveCount(),
+                    completedByState.size(),
+                    0,
+                    -1
+            ));
+        }
+
+        private List<F2LCandidate> completedCandidates() {
+            return completedByState.values().stream()
+                    .map(candidates -> candidates.get(0))
+                    .sorted(Comparator.comparing(F2LCandidate::algorithm, ALGORITHM_COMPARATOR))
+                    .toList();
+        }
+
+        private long visitedStates() {
             return visitedStates;
         }
 
-        private boolean exhausted() {
-            return exhausted;
+        private long prunedStates() {
+            return prunedStates;
         }
-    }
 
-    private static OptimizedResult betterOptimizedResult(OptimizedResult current, OptimizedResult candidate) {
-        if (candidate == null) {
-            return current;
+        private long duplicateStates() {
+            return duplicateStates;
         }
-        if (current == null) {
-            return candidate;
-        }
-        return ALGORITHM_COMPARATOR.compare(candidate.algorithm(), current.algorithm()) < 0 ? candidate : current;
     }
 
     private record PhaseSlotSolution(TargetSlot targetSlot, Algorithm algorithm) {
@@ -1229,7 +1330,30 @@ public class F2LSolver {
     ) {
     }
 
-    private record OptimizedResult(Algorithm algorithm) {
+    private record OptimizedTransition(
+            Algorithm algorithm,
+            CubeState cube,
+            CubeOrientation orientation,
+            List<TargetSlot> protectedSlots
+    ) {
+    }
+
+    public record F2LSearchProgress(
+            long statesExplored,
+            long statesPruned,
+            long duplicateStates,
+            int bestMoves,
+            int completedCandidates,
+            int candidatesEvaluated,
+            int bestTotalMoves
+    ) {
+    }
+
+    public record F2LCandidate(
+            Algorithm algorithm,
+            CubeState cube,
+            CubeOrientation orientation
+    ) {
     }
 
     private record SearchOutcome(Algorithm solution, int nextBound) {

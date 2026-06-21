@@ -4,10 +4,12 @@ import database.DatabaseHealth;
 import database.SavedSolution;
 import database.SolveHistoryDetail;
 import database.SolveHistoryEntry;
+import database.SolveHistoryPage;
 import solver.CfopSolveResult;
 import solver.CfopStageResult;
+import statistics.RollingAverage;
+import statistics.SolveStatistics;
 
-import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -45,6 +47,11 @@ final class JsonSupport {
     static Integer readInteger(String json, String fieldName) {
         var matcher = numberFieldMatcher(json, fieldName);
         return matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
+    }
+
+    static Long readLong(String json, String fieldName) {
+        var matcher = numberFieldMatcher(json, fieldName);
+        return matcher.find() ? Long.valueOf(matcher.group(1)) : null;
     }
 
     static int requireInteger(String json, String fieldName) {
@@ -103,17 +110,54 @@ final class JsonSupport {
                 + "}";
     }
 
-    static String solveHistoryListJson(List<SolveHistoryEntry> entries) {
+    static String solveHistoryPageJson(SolveHistoryPage page) {
         var builder = new StringBuilder();
         builder.append("{\"items\":[");
-        for (int i = 0; i < entries.size(); i++) {
+        for (int i = 0; i < page.items().size(); i++) {
             if (i > 0) {
                 builder.append(',');
             }
-            builder.append(solveHistoryEntryJson(entries.get(i)));
+            builder.append(solveHistoryEntryJson(page.items().get(i)));
         }
-        builder.append("]}");
+        builder.append("],\"nextCursor\":")
+                .append(nullableString(page.nextCursor()))
+                .append('}');
         return builder.toString();
+    }
+
+    static String solveStatisticsJson(SolveStatistics statistics) {
+        var builder = new StringBuilder();
+        builder.append('{')
+                .append("\"solveCount\":").append(statistics.solveCount()).append(',')
+                .append("\"dnfCount\":").append(statistics.dnfCount()).append(',')
+                .append("\"bestMs\":").append(nullableInteger(statistics.bestMs())).append(',')
+                .append("\"averageMs\":").append(nullableInteger(statistics.averageMs())).append(',')
+                .append("\"ao5\":").append(rollingAverageJson(statistics.ao5())).append(',')
+                .append("\"ao12\":").append(rollingAverageJson(statistics.ao12())).append(',')
+                .append("\"recentSolves\":[");
+        for (int i = 0; i < statistics.recentSolves().size(); i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append(solveHistoryEntryJson(statistics.recentSolves().get(i)));
+        }
+        return builder.append("]}").toString();
+    }
+
+    static String solveJobJson(SolveJobManager.JobSnapshot job) {
+        return "{"
+                + "\"id\":\"" + escape(job.id()) + "\","
+                + "\"status\":\"" + escape(job.status()) + "\","
+                + "\"statesExplored\":" + job.statesExplored() + ","
+                + "\"statesPruned\":" + job.statesPruned() + ","
+                + "\"duplicateStates\":" + job.duplicateStates() + ","
+                + "\"bestMoves\":" + job.bestMoves() + ","
+                + "\"completedCandidates\":" + job.completedCandidates() + ","
+                + "\"candidatesEvaluated\":" + job.candidatesEvaluated() + ","
+                + "\"bestTotalMoves\":" + job.bestTotalMoves() + ","
+                + "\"result\":" + (job.result() == null ? "null" : solveResultJson(job.result())) + ","
+                + "\"error\":" + nullableString(job.error())
+                + "}";
     }
 
     static String solveHistoryDetailJson(SolveHistoryDetail detail) {
@@ -207,5 +251,12 @@ final class JsonSupport {
 
     private static String nullableString(String value) {
         return value == null ? "null" : "\"" + escape(value) + "\"";
+    }
+
+    private static String rollingAverageJson(RollingAverage average) {
+        return "{"
+                + "\"status\":\"" + escape(average.status()) + "\","
+                + "\"valueMs\":" + nullableInteger(average.valueMs())
+                + "}";
     }
 }

@@ -28,4 +28,12 @@ public class OLLCaseDatabaseTest {
         assertTrue(collidingCaseCount > 0);
         assertEquals(57, database.allCases().size());
     }
+
+    @Test
+    void findAll_shouldReturnEveryCaseInCollisionBucket() {
+        var collision = OLLCaseDatabase.duplicateSeedCases().entrySet().iterator().next();
+        var database = OLLCaseDatabase.seedCases();
+
+        assertEquals(collision.getValue().size(), database.findAll(collision.getKey()).size());
+    }
 }

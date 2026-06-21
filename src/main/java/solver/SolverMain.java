@@ -9,13 +9,13 @@ import java.util.List;
 
 public class SolverMain {
     private static final List<String> DEFAULT_SCRAMBLES = List.of(
-            "F L2 D' R B2 D2 F' U B2 U2 F2 D2 R2 U2 R' B2 R' B2 R' U' R2"
+            "D2 F2 D' L F R F' B' D' U2 F2 L2 B R2 F2 R2 D2 R2 B D2 R2"
     );
 
     public static void main(String[] args) {
         var colorNeutral = args.length > 0 && isColorNeutralArg(args[0]);
-        var crossFace = args.length > 0 && !colorNeutral ? Face.fromNotation(args[0].charAt(0)) : Face.U;
-        var f2lMode = args.length > 1 && isF2LModeArg(args[1]) ? F2LMode.fromApiValue(args[1]) : F2LMode.GREEDY;
+        var crossFace = args.length > 0 && !colorNeutral ? Face.fromNotation(args[0].charAt(0)) : Face.B;
+        var f2lMode = args.length > 1 && isF2LModeArg(args[1]) ? F2LMode.fromApiValue(args[1]) : F2LMode.OPTIMIZED;
         var scrambleStartIndex = f2lMode == F2LMode.GREEDY && !(args.length > 1 && isF2LModeArg(args[1])) ? 1 : 2;
         var scrambles = args.length > scrambleStartIndex ? parseScrambles(args, scrambleStartIndex) : DEFAULT_SCRAMBLES;
 

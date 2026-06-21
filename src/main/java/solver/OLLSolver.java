@@ -12,6 +12,10 @@ import cube.Move;
 import cube.OrientationFrames;
 import cube.OrientedCube;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 public class OLLSolver {
@@ -60,40 +64,56 @@ public class OLLSolver {
         return solveStage(cube.cubeState().copy(), cube.orientation());
     }
 
+    public List<Algorithm> solveCandidates(OrientedCube cube) {
+        return solveStageCandidates(cube.cubeState().copy(), cube.orientation());
+    }
+
     private Algorithm solveStage(CubeState cube, CubeOrientation orientation) {
+        return solveStageCandidates(cube, orientation).get(0);
+    }
+
+    private List<Algorithm> solveStageCandidates(CubeState cube, CubeOrientation orientation) {
         if (caseDatabase == null || caseDatabase.size() == 0) {
             throw new IllegalStateException("OLL solver requires a non-empty OLL case database");
         }
 
         ensurePreconditions(cube, orientation);
         if (OLLAnalyzer.isOllSolved(cube, orientation)) {
-            return new Algorithm();
+            return List.of(new Algorithm());
         }
 
+        var candidates = new LinkedHashMap<String, Algorithm>();
         for (var prefix : PREFIX_TRIALS) {
+            SolveCancellation.throwIfCancelled();
             var trialCube = cube.copy();
             var resultingOrientation = executeAndReturnOrientation(trialCube, orientation, prefix.getMoves());
             var signature = OLLAnalyzer.extractSignature(trialCube, resultingOrientation);
-            var match = caseDatabase.find(signature);
-            if (match.isPresent()) {
-                var candidate = prefix.concat(match.get().algorithm());
-                if (solvesOll(cube, orientation, candidate)) {
-                    return candidate;
+            int candidatesBeforeLookup = candidates.size();
+            for (var ollCase : caseDatabase.findAll(signature)) {
+                for (var solved : findSolvedCandidates(cube, orientation, prefix, ollCase.algorithm())) {
+                    candidates.putIfAbsent(solved.toString(), solved);
                 }
             }
 
-            for (var ollCase : caseDatabase.allCases()) {
-                if (match.isPresent() && ollCase == match.get()) {
-                    continue;
-                }
-                var candidate = prefix.concat(ollCase.algorithm());
-                if (solvesOll(cube, orientation, candidate)) {
-                    return candidate;
+            if (candidates.size() == candidatesBeforeLookup) {
+                for (var ollCase : caseDatabase.allCases()) {
+                    for (var solved : findSolvedCandidates(cube, orientation, prefix, ollCase.algorithm())) {
+                        candidates.putIfAbsent(solved.toString(), solved);
+                    }
                 }
             }
         }
 
-        throw new IllegalStateException("No OLL case match found for current last-layer orientation");
+        var sorted = candidates.values().stream()
+                .sorted(Comparator
+                        .comparingInt(Algorithm::getMoveCount)
+                        .thenComparingInt(algorithm -> algorithm.getMoves().size())
+                        .thenComparing(Algorithm::toString))
+                .toList();
+        if (sorted.isEmpty()) {
+            throw new IllegalStateException("No OLL case match found for current last-layer orientation");
+        }
+        return distinctResultStates(cube, orientation, sorted);
     }
 
     private static boolean solvesOll(CubeState cube, CubeOrientation orientation, Algorithm candidate) {
@@ -102,6 +122,50 @@ public class OLLSolver {
         return CrossAnalyzer.isCrossSolved(validationCube, finalOrientation)
                 && F2LAnalyzer.isF2LSolved(validationCube, finalOrientation)
                 && OLLAnalyzer.isOllSolved(validationCube, finalOrientation);
+    }
+
+    private static List<Algorithm> findSolvedCandidates(
+            CubeState cube,
+            CubeOrientation orientation,
+            Algorithm prefix,
+            Algorithm algorithm
+    ) {
+        var solved = new ArrayList<Algorithm>();
+        var displayed = Algorithm.parse(prefix.concat(algorithm).toString());
+        if (solvesOll(cube, orientation, displayed)) {
+            solved.add(displayed);
+        }
+
+        var legacy = prefix.concat(algorithm);
+        if (!legacy.getMoves().equals(displayed.getMoves()) && solvesOll(cube, orientation, legacy)) {
+            solved.add(legacy);
+        }
+        return List.copyOf(solved);
+    }
+
+    private static List<Algorithm> distinctResultStates(
+            CubeState cube,
+            CubeOrientation orientation,
+            List<Algorithm> candidates
+    ) {
+        var byState = new LinkedHashMap<String, Algorithm>();
+        for (var candidate : candidates) {
+            var resultCube = cube.copy();
+            var resultOrientation = executeAndReturnOrientation(
+                    resultCube,
+                    orientation,
+                    candidate.getMoves()
+            );
+            var key = Arrays.toString(resultCube.cornerPerm)
+                    + Arrays.toString(resultCube.cornerOri)
+                    + Arrays.toString(resultCube.edgePerm)
+                    + Arrays.toString(resultCube.edgeOri)
+                    + "|U=" + resultOrientation.faceAt(Face.U)
+                    + "|R=" + resultOrientation.faceAt(Face.R)
+                    + "|F=" + resultOrientation.faceAt(Face.F);
+            byState.putIfAbsent(key, candidate);
+        }
+        return List.copyOf(byState.values());
     }
 
     private static void ensurePreconditions(CubeState cube, CubeOrientation orientation) {

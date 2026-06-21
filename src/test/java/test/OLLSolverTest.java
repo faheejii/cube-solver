@@ -6,6 +6,7 @@ import cfop.F2LAnalyzer;
 import cfop.OLLAnalyzer;
 import cube.CubeState;
 import cube.Algorithm;
+import cube.Move;
 import cube.MoveApplier;
 import cube.OrientedCube;
 import org.junit.jupiter.api.Test;
@@ -76,6 +77,27 @@ public class OLLSolverTest {
         var solution = new OLLSolver(OLLCaseDatabase.seedCases()).solve(orientedCube);
         orientedCube.applyMoves(solution.getMoves());
 
+        assertTrue(CrossAnalyzer.isCrossSolved(orientedCube.cubeState(), orientedCube.orientation()));
+        assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()));
+        assertTrue(OLLAnalyzer.isOllSolved(orientedCube.cubeState(), orientedCube.orientation()));
+    }
+
+    @Test
+    void solve_shouldFindCase2AfterAufInBFaceFrame() {
+        var orientedCube = new OrientedCube();
+        orientedCube.applyAlgorithm("D2 F2 D' L F R F' B' D' U2 F2 L2 B R2 F2 R2 D2 R2 B D2 R2");
+        orientedCube.applyAlgorithm("x y2 L F' L2 D' R");
+        orientedCube.applyAlgorithm(
+                "U F' U F U2 F U' F' y2 R U' R' U' R U' R2 F R F' "
+                        + "y2 F' U F U2 R' U2 R"
+        );
+
+        var database = OLLCaseDatabase.seedCases();
+        var solution = new OLLSolver(database).solve(orientedCube);
+        orientedCube.applyMoves(solution.getMoves());
+
+        assertTrue(solution.toString().contains("r U r'"));
+        assertTrue(solution.getMoves().contains(Move.RW));
         assertTrue(CrossAnalyzer.isCrossSolved(orientedCube.cubeState(), orientedCube.orientation()));
         assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()));
         assertTrue(OLLAnalyzer.isOllSolved(orientedCube.cubeState(), orientedCube.orientation()));

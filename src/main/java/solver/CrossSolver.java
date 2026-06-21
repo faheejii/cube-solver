@@ -48,6 +48,7 @@ public class CrossSolver {
     public CrossSolution solveColorNeutral(CubeState cube) {
         CrossSolution best = null;
         for (var face : COLOR_NEUTRAL_FACE_ORDER) {
+            SolveCancellation.throwIfCancelled();
             var algorithm = solve(cube, face);
             var candidate = new CrossSolution(face, algorithm);
             if (best == null || algorithm.getMoveCount() < best.algorithm().getMoveCount()) {
@@ -64,6 +65,7 @@ public class CrossSolver {
         }
 
         for (int depth = 0; depth <= MAX_CROSS_DEPTH; depth++) {
+            SolveCancellation.throwIfCancelled();
             for (var prefix : Y_PREFIX_TRIALS) {
                 var prefixedOrientation = orientationAfterPrefix(orientation, prefix);
                 var mappedFaceTurns = mapFaceTurns(prefixedOrientation);
@@ -94,6 +96,7 @@ public class CrossSolver {
             int remainingDepth,
             Map<Integer, Integer> visited
     ) {
+        SolveCancellation.throwIfCancelled();
         if (isTargetCrossSolved(cube, targetCross)) {
             return path;
         }

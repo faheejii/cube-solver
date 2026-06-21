@@ -28,6 +28,48 @@ export type SolveRequest = {
   f2lMode: string;
 };
 
+export type SolveJobRequest = SolveRequest & {
+  userId?: string;
+  solveId?: number;
+  saveOnComplete?: boolean;
+};
+
+export type SolveJob = {
+  id: string;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  statesExplored: number;
+  statesPruned: number;
+  duplicateStates: number;
+  bestMoves: number;
+  completedCandidates: number;
+  candidatesEvaluated: number;
+  bestTotalMoves: number;
+  result: SolveResponse | null;
+  error: string | null;
+};
+
+export type SolutionProcessSource = "timer" | "history" | "background";
+
+export type SolutionProcess = {
+  id: string;
+  jobId: string | null;
+  source: SolutionProcessSource;
+  request: SolveJobRequest;
+  status: SolveJob["status"];
+  statesExplored: number;
+  statesPruned: number;
+  duplicateStates: number;
+  bestMoves: number;
+  completedCandidates: number;
+  candidatesEvaluated: number;
+  bestTotalMoves: number;
+  createdAt: number;
+  updatedAt: number;
+  result: SolveResponse | null;
+  error: string | null;
+  cancelling: boolean;
+};
+
 export type CreateSolveAttemptRequest = {
   userId: string;
   clientAttemptId: string;
@@ -55,6 +97,22 @@ export type SolveHistoryEntry = {
 
 export type SolveHistoryResponse = {
   items: SolveHistoryEntry[];
+  nextCursor: string | null;
+};
+
+export type RollingAverage = {
+  status: "value" | "dnf" | "insufficient";
+  valueMs: number | null;
+};
+
+export type SolveStatistics = {
+  solveCount: number;
+  dnfCount: number;
+  bestMs: number | null;
+  averageMs: number | null;
+  ao5: RollingAverage;
+  ao12: RollingAverage;
+  recentSolves: SolveHistoryEntry[];
 };
 
 export type SavedSolution = Omit<SolveResponse, "scramble"> & {

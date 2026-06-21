@@ -9,6 +9,9 @@ import cube.OrientedCube;
 import org.junit.jupiter.api.Test;
 import solver.F2LSolver;
 
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -112,6 +115,41 @@ public class F2LSolverTest {
         orientedCube.applyMoves(f2lSolution.getMoves());
         assertTrue(CrossAnalyzer.isCrossSolved(orientedCube.cubeState(), Face.U));
         assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), Face.U));
+    }
+
+    @Test
+    void solveOptimized_shouldReportExploredStates() {
+        var cube = new CubeState();
+        MoveApplier.applyAlgorithm(cube, "R U R' U'");
+        var orientedCube = new OrientedCube(cube);
+        var states = new AtomicLong();
+
+        var solution = new F2LSolver().solveOptimized(orientedCube, explored -> {
+            assertTrue(explored >= states.get());
+            states.set(explored);
+        });
+
+        orientedCube.applyMoves(solution.getMoves());
+        assertTrue(states.get() > 0);
+        assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()));
+    }
+
+    @Test
+    void solveOptimizedCandidates_withoutCasesShouldNotUseSearchFallback() {
+        var cube = new CubeState();
+        MoveApplier.applyAlgorithm(cube, "R U R' U'");
+        var progressEvents = new AtomicInteger();
+
+        var candidates = new F2LSolver(
+                algorithms.F2LSetupCaseDatabase.empty(),
+                algorithms.F2LInsertCaseDatabase.empty()
+        ).solveOptimizedCandidates(
+                new OrientedCube(cube),
+                progress -> progressEvents.incrementAndGet()
+        );
+
+        assertTrue(candidates.isEmpty());
+        assertTrue(progressEvents.get() > 0);
     }
 
     @Test
