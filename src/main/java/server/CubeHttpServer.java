@@ -1,6 +1,7 @@
 package server;
 
 import api.CreateSolveAttemptRequest;
+import api.CreateSolveJobRequest;
 import api.SaveSolutionApiRequest;
 import api.SolveApiRequest;
 import com.sun.net.httpserver.Headers;
@@ -24,21 +25,82 @@ public class CubeHttpServer {
     private final CfopSolveService solveService;
     private final Path frontendDistDir;
     private final DatabaseManager databaseManager;
+    private final SolveJobManager solveJobManager;
 
     public CubeHttpServer(CfopSolveService solveService, Path frontendDistDir, DatabaseManager databaseManager) {
         this.solveService = solveService;
         this.frontendDistDir = frontendDistDir;
         this.databaseManager = databaseManager;
+        this.solveJobManager = new SolveJobManager(solveService, databaseManager);
     }
 
     public HttpServer create(int port) throws IOException {
         var server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/api/health", exchange -> writeJson(exchange, 200, JsonSupport.healthJson(databaseManager.health())));
         server.createContext("/api/solve", new SolveHandler(solveService));
-        server.createContext("/api/solves", new SolveHistoryHandler(databaseManager));
+        server.createContext("/api/solve-jobs", new SolveJobHandler(solveJobManager));
+        server.createContext("/api/solves", new SolveHistoryHandler(databaseManager, solveJobManager));
+        server.createContext("/api/stats", new StatisticsHandler(databaseManager));
         server.createContext("/", new StaticFileHandler(frontendDistDir));
         server.setExecutor(Executors.newCachedThreadPool());
         return server;
+    }
+
+    private static final class SolveJobHandler implements HttpHandler {
+        private final SolveJobManager jobManager;
+
+        private SolveJobHandler(SolveJobManager jobManager) {
+            this.jobManager = jobManager;
+        }
+
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handleCors(exchange)) {
+                return;
+            }
+
+            try {
+                var pathParts = java.util.Arrays.stream(exchange.getRequestURI().getPath().split("/"))
+                        .filter(part -> !part.isBlank())
+                        .toList();
+                if (pathParts.size() == 2 && "POST".equalsIgnoreCase(exchange.getRequestMethod())) {
+                    handleCreate(exchange);
+                    return;
+                }
+                if (pathParts.size() == 3 && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                    writeJson(exchange, 200, JsonSupport.solveJobJson(jobManager.find(pathParts.get(2))));
+                    return;
+                }
+                if (pathParts.size() == 3 && "DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
+                    writeJson(exchange, 200, JsonSupport.solveJobJson(jobManager.cancel(pathParts.get(2))));
+                    return;
+                }
+                writeJson(exchange, 405, JsonSupport.errorJson("Method not allowed"));
+            } catch (IllegalArgumentException exception) {
+                writeJson(exchange, 400, JsonSupport.errorJson(exception.getMessage()));
+            } catch (Exception exception) {
+                writeJson(exchange, 500, JsonSupport.errorJson("Internal server error"));
+            }
+        }
+
+        private void handleCreate(HttpExchange exchange) throws IOException {
+            var body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            var request = new CreateSolveJobRequest(
+                    JsonSupport.readString(body, "scramble"),
+                    JsonSupport.readString(body, "crossFace"),
+                    JsonSupport.readString(body, "f2lMode"),
+                    JsonSupport.readString(body, "userId"),
+                    JsonSupport.readLong(body, "solveId"),
+                    JsonSupport.readBoolean(body, "saveOnComplete")
+            );
+            var job = jobManager.submit(
+                    request.solveRequest(),
+                    request.userId(),
+                    request.solveId(),
+                    request.saveOnComplete()
+            );
+            writeJson(exchange, 202, JsonSupport.solveJobJson(job));
+        }
     }
 
     private static final class SolveHandler implements HttpHandler {
@@ -78,10 +140,12 @@ public class CubeHttpServer {
     private static final class SolveHistoryHandler implements HttpHandler {
         private final DatabaseManager databaseManager;
         private final SolveHistoryRepository repository;
+        private final SolveJobManager solveJobManager;
 
-        private SolveHistoryHandler(DatabaseManager databaseManager) {
+        private SolveHistoryHandler(DatabaseManager databaseManager, SolveJobManager solveJobManager) {
             this.databaseManager = databaseManager;
             this.repository = new SolveHistoryRepository(databaseManager);
+            this.solveJobManager = solveJobManager;
         }
 
         @Override
@@ -106,6 +170,10 @@ public class CubeHttpServer {
                 }
                 if (pathParts.size() == 3 && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
                     handleDetail(exchange, parseSolveId(pathParts.get(2)));
+                    return;
+                }
+                if (pathParts.size() == 3 && "DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
+                    handleDelete(exchange, parseSolveId(pathParts.get(2)));
                     return;
                 }
                 if (pathParts.size() == 5
@@ -199,8 +267,9 @@ public class CubeHttpServer {
                 throw new IllegalArgumentException("userId query parameter is required");
             }
             var limit = parseLimit(params.get("limit"));
-            var entries = repository.listRecent(userId, limit);
-            writeJson(exchange, 200, JsonSupport.solveHistoryListJson(entries));
+            var cursor = database.HistoryCursor.parse(params.get("cursor"));
+            var page = repository.listPage(userId, limit, cursor);
+            writeJson(exchange, 200, JsonSupport.solveHistoryPageJson(page));
         }
 
         private void handleDetail(HttpExchange exchange, long solveId) throws Exception {
@@ -210,6 +279,19 @@ public class CubeHttpServer {
                 throw new IllegalArgumentException("userId query parameter is required");
             }
             writeJson(exchange, 200, JsonSupport.solveHistoryDetailJson(repository.findDetail(userId, solveId)));
+        }
+
+        private void handleDelete(HttpExchange exchange, long solveId) throws Exception {
+            var params = parseQuery(exchange.getRequestURI().getRawQuery());
+            var userId = params.get("userId");
+            if (userId == null || userId.isBlank()) {
+                throw new IllegalArgumentException("userId query parameter is required");
+            }
+            repository.requireOwnedSolve(userId, solveId);
+            solveJobManager.cancelLinkedJobs(userId, solveId);
+            repository.deleteSolve(userId, solveId);
+            exchange.sendResponseHeaders(204, -1);
+            exchange.close();
         }
 
         private static int parseLimit(String value) {
@@ -284,6 +366,44 @@ public class CubeHttpServer {
         }
     }
 
+    private static final class StatisticsHandler implements HttpHandler {
+        private final DatabaseManager databaseManager;
+        private final SolveHistoryRepository repository;
+
+        private StatisticsHandler(DatabaseManager databaseManager) {
+            this.databaseManager = databaseManager;
+            this.repository = new SolveHistoryRepository(databaseManager);
+        }
+
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (handleCors(exchange)) {
+                return;
+            }
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                writeJson(exchange, 405, JsonSupport.errorJson("Method not allowed"));
+                return;
+            }
+            if (!databaseManager.isConfigured()) {
+                writeJson(exchange, 503, JsonSupport.errorJson("Database is not configured"));
+                return;
+            }
+
+            try {
+                var params = parseQuery(exchange.getRequestURI().getRawQuery());
+                var userId = params.get("userId");
+                if (userId == null || userId.isBlank()) {
+                    throw new IllegalArgumentException("userId query parameter is required");
+                }
+                writeJson(exchange, 200, JsonSupport.solveStatisticsJson(repository.statistics(userId)));
+            } catch (IllegalArgumentException exception) {
+                writeJson(exchange, 400, JsonSupport.errorJson(exception.getMessage()));
+            } catch (Exception exception) {
+                writeJson(exchange, 500, JsonSupport.errorJson("Internal server error"));
+            }
+        }
+    }
+
     private static final class StaticFileHandler implements HttpHandler {
         private final Path frontendDistDir;
 
@@ -336,7 +456,7 @@ public class CubeHttpServer {
 
     private static void addCorsHeaders(Headers headers) {
         headers.set("Access-Control-Allow-Origin", "*");
-        headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
+        headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
         headers.set("Access-Control-Allow-Headers", "Content-Type");
     }
 

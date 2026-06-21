@@ -13,6 +13,8 @@ import cube.Move;
 import cube.OrientationFrames;
 import cube.OrientedCube;
 
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 public class PLLSolver {
@@ -56,31 +58,44 @@ public class PLLSolver {
             return new Algorithm();
         }
 
+        var candidates = new LinkedHashMap<String, Algorithm>();
         for (var preAuf : AUF_TRIALS) {
+            SolveCancellation.throwIfCancelled();
             var trialCube = cube.copy();
             var trialOrientation = executeAndReturnOrientation(trialCube, orientation, preAuf.getMoves());
             if (isFullySolved(trialCube, trialOrientation)) {
-                return preAuf;
+                candidates.putIfAbsent(preAuf.toString(), preAuf);
             }
 
             var signature = PLLAnalyzer.extractSignature(trialCube, trialOrientation);
             var match = caseDatabase.find(signature);
-            if (match.isEmpty()) {
-                continue;
+            int candidatesBeforeLookup = candidates.size();
+            if (match.isPresent()) {
+                for (var solved : findSolvedCandidates(cube, orientation, preAuf, match.get().algorithm())) {
+                    candidates.putIfAbsent(solved.toString(), solved);
+                }
             }
 
-            var baseCandidate = preAuf.concat(match.get().algorithm());
-            for (var postAuf : AUF_TRIALS) {
-                var candidate = baseCandidate.concat(postAuf);
-                var validationCube = cube.copy();
-                var finalOrientation = executeAndReturnOrientation(validationCube, orientation, candidate.getMoves());
-                if (isFullySolved(validationCube, finalOrientation)) {
-                    return candidate;
+            if (candidates.size() == candidatesBeforeLookup) {
+                for (var pllCase : caseDatabase.allCases()) {
+                    if (match.isPresent() && pllCase == match.get()) {
+                        continue;
+                    }
+                    for (var solved : findSolvedCandidates(cube, orientation, preAuf, pllCase.algorithm())) {
+                        candidates.putIfAbsent(solved.toString(), solved);
+                    }
                 }
             }
         }
 
-        throw new IllegalStateException("No PLL case match found for current last-layer permutation");
+        return candidates.values().stream()
+                .min(Comparator
+                        .comparingInt(Algorithm::getMoveCount)
+                        .thenComparingInt(algorithm -> algorithm.getMoves().size())
+                        .thenComparing(Algorithm::toString))
+                .orElseThrow(() -> new IllegalStateException(
+                        "No PLL case match found for current last-layer permutation"
+                ));
     }
 
     private static void ensurePreconditions(CubeState cube, CubeOrientation orientation) {
@@ -100,6 +115,32 @@ public class PLLSolver {
                 && F2LAnalyzer.isF2LSolved(cube, orientation)
                 && OLLAnalyzer.isOllSolved(cube, orientation)
                 && PLLAnalyzer.isPllSolved(cube, orientation);
+    }
+
+    private static List<Algorithm> findSolvedCandidates(
+            CubeState cube,
+            CubeOrientation orientation,
+            Algorithm preAuf,
+            Algorithm algorithm
+    ) {
+        var solved = new java.util.ArrayList<Algorithm>();
+        for (var postAuf : AUF_TRIALS) {
+            var legacy = preAuf.concat(algorithm).concat(postAuf);
+            var displayed = Algorithm.parse(legacy.toString());
+            if (solvesPll(cube, orientation, displayed)) {
+                solved.add(displayed);
+            }
+            if (!legacy.getMoves().equals(displayed.getMoves()) && solvesPll(cube, orientation, legacy)) {
+                solved.add(legacy);
+            }
+        }
+        return List.copyOf(solved);
+    }
+
+    private static boolean solvesPll(CubeState cube, CubeOrientation orientation, Algorithm candidate) {
+        var validationCube = cube.copy();
+        var finalOrientation = executeAndReturnOrientation(validationCube, orientation, candidate.getMoves());
+        return isFullySolved(validationCube, finalOrientation);
     }
 
     private static CubeOrientation executeAndReturnOrientation(CubeState cube, CubeOrientation orientation, List<Move> moves) {

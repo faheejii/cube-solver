@@ -7,6 +7,8 @@ import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import statistics.SolveStatistics;
+import statistics.SolveStatisticsCalculator;
 
 public final class SolveHistoryRepository {
     private final DatabaseManager databaseManager;
@@ -59,13 +61,18 @@ public final class SolveHistoryRepository {
         }
     }
 
-    public List<SolveHistoryEntry> listRecent(String userExternalId, int limit) throws SQLException {
+    public SolveHistoryPage listPage(
+            String userExternalId,
+            int limit,
+            HistoryCursor cursor
+    ) throws SQLException {
         try (var connection = databaseManager.openConnection()) {
             var userId = findUserId(connection, userExternalId);
             if (userId == null) {
-                return List.of();
+                return new SolveHistoryPage(List.of(), null);
             }
-            try (var statement = connection.prepareStatement("""
+            int pageSize = Math.max(1, Math.min(limit, 100));
+            var sql = """
                     SELECT s.id, s.client_attempt_id, s.scramble, s.cross_face_requested,
                            s.timer_ms, s.official_ms, s.penalty, s.dnf, s.created_at,
                            MAX(CASE WHEN ss.mode = 'greedy' THEN ss.cross_face_requested END) AS fast_cross,
@@ -73,14 +80,41 @@ public final class SolveHistoryRepository {
                     FROM solves s
                     LEFT JOIN solve_solutions ss ON ss.solve_id = s.id AND ss.status = 'ready'
                     WHERE s.user_id = ?
+                    """ + (cursor == null ? "" : " AND (s.created_at, s.id) < (?, ?)\n") + """
                     GROUP BY s.id
-                    ORDER BY s.created_at DESC
+                    ORDER BY s.created_at DESC, s.id DESC
                     LIMIT ?
-                    """)) {
-                statement.setLong(1, userId);
-                statement.setInt(2, Math.max(1, Math.min(limit, 100)));
-                return readHistoryEntries(statement);
+                    """;
+            try (var statement = connection.prepareStatement(sql)) {
+                int index = 1;
+                statement.setLong(index++, userId);
+                if (cursor != null) {
+                    statement.setObject(index++, cursor.createdAt());
+                    statement.setLong(index++, cursor.id());
+                }
+                statement.setInt(index, pageSize + 1);
+                var entries = new ArrayList<>(readHistoryEntries(statement));
+                String nextCursor = null;
+                if (entries.size() > pageSize) {
+                    entries.remove(entries.size() - 1);
+                    var last = entries.get(entries.size() - 1);
+                    nextCursor = new HistoryCursor(last.createdAt(), last.id()).encode();
+                }
+                return new SolveHistoryPage(List.copyOf(entries), nextCursor);
             }
+        }
+    }
+
+    public SolveStatistics statistics(String userExternalId) throws SQLException {
+        try (var connection = databaseManager.openConnection()) {
+            var userId = findUserId(connection, userExternalId);
+            if (userId == null) {
+                return SolveStatisticsCalculator.calculate(List.of(), List.of());
+            }
+            return SolveStatisticsCalculator.calculate(
+                    listTimedSolves(connection, userId),
+                    listRecentByUserId(connection, userId, 5)
+            );
         }
     }
 
@@ -116,6 +150,31 @@ public final class SolveHistoryRepository {
         }
     }
 
+    public void deleteSolve(String userExternalId, long solveId) throws SQLException {
+        try (var connection = databaseManager.openConnection()) {
+            connection.setAutoCommit(false);
+            try {
+                long userId = requireUserId(connection, userExternalId);
+                requireOwnedSolve(connection, solveId, userId);
+                deleteOwnedSolve(connection, solveId, userId);
+                rebuildUserStats(connection, userId);
+                connection.commit();
+            } catch (SQLException | RuntimeException exception) {
+                connection.rollback();
+                throw exception;
+            } finally {
+                connection.setAutoCommit(true);
+            }
+        }
+    }
+
+    public void requireOwnedSolve(String userExternalId, long solveId) throws SQLException {
+        try (var connection = databaseManager.openConnection()) {
+            long userId = requireUserId(connection, userExternalId);
+            requireOwnedSolve(connection, solveId, userId);
+        }
+    }
+
     private static List<SavedSolution> listSolutions(Connection connection, long solveId) throws SQLException {
         try (var statement = connection.prepareStatement("""
                 SELECT *
@@ -131,6 +190,52 @@ public final class SolveHistoryRepository {
                 }
                 return solutions;
             }
+        }
+    }
+
+    private static List<TimedSolve> listTimedSolves(Connection connection, long userId) throws SQLException {
+        try (var statement = connection.prepareStatement("""
+                SELECT id, official_ms, dnf, created_at
+                FROM solves
+                WHERE user_id = ?
+                ORDER BY created_at DESC, id DESC
+                """)) {
+            statement.setLong(1, userId);
+            try (var result = statement.executeQuery()) {
+                var solves = new ArrayList<TimedSolve>();
+                while (result.next()) {
+                    solves.add(new TimedSolve(
+                            result.getLong("id"),
+                            nullableInt(result, "official_ms"),
+                            result.getBoolean("dnf"),
+                            result.getObject("created_at", java.time.OffsetDateTime.class)
+                    ));
+                }
+                return solves;
+            }
+        }
+    }
+
+    private static List<SolveHistoryEntry> listRecentByUserId(
+            Connection connection,
+            long userId,
+            int limit
+    ) throws SQLException {
+        try (var statement = connection.prepareStatement("""
+                SELECT s.id, s.client_attempt_id, s.scramble, s.cross_face_requested,
+                       s.timer_ms, s.official_ms, s.penalty, s.dnf, s.created_at,
+                       MAX(CASE WHEN ss.mode = 'greedy' THEN ss.cross_face_requested END) AS fast_cross,
+                       MAX(CASE WHEN ss.mode = 'optimized' THEN ss.cross_face_requested END) AS optimized_cross
+                FROM solves s
+                LEFT JOIN solve_solutions ss ON ss.solve_id = s.id AND ss.status = 'ready'
+                WHERE s.user_id = ?
+                GROUP BY s.id
+                ORDER BY s.created_at DESC, s.id DESC
+                LIMIT ?
+                """)) {
+            statement.setLong(1, userId);
+            statement.setInt(2, limit);
+            return readHistoryEntries(statement);
         }
     }
 
@@ -373,6 +478,62 @@ public final class SolveHistoryRepository {
             statement.setInt(2, command.dnf() ? 1 : 0);
             setNullableInt(statement, 3, command.dnf() ? null : command.officialMs());
             setNullableInt(statement, 4, command.officialMs());
+            statement.executeUpdate();
+        }
+    }
+
+    private static void deleteOwnedSolve(Connection connection, long solveId, long userId) throws SQLException {
+        try (var statement = connection.prepareStatement(
+                "DELETE FROM solves WHERE id = ? AND user_id = ?"
+        )) {
+            statement.setLong(1, solveId);
+            statement.setLong(2, userId);
+            if (statement.executeUpdate() != 1) {
+                throw new IllegalArgumentException("Solve not found");
+            }
+        }
+    }
+
+    private static void rebuildUserStats(Connection connection, long userId) throws SQLException {
+        try (var statement = connection.prepareStatement("""
+                INSERT INTO user_stats (
+                    user_id, solve_count, dnf_count, best_single_ms,
+                    latest_official_ms, latest_solve_at, updated_at
+                )
+                SELECT
+                    ?,
+                    COUNT(*)::INTEGER,
+                    COUNT(*) FILTER (WHERE dnf)::INTEGER,
+                    MIN(official_ms) FILTER (WHERE NOT dnf),
+                    (
+                        SELECT recent.official_ms
+                        FROM solves recent
+                        WHERE recent.user_id = ?
+                        ORDER BY recent.created_at DESC, recent.id DESC
+                        LIMIT 1
+                    ),
+                    (
+                        SELECT recent.created_at
+                        FROM solves recent
+                        WHERE recent.user_id = ?
+                        ORDER BY recent.created_at DESC, recent.id DESC
+                        LIMIT 1
+                    ),
+                    NOW()
+                FROM solves
+                WHERE user_id = ?
+                ON CONFLICT (user_id) DO UPDATE SET
+                    solve_count = EXCLUDED.solve_count,
+                    dnf_count = EXCLUDED.dnf_count,
+                    best_single_ms = EXCLUDED.best_single_ms,
+                    latest_official_ms = EXCLUDED.latest_official_ms,
+                    latest_solve_at = EXCLUDED.latest_solve_at,
+                    updated_at = NOW()
+                """)) {
+            statement.setLong(1, userId);
+            statement.setLong(2, userId);
+            statement.setLong(3, userId);
+            statement.setLong(4, userId);
             statement.executeUpdate();
         }
     }

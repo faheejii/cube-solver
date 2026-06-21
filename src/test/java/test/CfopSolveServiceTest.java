@@ -24,7 +24,7 @@ public class CfopSolveServiceTest {
     }
 
     @Test
-    void solve_withOptimizedF2LMode_shouldReturnSolvedResultNoLongerThanGreedyF2L() {
+    void solve_withOptimizedF2LMode_shouldReturnSolvedResultNoLongerThanFastCfop() {
         var service = new CfopSolveService();
         var scramble = "R D R' D2 R D' R'";
 
@@ -34,7 +34,7 @@ public class CfopSolveServiceTest {
         assertEquals("optimized", optimized.f2lMode());
         assertTrue(optimized.f2l().solved());
         assertTrue(optimized.fullySolved());
-        assertTrue(optimized.f2l().moveCount() <= greedy.f2l().moveCount());
+        assertTrue(totalCfopMoves(optimized) <= totalCfopMoves(greedy));
     }
 
     @Test
@@ -47,5 +47,12 @@ public class CfopSolveServiceTest {
         assertTrue(result.cross().solved());
         assertTrue(result.f2l().solved());
         assertTrue(result.fullySolved());
+    }
+
+    private static int totalCfopMoves(solver.CfopSolveResult result) {
+        return result.cross().moveCount()
+                + result.f2l().moveCount()
+                + result.oll().moveCount()
+                + result.pll().moveCount();
     }
 }

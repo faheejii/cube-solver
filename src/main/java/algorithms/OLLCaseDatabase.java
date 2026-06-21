@@ -17,6 +17,7 @@ import java.util.Optional;
 
 public class OLLCaseDatabase {
     private final Map<OLLCaseSignature, OLLCase> cases = new LinkedHashMap<>();
+    private final Map<OLLCaseSignature, List<OLLCase>> casesBySignature = new LinkedHashMap<>();
     private final List<OLLCase> caseList = new ArrayList<>();
 
     public static OLLCaseDatabase empty() {
@@ -140,11 +141,16 @@ public class OLLCaseDatabase {
             throw new IllegalArgumentException("ollCase cannot be null");
         }
         cases.putIfAbsent(ollCase.signature(), ollCase);
+        casesBySignature.computeIfAbsent(ollCase.signature(), ignored -> new ArrayList<>()).add(ollCase);
         caseList.add(ollCase);
     }
 
     public Optional<OLLCase> find(OLLCaseSignature signature) {
         return Optional.ofNullable(cases.get(signature));
+    }
+
+    public List<OLLCase> findAll(OLLCaseSignature signature) {
+        return List.copyOf(casesBySignature.getOrDefault(signature, List.of()));
     }
 
     public int size() {
