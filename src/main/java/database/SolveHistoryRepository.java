@@ -111,10 +111,7 @@ public final class SolveHistoryRepository {
             if (userId == null) {
                 return SolveStatisticsCalculator.calculate(List.of(), List.of());
             }
-            return SolveStatisticsCalculator.calculate(
-                    listTimedSolves(connection, userId),
-                    listRecentByUserId(connection, userId, 5)
-            );
+            return aggregateStatistics(connection, userId);
         }
     }
 
@@ -193,14 +190,51 @@ public final class SolveHistoryRepository {
         }
     }
 
-    private static List<TimedSolve> listTimedSolves(Connection connection, long userId) throws SQLException {
+    private static SolveStatistics aggregateStatistics(Connection connection, long userId) throws SQLException {
+        int solveCount;
+        int dnfCount;
+        Integer bestMs;
+        Integer averageMs;
+        try (var statement = connection.prepareStatement("""
+                SELECT COUNT(*)::INTEGER AS solve_count,
+                       COUNT(*) FILTER (WHERE dnf)::INTEGER AS dnf_count,
+                       MIN(official_ms) FILTER (WHERE NOT dnf) AS best_ms,
+                       AVG(official_ms) FILTER (WHERE NOT dnf) AS average_ms
+                FROM solves
+                WHERE user_id = ?
+                """)) {
+            statement.setLong(1, userId);
+            try (var result = statement.executeQuery()) {
+                result.next();
+                solveCount = result.getInt("solve_count");
+                dnfCount = result.getInt("dnf_count");
+                bestMs = nullableInt(result, "best_ms");
+                var average = result.getObject("average_ms");
+                averageMs = average == null ? null : (int) Math.round(((Number) average).doubleValue());
+            }
+        }
+        var recentTimed = listTimedSolves(connection, userId, 12);
+        return new SolveStatistics(
+                solveCount,
+                dnfCount,
+                bestMs,
+                averageMs,
+                SolveStatisticsCalculator.rollingAverage(recentTimed, 5),
+                SolveStatisticsCalculator.rollingAverage(recentTimed, 12),
+                List.copyOf(listRecentByUserId(connection, userId, 5))
+        );
+    }
+
+    private static List<TimedSolve> listTimedSolves(Connection connection, long userId, int limit) throws SQLException {
         try (var statement = connection.prepareStatement("""
                 SELECT id, official_ms, dnf, created_at
                 FROM solves
                 WHERE user_id = ?
                 ORDER BY created_at DESC, id DESC
+                LIMIT ?
                 """)) {
             statement.setLong(1, userId);
+            statement.setInt(2, limit);
             try (var result = statement.executeQuery()) {
                 var solves = new ArrayList<TimedSolve>();
                 while (result.next()) {

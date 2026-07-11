@@ -1,13 +1,15 @@
 package database;
 
+import com.zaxxer.hikari.HikariConfig;
+import com.zaxxer.hikari.HikariDataSource;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-public final class DatabaseManager {
+public final class DatabaseManager implements AutoCloseable {
     public static final String SOLVER_VERSION = "cfop-web-v1";
     private final DatabaseConfig config;
+    private volatile HikariDataSource dataSource;
 
     public DatabaseManager(DatabaseConfig config) {
         this.config = config == null ? DatabaseConfig.disabled() : config;
@@ -47,7 +49,45 @@ public final class DatabaseManager {
         if (!isConfigured()) {
             throw new IllegalStateException("Database is not configured");
         }
-        return DriverManager.getConnection(config.jdbcUrl(), config.username(), config.password());
+        return dataSource().getConnection();
+    }
+
+    @Override
+    public void close() {
+        var current = dataSource;
+        if (current != null) {
+            current.close();
+            dataSource = null;
+        }
+    }
+
+    private HikariDataSource dataSource() {
+        var current = dataSource;
+        if (current != null) {
+            return current;
+        }
+        synchronized (this) {
+            if (dataSource == null) {
+                var hikari = new HikariConfig();
+                hikari.setJdbcUrl(config.jdbcUrl());
+                hikari.setUsername(config.username());
+                hikari.setPassword(config.password());
+                hikari.setMaximumPoolSize(configuredPoolSize());
+                hikari.setMinimumIdle(0);
+                hikari.setPoolName("cube-solver-postgres");
+                hikari.setConnectionTimeout(10_000);
+                dataSource = new HikariDataSource(hikari);
+            }
+            return dataSource;
+        }
+    }
+
+    private static int configuredPoolSize() {
+        try {
+            return Math.max(1, Integer.parseInt(System.getProperty("database.pool.size", "4")));
+        } catch (NumberFormatException exception) {
+            return 4;
+        }
     }
 
     private static void migrate(Connection connection) throws SQLException {
