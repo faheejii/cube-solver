@@ -668,7 +668,6 @@ export default function App() {
     setTimerSolutionOpen(false);
     setAttemptSaveStatus("idle");
     setAttemptSaveError(null);
-    attemptSavingRef.current = null;
     resetTimer();
   }
 
@@ -759,7 +758,9 @@ export default function App() {
         ...current.filter((entry) => entry.id !== savedAttempt.id),
       ].slice(0, 20));
       setHistoryStatus("ready");
-      setAttemptSaveStatus("saved");
+      if (clientAttemptId === snapshot.clientAttemptId) {
+        setAttemptSaveStatus("saved");
+      }
       setSaveNotice(`Solve saved · ${formatHistoryTime(savedAttempt.officialMs, savedAttempt.penalty, savedAttempt.dnf)}`);
       void loadStatistics();
 
@@ -789,8 +790,10 @@ export default function App() {
       }
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : "Attempt save failed";
-      setAttemptSaveStatus("error");
-      setAttemptSaveError(message);
+      if (clientAttemptId === snapshot.clientAttemptId) {
+        setAttemptSaveStatus("error");
+        setAttemptSaveError(message);
+      }
       attemptSavingRef.current = null;
     }
   }
@@ -894,6 +897,13 @@ export default function App() {
       completedCandidates: 0,
       candidatesEvaluated: 0,
       bestTotalMoves: -1,
+      phase: "QUEUED",
+      currentCrossFace: "",
+      completedCrosses: 0,
+      totalCrosses: 0,
+      optimizationCandidate: 0,
+      totalOptimizationCandidates: 0,
+      optimizationBudgetExpired: false,
       createdAt: now,
       updatedAt: now,
       result: null,
@@ -941,6 +951,13 @@ export default function App() {
             completedCandidates: job.completedCandidates,
             candidatesEvaluated: job.candidatesEvaluated,
             bestTotalMoves: job.bestTotalMoves,
+            phase: job.phase,
+            currentCrossFace: job.currentCrossFace,
+            completedCrosses: job.completedCrosses,
+            totalCrosses: job.totalCrosses,
+            optimizationCandidate: job.optimizationCandidate,
+            totalOptimizationCandidates: job.totalOptimizationCandidates,
+            optimizationBudgetExpired: job.optimizationBudgetExpired,
             result: job.result,
             error: job.error,
             cancelling: isTerminalProcess({ ...process, status: job.status })
@@ -1345,7 +1362,7 @@ async function waitForSolveJob(
     if (job.status === "cancelled") {
       throw new SolveJobCancelledError();
     }
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
     job = await fetchSolveJob(job.id);
   }
 }

@@ -10,16 +10,18 @@ import solver.CfopStageResult;
 import statistics.RollingAverage;
 import statistics.SolveStatistics;
 
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 final class JsonSupport {
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     private JsonSupport() {
     }
 
     static String readString(String json, String fieldName) {
-        var matcher = stringFieldMatcher(json, fieldName);
-        return matcher.find() ? unescape(matcher.group(1)) : null;
+        var field = field(json, fieldName);
+        return field != null && field.isTextual() ? field.textValue() : null;
     }
 
     static String solveResultJson(CfopSolveResult result) {
@@ -45,13 +47,13 @@ final class JsonSupport {
     }
 
     static Integer readInteger(String json, String fieldName) {
-        var matcher = numberFieldMatcher(json, fieldName);
-        return matcher.find() ? Integer.valueOf(matcher.group(1)) : null;
+        var field = field(json, fieldName);
+        return field != null && field.canConvertToInt() ? field.intValue() : null;
     }
 
     static Long readLong(String json, String fieldName) {
-        var matcher = numberFieldMatcher(json, fieldName);
-        return matcher.find() ? Long.valueOf(matcher.group(1)) : null;
+        var field = field(json, fieldName);
+        return field != null && field.canConvertToLong() ? field.longValue() : null;
     }
 
     static int requireInteger(String json, String fieldName) {
@@ -63,8 +65,8 @@ final class JsonSupport {
     }
 
     static Double readDouble(String json, String fieldName) {
-        var matcher = decimalFieldMatcher(json, fieldName);
-        return matcher.find() ? Double.valueOf(matcher.group(1)) : null;
+        var field = field(json, fieldName);
+        return field != null && field.isNumber() ? field.doubleValue() : null;
     }
 
     static double requireDouble(String json, String fieldName) {
@@ -76,11 +78,8 @@ final class JsonSupport {
     }
 
     static boolean readBoolean(String json, String fieldName) {
-        var matcher = booleanFieldMatcher(json, fieldName);
-        if (!matcher.find()) {
-            return false;
-        }
-        return Boolean.parseBoolean(matcher.group(1));
+        var field = field(json, fieldName);
+        return field != null && field.isBoolean() && field.booleanValue();
     }
 
     static String healthJson(DatabaseHealth health) {
@@ -155,6 +154,13 @@ final class JsonSupport {
                 + "\"completedCandidates\":" + job.completedCandidates() + ","
                 + "\"candidatesEvaluated\":" + job.candidatesEvaluated() + ","
                 + "\"bestTotalMoves\":" + job.bestTotalMoves() + ","
+                + "\"phase\":\"" + escape(job.phase()) + "\","
+                + "\"currentCrossFace\":\"" + escape(job.currentCrossFace()) + "\","
+                + "\"completedCrosses\":" + job.completedCrosses() + ","
+                + "\"totalCrosses\":" + job.totalCrosses() + ","
+                + "\"optimizationCandidate\":" + job.optimizationCandidate() + ","
+                + "\"totalOptimizationCandidates\":" + job.totalOptimizationCandidates() + ","
+                + "\"optimizationBudgetExpired\":" + job.optimizationBudgetExpired() + ","
                 + "\"result\":" + (job.result() == null ? "null" : solveResultJson(job.result())) + ","
                 + "\"error\":" + nullableString(job.error())
                 + "}";
@@ -213,20 +219,16 @@ final class JsonSupport {
                 + "}";
     }
 
-    private static Matcher stringFieldMatcher(String json, String fieldName) {
-        return Pattern.compile("\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*\"((?:\\\\.|[^\"])*)\"").matcher(json);
-    }
-
-    private static Matcher numberFieldMatcher(String json, String fieldName) {
-        return Pattern.compile("\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?\\d+)").matcher(json);
-    }
-
-    private static Matcher decimalFieldMatcher(String json, String fieldName) {
-        return Pattern.compile("\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)").matcher(json);
-    }
-
-    private static Matcher booleanFieldMatcher(String json, String fieldName) {
-        return Pattern.compile("\"" + Pattern.quote(fieldName) + "\"\\s*:\\s*(true|false)").matcher(json);
+    private static JsonNode field(String json, String fieldName) {
+        try {
+            var root = JSON.readTree(json);
+            if (root == null || !root.isObject()) {
+                throw new IllegalArgumentException("Request body must be a JSON object");
+            }
+            return root.get(fieldName);
+        } catch (java.io.IOException exception) {
+            throw new IllegalArgumentException("Invalid JSON request body", exception);
+        }
     }
 
     private static String escape(String value) {
@@ -235,14 +237,6 @@ final class JsonSupport {
                 .replace("\"", "\\\"")
                 .replace("\n", "\\n")
                 .replace("\r", "\\r");
-    }
-
-    private static String unescape(String value) {
-        return value
-                .replace("\\n", "\n")
-                .replace("\\r", "\r")
-                .replace("\\\"", "\"")
-                .replace("\\\\", "\\");
     }
 
     private static String nullableInteger(Integer value) {

@@ -5,25 +5,8 @@ import cube.CubeOrientation;
 import cube.CubeState;
 import cube.Edge;
 import cube.Face;
-import io.CubeConverter;
-import io.FaceletState;
 
 public final class F2LCaseSignatureExtractor {
-    private static final StickerRef[][] EDGE_FACELETS = {
-            {sticker(Face.U, 5), sticker(Face.R, 1)}, // UR
-            {sticker(Face.U, 7), sticker(Face.F, 1)}, // UF
-            {sticker(Face.U, 3), sticker(Face.L, 1)}, // UL
-            {sticker(Face.U, 1), sticker(Face.B, 1)}, // UB
-            {sticker(Face.D, 5), sticker(Face.R, 7)}, // DR
-            {sticker(Face.D, 1), sticker(Face.F, 7)}, // DF
-            {sticker(Face.D, 3), sticker(Face.L, 7)}, // DL
-            {sticker(Face.D, 7), sticker(Face.B, 7)}, // DB
-            {sticker(Face.F, 5), sticker(Face.R, 3)}, // FR
-            {sticker(Face.F, 3), sticker(Face.L, 5)}, // FL
-            {sticker(Face.B, 5), sticker(Face.L, 3)}, // BL
-            {sticker(Face.B, 3), sticker(Face.R, 5)}  // BR
-    };
-
     private F2LCaseSignatureExtractor() {
     }
 
@@ -93,16 +76,13 @@ public final class F2LCaseSignatureExtractor {
     }
 
     private static int edgeOrientation(CubeState cube, Edge rawPosition, Edge targetEdge, CubeOrientation orientation) {
-        var facelets = CubeConverter.toFaceletStateAllowingCenterParity(cube);
         var logicalTargetFaces = edgeFaces(mapEdgePosition(targetEdge, orientation));
-        var logicalStickerOnFirstPositionFace = logicalEdgeSticker(facelets, rawPosition, 0, orientation);
+        var edgePiece = Edge.values()[cube.edgePerm[rawPosition.ordinal()]];
+        var physicalPieceFaces = edgeFaces(edgePiece);
+        int pieceFaceIndex = Math.floorMod(-cube.edgeOri[rawPosition.ordinal()], 2);
+        var logicalStickerOnFirstPositionFace = orientation.logicalFaceOf(physicalPieceFaces[pieceFaceIndex]);
 
         return logicalStickerOnFirstPositionFace == logicalTargetFaces[0] ? 0 : 1;
-    }
-
-    private static Face logicalEdgeSticker(FaceletState facelets, Edge rawPosition, int stickerIndex, CubeOrientation orientation) {
-        var sticker = EDGE_FACELETS[rawPosition.ordinal()][stickerIndex];
-        return orientation.logicalFaceOf(facelets.getSticker(sticker.face(), sticker.index()));
     }
 
     private static Edge mapEdgePosition(Edge rawPosition, CubeOrientation orientation) {
@@ -195,10 +175,4 @@ public final class F2LCaseSignatureExtractor {
     private record TargetPair(Corner corner, Edge edge) {
     }
 
-    private static StickerRef sticker(Face face, int index) {
-        return new StickerRef(face, index);
-    }
-
-    private record StickerRef(Face face, int index) {
-    }
 }

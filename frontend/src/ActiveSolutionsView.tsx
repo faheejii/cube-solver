@@ -150,15 +150,7 @@ function ProcessCard({
       {active ? (
         <div className="process-progress">
           <div className="process-progress-bar"><i /></div>
-          <p>
-            {optimized
-              ? process.candidatesEvaluated > 0
-                ? `${process.candidatesEvaluated}/${process.completedCandidates} candidates · Best total ${moveLabel(process.bestTotalMoves)}`
-                : `${process.statesExplored.toLocaleString()} states · ${process.statesPruned.toLocaleString()} pruned · Best F2L ${moveLabel(process.bestMoves)}`
-              : process.status === "queued"
-                ? "Waiting for a Fast worker"
-                : "Computing Fast solution"}
-          </p>
+          <p>{progressLabel(process, optimized)}</p>
         </div>
       ) : null}
 
@@ -201,6 +193,43 @@ function ProcessCard({
       </div>
     </article>
   );
+}
+
+function progressLabel(process: SolutionProcess, optimized: boolean): string {
+  if (process.status === "queued") {
+    return optimized ? "Waiting for an optimized worker" : "Waiting for a fast worker";
+  }
+  if (process.optimizationBudgetExpired) {
+    return "Optimization budget reached; using best solution found";
+  }
+  if (process.phase === "CROSS_EVALUATION" && process.totalCrosses > 0) {
+    return `Screening cross colors ${process.completedCrosses} of ${process.totalCrosses}`;
+  }
+  if (process.phase === "BASELINE_COMPARISON" && process.totalCrosses > 0) {
+    const face = process.currentCrossFace ? ` (${process.currentCrossFace} cross)` : "";
+    return `Comparing shortlisted colors ${process.completedCrosses} of ${process.totalCrosses}${face}`;
+  }
+  if (process.phase === "BASELINE_BUDGET_REACHED") {
+    return "Comparison budget reached; optimizing best result found";
+  }
+  if (process.phase === "BASELINE_FALLBACK") {
+    const face = process.currentCrossFace ? ` (${process.currentCrossFace} cross)` : "";
+    return `Finishing reliable fallback${face}`;
+  }
+  if ((process.phase === "F2L_OPTIMIZATION" || process.phase === "F2L_CANDIDATE_GENERATION")
+      && process.totalOptimizationCandidates > 0) {
+    const face = process.currentCrossFace ? ` (${process.currentCrossFace} cross)` : "";
+    const rank = `${process.optimizationCandidate} of ${process.totalOptimizationCandidates}`;
+    return process.phase === "F2L_CANDIDATE_GENERATION"
+      ? `Building F2L candidates for optimized result ${rank}${face}`
+      : `Optimizing candidate ${rank}${face}`;
+  }
+  if (optimized) {
+    return process.candidatesEvaluated > 0
+      ? `${process.candidatesEvaluated}/${process.completedCandidates} candidates · Best total ${moveLabel(process.bestTotalMoves)}`
+      : `Building F2L candidates · ${process.statesExplored.toLocaleString()} states · Best F2L ${moveLabel(process.bestMoves)}`;
+  }
+  return "Computing fast solution";
 }
 
 function sourceLabel(source: SolutionProcess["source"]): string {

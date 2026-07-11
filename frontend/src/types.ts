@@ -44,6 +44,13 @@ export type SolveJob = {
   completedCandidates: number;
   candidatesEvaluated: number;
   bestTotalMoves: number;
+  phase: string;
+  currentCrossFace: string;
+  completedCrosses: number;
+  totalCrosses: number;
+  optimizationCandidate: number;
+  totalOptimizationCandidates: number;
+  optimizationBudgetExpired: boolean;
   result: SolveResponse | null;
   error: string | null;
 };
@@ -63,6 +70,13 @@ export type SolutionProcess = {
   completedCandidates: number;
   candidatesEvaluated: number;
   bestTotalMoves: number;
+  phase: string;
+  currentCrossFace: string;
+  completedCrosses: number;
+  totalCrosses: number;
+  optimizationCandidate: number;
+  totalOptimizationCandidates: number;
+  optimizationBudgetExpired: boolean;
   createdAt: number;
   updatedAt: number;
   result: SolveResponse | null;

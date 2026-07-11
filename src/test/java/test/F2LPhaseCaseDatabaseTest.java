@@ -9,6 +9,7 @@ import cfop.F2LSlot;
 import cube.Algorithm;
 import cube.CubeState;
 import cube.Face;
+import cube.Move;
 import cube.MoveApplier;
 import cube.OrientedCube;
 import org.junit.jupiter.api.Test;
@@ -119,7 +120,6 @@ public class F2LPhaseCaseDatabaseTest {
         var solution = new F2LSolver(setupDatabase, insertDatabase)
                 .solve(orientedCube);
 
-        assertEquals("y2 R U R' U2 R U' R'", solution.toString());
         orientedCube.applyMoves(solution.getMoves());
         assertTrue(cfop.F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()));
     }

@@ -97,6 +97,64 @@ class SolveJobManagerTest {
     }
 
     @Test
+    void cancelRunningOptimizedJob_shouldReleaseWorkerForQueuedOptimizedJob() throws Exception {
+        var optimizedRelease = new CountDownLatch(1);
+        var service = new ControlledSolveService(optimizedRelease);
+        var manager = manager(service);
+        var running = manager.submit(
+                new SolveApiRequest("R", "U", "optimized"),
+                null,
+                null,
+                false
+        );
+        waitForStatus(manager, running.id(), "running");
+        var queued = manager.submit(
+                new SolveApiRequest("U", "COLOR_NEUTRAL", "optimized"),
+                null,
+                null,
+                false
+        );
+
+        assertEquals("cancelled", manager.cancel(running.id()).status());
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (service.optimizedInvocations.get() < 2 && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+        assertEquals(2, service.optimizedInvocations.get());
+        optimizedRelease.countDown();
+
+        assertEquals("completed", waitForStatus(manager, queued.id(), "completed").status());
+    }
+
+    @Test
+    void cancelRealOptimizedSolve_shouldReleaseWorkerForQueuedSolve() throws Exception {
+        var manager = manager(new CfopSolveService());
+        var running = manager.submit(
+                new SolveApiRequest(
+                        "B R' F U D' R D' R2 B U2 R U2 L' D2 R F2 R2 D2 R B2 R2",
+                        "R",
+                        "optimized"
+                ),
+                null,
+                null,
+                false
+        );
+        waitForStatus(manager, running.id(), "running");
+        var queued = manager.submit(
+                new SolveApiRequest("R U R'", "COLOR_NEUTRAL", "optimized"),
+                null,
+                null,
+                false
+        );
+
+        manager.cancel(running.id());
+        var released = waitUntilNotQueued(manager, queued.id());
+
+        assertNotEquals("queued", released.status());
+        manager.cancel(queued.id());
+    }
+
+    @Test
     void cancelLinkedJobs_shouldOnlyCancelMatchingSaveJob() throws Exception {
         var optimizedRelease = new CountDownLatch(1);
         var service = new ControlledSolveService(optimizedRelease);
@@ -152,6 +210,21 @@ class SolveJobManagerTest {
             Thread.sleep(10);
         }
         throw new AssertionError("Job did not reach status " + expected);
+    }
+
+    private static SolveJobManager.JobSnapshot waitUntilNotQueued(
+            SolveJobManager manager,
+            String jobId
+    ) throws InterruptedException {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (System.nanoTime() < deadline) {
+            var snapshot = manager.find(jobId);
+            if (!"queued".equals(snapshot.status())) {
+                return snapshot;
+            }
+            Thread.sleep(10);
+        }
+        throw new AssertionError("Queued job did not acquire the optimized worker");
     }
 
     private static final class ControlledSolveService extends CfopSolveService {

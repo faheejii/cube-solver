@@ -6,8 +6,10 @@ import cfop.F2LAnalyzer;
 import cfop.OLLAnalyzer;
 import cfop.PLLAnalyzer;
 import cube.Algorithm;
+import cube.CubeOrientationKey;
 import cube.CubeState;
 import cube.Face;
+import cube.Move;
 import cube.MoveApplier;
 import cube.OrientedCube;
 import org.junit.jupiter.api.Test;
@@ -20,6 +22,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PLLSolverTest {
+    private static final Algorithm[] AUF_TRIALS = {
+            new Algorithm(),
+            Algorithm.fromMoves(java.util.List.of(Move.U)),
+            Algorithm.fromMoves(java.util.List.of(Move.U2)),
+            Algorithm.fromMoves(java.util.List.of(Move.U_PRIME))
+    };
+
     @Test
     void solve_shouldReturnEmptyAlgorithmWhenPllAlreadySolved() {
         var database = PLLCaseDatabase.empty();
@@ -61,6 +70,7 @@ public class PLLSolverTest {
         var solution = solver.solve(cube);
 
         cube.applyMoves(solution.getMoves());
+        assertTrue(solution.getMoves().stream().noneMatch(Move::isCubeRotation));
         assertTrue(PLLAnalyzer.isPllSolved(cube.cubeState(), cube.orientation()));
     }
 
@@ -73,6 +83,7 @@ public class PLLSolverTest {
         var solution = solver.solve(cube);
 
         cube.applyMoves(solution.getMoves());
+        assertTrue(solution.getMoves().stream().noneMatch(Move::isCubeRotation));
         assertTrue(PLLAnalyzer.isPllSolved(cube.cubeState(), cube.orientation()));
     }
 
@@ -106,11 +117,36 @@ public class PLLSolverTest {
 
         var f2lSolution = new F2LSolver().solve(orientedCube);
         orientedCube.applyMoves(f2lSolution.getMoves());
-
         var ollSolution = new OLLSolver(algorithms.OLLCaseDatabase.seedCases()).solve(orientedCube);
         orientedCube.applyMoves(ollSolution.getMoves());
 
         return orientedCube;
+    }
+
+    @Test
+    void solve_shouldCoverEverySeededCaseAcrossAllFramesAndFinalAufsWithoutCubeRotations() {
+        var database = PLLCaseDatabase.seedCases();
+
+        for (var pllCase : database.allCases()) {
+            for (var orientationKey : CubeOrientationKey.all()) {
+                for (var finalAuf : AUF_TRIALS) {
+                    var solution = Algorithm.normalize(pllCase.algorithm().concat(finalAuf));
+                    var cube = setupCubeFor(orientationKey, solution);
+                    cube.applyMoves(solution.getMoves());
+
+                    assertTrue(solution.getMoves().stream().noneMatch(Move::isCubeRotation), pllCase.name());
+                    assertTrue(isFullySolved(cube), pllCase.name());
+                }
+            }
+        }
+    }
+
+    private static OrientedCube setupCubeFor(CubeOrientationKey setupOrientationKey, Algorithm algorithm) {
+        var solvedOrientation = new OrientedCube(new CubeState(), setupOrientationKey.toOrientation());
+        solvedOrientation.applyMoves(algorithm.getMoves());
+        var setup = new OrientedCube(new CubeState(), solvedOrientation.orientation());
+        setup.applyMoves(algorithm.inverse().getMoves());
+        return setup;
     }
 
     private static boolean isFullySolved(OrientedCube cube) {

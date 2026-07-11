@@ -15,6 +15,7 @@ import database.SolveHistoryRepository;
 import solver.CfopSolveService;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -22,6 +23,7 @@ import java.nio.file.Path;
 import java.util.concurrent.Executors;
 
 public class CubeHttpServer {
+    private static final int MAX_JSON_BODY_BYTES = 64 * 1024;
     private final CfopSolveService solveService;
     private final Path frontendDistDir;
     private final DatabaseManager databaseManager;
@@ -42,7 +44,14 @@ public class CubeHttpServer {
         server.createContext("/api/solves", new SolveHistoryHandler(databaseManager, solveJobManager));
         server.createContext("/api/stats", new StatisticsHandler(databaseManager));
         server.createContext("/", new StaticFileHandler(frontendDistDir));
-        server.setExecutor(Executors.newCachedThreadPool());
+        server.setExecutor(Executors.newFixedThreadPool(
+                Math.max(4, Runtime.getRuntime().availableProcessors()),
+                runnable -> {
+                    var thread = new Thread(runnable, "cube-http-worker");
+                    thread.setDaemon(true);
+                    return thread;
+                }
+        ));
         return server;
     }
 
@@ -76,6 +85,8 @@ public class CubeHttpServer {
                     return;
                 }
                 writeJson(exchange, 405, JsonSupport.errorJson("Method not allowed"));
+            } catch (SolveJobManager.CapacityException exception) {
+                writeJson(exchange, 429, JsonSupport.errorJson(exception.getMessage()));
             } catch (IllegalArgumentException exception) {
                 writeJson(exchange, 400, JsonSupport.errorJson(exception.getMessage()));
             } catch (Exception exception) {
@@ -84,7 +95,7 @@ public class CubeHttpServer {
         }
 
         private void handleCreate(HttpExchange exchange) throws IOException {
-            var body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            var body = readJsonBody(exchange);
             var request = new CreateSolveJobRequest(
                     JsonSupport.readString(body, "scramble"),
                     JsonSupport.readString(body, "crossFace"),
@@ -121,7 +132,7 @@ public class CubeHttpServer {
             }
 
             try {
-                var body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+                var body = readJsonBody(exchange);
                 var request = new SolveApiRequest(
                         JsonSupport.readString(body, "scramble"),
                         JsonSupport.readString(body, "crossFace"),
@@ -191,7 +202,7 @@ public class CubeHttpServer {
         }
 
         private void handleCreateAttempt(HttpExchange exchange) throws Exception {
-            var body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            var body = readJsonBody(exchange);
             var request = new CreateSolveAttemptRequest(
                     JsonSupport.readString(body, "userId"),
                     JsonSupport.readString(body, "clientAttemptId"),
@@ -219,7 +230,7 @@ public class CubeHttpServer {
             if (!mode.equals("greedy") && !mode.equals("optimized")) {
                 throw new IllegalArgumentException("Invalid F2L mode: " + mode);
             }
-            var body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            var body = readJsonBody(exchange);
             var request = readSolutionRequest(body);
             if (!mode.equals(request.f2lMode())) {
                 throw new IllegalArgumentException("Solution mode does not match request path");
@@ -455,7 +466,7 @@ public class CubeHttpServer {
     }
 
     private static void addCorsHeaders(Headers headers) {
-        headers.set("Access-Control-Allow-Origin", "*");
+        headers.set("Access-Control-Allow-Origin", System.getProperty("server.cors.origin", "http://localhost:5173"));
         headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
         headers.set("Access-Control-Allow-Headers", "Content-Type");
     }
@@ -468,6 +479,26 @@ public class CubeHttpServer {
         exchange.sendResponseHeaders(statusCode, bytes.length);
         exchange.getResponseBody().write(bytes);
         exchange.close();
+    }
+
+    private static String readJsonBody(HttpExchange exchange) throws IOException {
+        var contentLength = exchange.getRequestHeaders().getFirst("Content-Length");
+        if (contentLength != null) {
+            try {
+                if (Long.parseLong(contentLength) > MAX_JSON_BODY_BYTES) {
+                    throw new IllegalArgumentException("Request body is too large");
+                }
+            } catch (NumberFormatException exception) {
+                throw new IllegalArgumentException("Invalid Content-Length");
+            }
+        }
+        try (InputStream input = exchange.getRequestBody()) {
+            var bytes = input.readNBytes(MAX_JSON_BODY_BYTES + 1);
+            if (bytes.length > MAX_JSON_BODY_BYTES) {
+                throw new IllegalArgumentException("Request body is too large");
+            }
+            return new String(bytes, StandardCharsets.UTF_8);
+        }
     }
 
     private static void writePlainText(HttpExchange exchange, int statusCode, String body) throws IOException {

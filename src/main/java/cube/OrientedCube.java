@@ -57,41 +57,6 @@ public class OrientedCube {
         return orientation.copy();
     }
 
-    public void collapseOrientationIntoCube() {
-        if (isIdentityOrientation()) {
-            return;
-        }
-
-        var newCornerPerm = new byte[8];
-        var newCornerOri = new byte[8];
-        for (var logicalPosition : Corner.values()) {
-            var physicalPosition = cornerForFaces(
-                    orientation.faceAt(cornerFaces(logicalPosition)[0]),
-                    orientation.faceAt(cornerFaces(logicalPosition)[1]),
-                    orientation.faceAt(cornerFaces(logicalPosition)[2])
-            );
-            newCornerPerm[logicalPosition.ordinal()] = cube.cornerPerm[physicalPosition.ordinal()];
-            newCornerOri[logicalPosition.ordinal()] = cube.cornerOri[physicalPosition.ordinal()];
-        }
-
-        var newEdgePerm = new byte[12];
-        var newEdgeOri = new byte[12];
-        for (var logicalPosition : Edge.values()) {
-            var physicalPosition = edgeForFaces(
-                    orientation.faceAt(edgeFaces(logicalPosition)[0]),
-                    orientation.faceAt(edgeFaces(logicalPosition)[1])
-            );
-            newEdgePerm[logicalPosition.ordinal()] = cube.edgePerm[physicalPosition.ordinal()];
-            newEdgeOri[logicalPosition.ordinal()] = cube.edgeOri[physicalPosition.ordinal()];
-        }
-
-        cube.cornerPerm = newCornerPerm;
-        cube.cornerOri = newCornerOri;
-        cube.edgePerm = newEdgePerm;
-        cube.edgeOri = newEdgeOri;
-        orientation.reset();
-    }
-
     private void applyWideMove(Move move) {
         switch (move) {
             case RW -> {
@@ -168,12 +133,6 @@ public class OrientedCube {
             }
             default -> throw new IllegalArgumentException("Not a wide move: " + move);
         }
-    }
-
-    private boolean isIdentityOrientation() {
-        return orientation.faceAt(Face.U) == Face.U
-                && orientation.faceAt(Face.R) == Face.R
-                && orientation.faceAt(Face.F) == Face.F;
     }
 
     private static Face[] edgeFaces(Edge edge) {

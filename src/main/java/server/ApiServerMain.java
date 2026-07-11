@@ -17,6 +17,10 @@ public class ApiServerMain {
         System.out.println("Cube server listening on http://localhost:" + port);
         System.out.println("Frontend dist: " + frontendDistDir);
         System.out.println("Database: " + (databaseManager.isConfigured() ? "configured" : "disabled (set DATABASE_URL)"));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            server.stop(0);
+            databaseManager.close();
+        }, "cube-server-shutdown"));
         server.start();
     }
 }

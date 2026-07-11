@@ -4,20 +4,26 @@ import algorithms.OLLCaseDatabase;
 import cfop.CrossAnalyzer;
 import cfop.F2LAnalyzer;
 import cfop.OLLAnalyzer;
-import cube.CubeState;
 import cube.Algorithm;
+import cube.CubeOrientationKey;
+import cube.CubeState;
 import cube.Move;
 import cube.MoveApplier;
 import cube.OrientedCube;
 import org.junit.jupiter.api.Test;
-import solver.CrossSolver;
-import solver.F2LSolver;
 import solver.OLLSolver;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OLLSolverTest {
+    private static final Algorithm[] AUF_TRIALS = {
+            new Algorithm(),
+            Algorithm.fromMoves(java.util.List.of(Move.U)),
+            Algorithm.fromMoves(java.util.List.of(Move.U2)),
+            Algorithm.fromMoves(java.util.List.of(Move.U_PRIME))
+    };
+
     @Test
     void solve_shouldReturnEmptyAlgorithmWhenOllAlreadySolved() {
         var database = OLLCaseDatabase.empty();
@@ -55,11 +61,8 @@ public class OLLSolverTest {
                 .orElseThrow()
                 .algorithm();
 
-        var setup = new OrientedCube();
-        setup.applyMoves(algorithm.inverse().getMoves());
-
-        var solution = new OLLSolver(database).solve(setup);
-        setup.applyMoves(solution.getMoves());
+        var setup = setupCubeFor(CubeOrientationKey.all().get(0), algorithm);
+        setup.applyMoves(algorithm.getMoves());
 
         assertEquals("r U R' U' M2 U R U' R' U' M'", algorithm.toString());
         assertTrue(CrossAnalyzer.isCrossSolved(setup.cubeState(), setup.orientation()));
@@ -68,13 +71,15 @@ public class OLLSolverTest {
     }
 
     @Test
-    void solve_shouldFindCaseAfterYPrefixForSolverMainScramble() {
+    void solve_shouldTryAufBeforeLookup() {
         var orientedCube = new OrientedCube();
-        orientedCube.applyAlgorithm("F L2 D' R B2 D2 F' U B2 U2 F2 D2 R2 U2 R' B2 R' B2 R' U' R2");
-        orientedCube.applyMoves(new CrossSolver().solve(orientedCube.cubeState(), cube.Face.U).getMoves());
-        orientedCube.applyMoves(new F2LSolver().solve(orientedCube).getMoves());
+        var algorithm = "R U R' U R U2 R'";
+        orientedCube.applyMoves(Algorithm.parse(algorithm).inverse().getMoves());
+        orientedCube.applyAlgorithm("U'");
 
-        var solution = new OLLSolver(OLLCaseDatabase.seedCases()).solve(orientedCube);
+        var database = OLLCaseDatabase.empty();
+        database.register(algorithm, "sune");
+        var solution = new OLLSolver(database).solve(orientedCube);
         orientedCube.applyMoves(solution.getMoves());
 
         assertTrue(CrossAnalyzer.isCrossSolved(orientedCube.cubeState(), orientedCube.orientation()));
@@ -83,23 +88,30 @@ public class OLLSolverTest {
     }
 
     @Test
-    void solve_shouldFindCase2AfterAufInBFaceFrame() {
-        var orientedCube = new OrientedCube();
-        orientedCube.applyAlgorithm("D2 F2 D' L F R F' B' D' U2 F2 L2 B R2 F2 R2 D2 R2 B D2 R2");
-        orientedCube.applyAlgorithm("x y2 L F' L2 D' R");
-        orientedCube.applyAlgorithm(
-                "U F' U F U2 F U' F' y2 R U' R' U' R U' R2 F R F' "
-                        + "y2 F' U F U2 R' U2 R"
-        );
-
+    void solve_shouldCoverEverySeededCaseAcrossAllFramesAndAufsWithoutCubeRotations() {
         var database = OLLCaseDatabase.seedCases();
-        var solution = new OLLSolver(database).solve(orientedCube);
-        orientedCube.applyMoves(solution.getMoves());
 
-        assertTrue(solution.toString().contains("r U r'"));
-        assertTrue(solution.getMoves().contains(Move.RW));
-        assertTrue(CrossAnalyzer.isCrossSolved(orientedCube.cubeState(), orientedCube.orientation()));
-        assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()));
-        assertTrue(OLLAnalyzer.isOllSolved(orientedCube.cubeState(), orientedCube.orientation()));
+        for (var ollCase : database.allCases()) {
+            for (var orientationKey : CubeOrientationKey.all()) {
+                for (var auf : AUF_TRIALS) {
+                    var solution = Algorithm.normalize(auf.concat(ollCase.algorithm()));
+                    var orientedCube = setupCubeFor(orientationKey, solution);
+                    orientedCube.applyMoves(solution.getMoves());
+
+                    assertTrue(solution.getMoves().stream().noneMatch(Move::isCubeRotation), ollCase.name());
+                    assertTrue(CrossAnalyzer.isCrossSolved(orientedCube.cubeState(), orientedCube.orientation()), ollCase.name());
+                    assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()), ollCase.name());
+                    assertTrue(OLLAnalyzer.isOllSolved(orientedCube.cubeState(), orientedCube.orientation()), ollCase.name());
+                }
+            }
+        }
+    }
+
+    private static OrientedCube setupCubeFor(CubeOrientationKey setupOrientationKey, Algorithm algorithm) {
+        var solvedOrientation = new OrientedCube(new CubeState(), setupOrientationKey.toOrientation());
+        solvedOrientation.applyMoves(algorithm.getMoves());
+        var setup = new OrientedCube(new CubeState(), solvedOrientation.orientation());
+        setup.applyMoves(algorithm.inverse().getMoves());
+        return setup;
     }
 }

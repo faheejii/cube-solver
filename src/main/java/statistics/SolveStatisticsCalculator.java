@@ -40,7 +40,7 @@ public final class SolveStatisticsCalculator {
         );
     }
 
-    static RollingAverage rollingAverage(List<TimedSolve> ordered, int size) {
+    public static RollingAverage rollingAverage(List<TimedSolve> ordered, int size) {
         if (ordered.size() < size) {
             return RollingAverage.insufficient();
         }
