@@ -2,6 +2,7 @@ package test;
 
 import cfop.CrossAnalyzer;
 import cfop.F2LAnalyzer;
+import cube.Algorithm;
 import cube.CubeState;
 import cube.Face;
 import cube.MoveApplier;
@@ -150,6 +151,22 @@ public class F2LSolverTest {
 
         assertTrue(candidates.isEmpty());
         assertTrue(progressEvents.get() > 0);
+    }
+
+    @Test
+    void solveOptimizedCandidates_shouldHonorBoundedSearchStopSignal() {
+        var cube = new CubeState();
+        MoveApplier.applyAlgorithm(cube, "R U R' U'");
+
+        var candidates = new F2LSolver().solveOptimizedCandidates(
+                new OrientedCube(cube),
+                ignored -> {
+                },
+                new Algorithm(),
+                () -> true
+        );
+
+        assertTrue(candidates.isEmpty());
     }
 
     @Test

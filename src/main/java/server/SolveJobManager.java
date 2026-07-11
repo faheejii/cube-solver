@@ -14,8 +14,11 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 final class SolveJobManager {
@@ -33,14 +36,8 @@ final class SolveJobManager {
         this.solveService = solveService;
         this.databaseManager = databaseManager;
         this.repository = new SolveHistoryRepository(databaseManager);
-        this.optimizedExecutor = Executors.newSingleThreadExecutor(runnable -> daemonThread(
-                runnable,
-                "optimized-solve-worker"
-        ));
-        this.fastExecutor = Executors.newFixedThreadPool(2, runnable -> daemonThread(
-                runnable,
-                "fast-solve-worker"
-        ));
+        this.optimizedExecutor = boundedExecutor("optimized-solve-worker", 1, configuredQueueSize("server.optimized.queue", 4));
+        this.fastExecutor = boundedExecutor("fast-solve-worker", 2, configuredQueueSize("server.fast.queue", 16));
     }
 
     JobSnapshot submit(
@@ -60,14 +57,19 @@ final class SolveJobManager {
         );
         jobsById.put(job.id, job);
         var executor = request.f2lMode() == F2LMode.OPTIMIZED ? optimizedExecutor : fastExecutor;
-        job.future = executor.submit(() -> run(
-                job,
-                request,
-                normalizedCrossFace(apiRequest.crossFace()),
-                userId,
-                solveId,
-                saveOnComplete
-        ));
+        try {
+            job.future = executor.submit(() -> run(
+                    job,
+                    request,
+                    normalizedCrossFace(apiRequest.crossFace()),
+                    userId,
+                    solveId,
+                    saveOnComplete
+            ));
+        } catch (RejectedExecutionException exception) {
+            jobsById.remove(job.id);
+            throw new CapacityException("Solve queue is full; try again shortly");
+        }
         return job.snapshot();
     }
 
@@ -176,6 +178,32 @@ final class SolveJobManager {
         return thread;
     }
 
+    private static ExecutorService boundedExecutor(String threadName, int workers, int queueSize) {
+        return new ThreadPoolExecutor(
+                workers,
+                workers,
+                0L,
+                TimeUnit.MILLISECONDS,
+                new ArrayBlockingQueue<>(queueSize),
+                runnable -> daemonThread(runnable, threadName),
+                new ThreadPoolExecutor.AbortPolicy()
+        );
+    }
+
+    private static int configuredQueueSize(String property, int defaultValue) {
+        try {
+            return Math.max(1, Integer.parseInt(System.getProperty(property, String.valueOf(defaultValue))));
+        } catch (NumberFormatException exception) {
+            return defaultValue;
+        }
+    }
+
+    static final class CapacityException extends IllegalStateException {
+        private CapacityException(String message) {
+            super(message);
+        }
+    }
+
     private static SaveSolutionCommand toSaveCommand(
             String userId,
             long solveId,
@@ -243,6 +271,13 @@ final class SolveJobManager {
             int completedCandidates,
             int candidatesEvaluated,
             int bestTotalMoves,
+            String phase,
+            String currentCrossFace,
+            int completedCrosses,
+            int totalCrosses,
+            int optimizationCandidate,
+            int totalOptimizationCandidates,
+            boolean optimizationBudgetExpired,
             CfopSolveResult result,
             String error
     ) {
@@ -264,6 +299,17 @@ final class SolveJobManager {
                 new java.util.concurrent.atomic.AtomicInteger();
         private final java.util.concurrent.atomic.AtomicInteger bestTotalMoves =
                 new java.util.concurrent.atomic.AtomicInteger(-1);
+        private volatile String phase = solver.F2LSolver.SolvePhase.QUEUED.name();
+        private volatile String currentCrossFace = "";
+        private final java.util.concurrent.atomic.AtomicInteger completedCrosses =
+                new java.util.concurrent.atomic.AtomicInteger();
+        private final java.util.concurrent.atomic.AtomicInteger totalCrosses =
+                new java.util.concurrent.atomic.AtomicInteger();
+        private final java.util.concurrent.atomic.AtomicInteger optimizationCandidate =
+                new java.util.concurrent.atomic.AtomicInteger();
+        private final java.util.concurrent.atomic.AtomicInteger totalOptimizationCandidates =
+                new java.util.concurrent.atomic.AtomicInteger();
+        private volatile boolean optimizationBudgetExpired;
         private volatile String status = "queued";
         private volatile CfopSolveResult result;
         private volatile String error;
@@ -336,6 +382,13 @@ final class SolveJobManager {
             completedCandidates.set(progress.completedCandidates());
             candidatesEvaluated.set(progress.candidatesEvaluated());
             bestTotalMoves.set(progress.bestTotalMoves());
+            phase = progress.phase().name();
+            currentCrossFace = progress.currentCrossFace();
+            completedCrosses.set(progress.completedCrosses());
+            totalCrosses.set(progress.totalCrosses());
+            optimizationCandidate.set(progress.optimizationCandidate());
+            totalOptimizationCandidates.set(progress.totalOptimizationCandidates());
+            optimizationBudgetExpired = progress.optimizationBudgetExpired();
         }
 
         private synchronized boolean markRetained() {
@@ -363,6 +416,13 @@ final class SolveJobManager {
                     completedCandidates.get(),
                     candidatesEvaluated.get(),
                     bestTotalMoves.get(),
+                    phase,
+                    currentCrossFace,
+                    completedCrosses.get(),
+                    totalCrosses.get(),
+                    optimizationCandidate.get(),
+                    totalOptimizationCandidates.get(),
+                    optimizationBudgetExpired,
                     result,
                     error
             );

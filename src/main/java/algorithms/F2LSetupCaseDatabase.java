@@ -19,6 +19,8 @@ import java.util.Optional;
 
 public class F2LSetupCaseDatabase {
     private final Map<F2LSetupCaseKey, F2LSetupCase> cases = new LinkedHashMap<>();
+    private final Map<LookupKey, List<F2LSetupCase>> casesByLookup = new LinkedHashMap<>();
+    private boolean validated;
 
     public static F2LSetupCaseDatabase empty() {
         return new F2LSetupCaseDatabase();
@@ -29,6 +31,7 @@ public class F2LSetupCaseDatabase {
         for (var setupCase : seedCaseList()) {
             database.register(setupCase);
         }
+        database.validate();
         return database;
     }
 
@@ -196,7 +199,11 @@ public class F2LSetupCaseDatabase {
         if (setupCase == null) {
             throw new IllegalArgumentException("setupCase cannot be null");
         }
-        cases.putIfAbsent(setupCase.key(), setupCase);
+        if (cases.putIfAbsent(setupCase.key(), setupCase) == null) {
+            var lookupKey = new LookupKey(setupCase.insertSlot(), setupCase.signature());
+            casesByLookup.computeIfAbsent(lookupKey, ignored -> new ArrayList<>()).add(setupCase);
+            validated = false;
+        }
     }
 
     public Optional<F2LSetupCase> find(F2LSlot insertSlot, F2LPreservationMask requiredPreservedSlots, F2LCaseSignature signature) {
@@ -219,10 +226,8 @@ public class F2LSetupCaseDatabase {
         }
 
         var matches = new ArrayList<F2LSetupCase>();
-        for (var setupCase : cases.values()) {
-            if (setupCase.insertSlot() == insertSlot
-                    && setupCase.signature().equals(signature)
-                    && setupCase.preservedSlots().preservesAll(requiredPreservedSlots)) {
+        for (var setupCase : casesByLookup.getOrDefault(new LookupKey(insertSlot, signature), List.of())) {
+            if (setupCase.preservedSlots().preservesAll(requiredPreservedSlots)) {
                 matches.add(setupCase);
             }
         }
@@ -241,9 +246,13 @@ public class F2LSetupCaseDatabase {
     }
 
     public void validate() {
+        if (validated) {
+            return;
+        }
         for (var setupCase : cases.values()) {
             validateSeedCase(setupCase);
         }
+        validated = true;
     }
 
     private static List<F2LSetupCase> casesFromSetup(
@@ -329,5 +338,8 @@ public class F2LSetupCaseDatabase {
         private List<F2LSetupCase> toList() {
             return List.copyOf(cases);
         }
+    }
+
+    private record LookupKey(F2LSlot insertSlot, F2LCaseSignature signature) {
     }
 }

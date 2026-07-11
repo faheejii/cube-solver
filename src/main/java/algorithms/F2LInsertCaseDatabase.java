@@ -19,6 +19,8 @@ import java.util.Optional;
 
 public class F2LInsertCaseDatabase {
     private final Map<F2LInsertCaseKey, F2LInsertCase> cases = new LinkedHashMap<>();
+    private final Map<LookupKey, List<F2LInsertCase>> casesByLookup = new LinkedHashMap<>();
+    private boolean validated;
 
     public static F2LInsertCaseDatabase empty() {
         return new F2LInsertCaseDatabase();
@@ -29,6 +31,7 @@ public class F2LInsertCaseDatabase {
         for (var insertCase : seedCaseList()) {
             database.register(insertCase);
         }
+        database.validate();
         return database;
     }
 
@@ -74,6 +77,9 @@ public class F2LInsertCaseDatabase {
             throw new IllegalArgumentException("Duplicate F2L insert case key: " + insertCase.key());
         }
         cases.put(insertCase.key(), insertCase);
+        var lookupKey = new LookupKey(insertCase.insertSlot(), insertCase.signature());
+        casesByLookup.computeIfAbsent(lookupKey, ignored -> new ArrayList<>()).add(insertCase);
+        validated = false;
     }
 
     public Optional<F2LInsertCase> find(F2LSlot insertSlot, F2LPreservationMask requiredPreservedSlots, F2LCaseSignature signature) {
@@ -96,10 +102,8 @@ public class F2LInsertCaseDatabase {
         }
 
         var matches = new ArrayList<F2LInsertCase>();
-        for (var insertCase : cases.values()) {
-            if (insertCase.insertSlot() == insertSlot
-                    && insertCase.signature().equals(signature)
-                    && insertCase.preservedSlots().preservesAll(requiredPreservedSlots)) {
+        for (var insertCase : casesByLookup.getOrDefault(new LookupKey(insertSlot, signature), List.of())) {
+            if (insertCase.preservedSlots().preservesAll(requiredPreservedSlots)) {
                 matches.add(insertCase);
             }
         }
@@ -118,9 +122,13 @@ public class F2LInsertCaseDatabase {
     }
 
     public void validate() {
+        if (validated) {
+            return;
+        }
         for (var insertCase : cases.values()) {
             validateSeedCase(insertCase);
         }
+        validated = true;
     }
 
     private static F2LInsertCase caseFromAlgorithm(
@@ -185,5 +193,8 @@ public class F2LInsertCaseDatabase {
         private List<F2LInsertCase> toList() {
             return List.copyOf(cases);
         }
+    }
+
+    private record LookupKey(F2LSlot insertSlot, F2LCaseSignature signature) {
     }
 }
