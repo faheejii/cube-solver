@@ -22,7 +22,7 @@ The solver works on a cubie model, which means it tracks where the pieces are an
 - `CubeOrientation` tracks which face is being treated as which logical side
 - `x`, `y`, and `z` rotations change the frame instead of physically mutating the cube model
 
-That matters because cross, F2L, OLL, and PLL are all solved from the currently oriented view of the cube. Low-level move execution still happens through `MoveApplier.applyMove`.
+Cross, F2L, OLL, and PLL all keep the live `OrientedCube` frame. The OLL and PLL databases expand logical cases into all 24 cube orientations at startup, so last-layer lookup stays frame-aware without a runtime canonicalization bridge. Low-level physical face-turn execution still happens through `MoveApplier.applyMove`.
 
 ## CFOP stages
 
@@ -43,6 +43,9 @@ Implemented:
 - OLL solving from seeded sticker-orientation signatures
 - PLL solving from seeded last-layer permutation signatures, including final AUF handling
 - validation-by-execution after database lookup in F2L, OLL, and PLL
+- AUF-only OLL and PLL lookup; all 24 frame variants are indexed at startup
+- bounded Fast and Optimized solve queues with cancellation support
+- pooled PostgreSQL connections and aggregate-based solve statistics
 - Java HTTP API and Vite/React frontend
 - 3D cube playback in the frontend through `cubing.js`
 
@@ -52,6 +55,7 @@ Known limitations:
 - The IDA* fallback remains as a safety net for unexpected F2L misses.
 - Optimized F2L can be slower than fast mode on some scrambles because it evaluates more candidate lines before choosing a result.
 - Solve history currently uses a browser-local anonymous user ID. It is useful for local persistence, but it is not a real login system.
+- The API is intended for a trusted single-user deployment until real authentication is added.
 
 ## Requirements
 
@@ -98,11 +102,35 @@ The server exposes:
 
 Postgres is optional at startup. If `DATABASE_URL` is set, the server validates the connection and creates the history tables automatically.
 
-The server reads a root-level `.env` file if one exists. A local example looks like this:
+The app supports any PostgreSQL database, not just Neon. You can use:
+
+- a local PostgreSQL server for development
+- Neon for hosted deployment
+- any other Postgres provider, as long as the connection string matches one of the supported formats
+
+The server reads a root-level `.env` file if one exists. Supported database URL formats are:
+
+```bash
+DATABASE_URL='postgresql://USER:PASSWORD@HOST:5432/DB_NAME'
+```
+
+```bash
+DATABASE_URL='jdbc:postgresql://HOST:5432/DB_NAME'
+DATABASE_USER='USER'
+DATABASE_PASSWORD='PASSWORD'
+```
+
+Examples:
 
 ```bash
 DATABASE_URL='postgresql://USER:PASSWORD@HOST/neondb?sslmode=require&channel_binding=require'
 ```
+
+```bash
+DATABASE_URL='postgresql://postgres:postgres@localhost:5432/cube_solver'
+```
+
+If you want to support additional URL formats such as `postgres://...`, update the parser in [`src/main/java/database/DatabaseConfig.java`](src/main/java/database/DatabaseConfig.java). That class is responsible for accepting the configured URL, converting `postgresql://...` into a JDBC URL, and reading fallback credentials for `jdbc:postgresql://...`.
 
 Configuration priority is:
 
@@ -117,6 +145,17 @@ mvn -q compile exec:java -Dexec.mainClass=server.ApiServerMain -Dserver.port=909
 ```
 
 `GET /api/health` reports both API status and database status.
+
+Useful server tuning properties:
+
+```bash
+-Ddatabase.pool.size=4
+-Dserver.fast.queue=16
+-Dserver.optimized.queue=4
+-Dserver.cors.origin=http://localhost:5173
+```
+
+JSON request bodies are limited to 64 KiB. A full solve queue returns `429` so the frontend can retry instead of allowing unbounded pending work.
 
 Solve history uses separate solve and solution records:
 
@@ -229,7 +268,7 @@ The parser supports:
 - cube rotations: `x y z`
 - lowercase wide moves: `r u f d l b`
 
-Runtime lowercase wide moves are frame-aware moves executed by `OrientedCube`. OLL and PLL databases normalize lowercase wide moves into face-plus-slice turns only for signature seeding. During lookup validation, solvers first execute the original displayed notation so wide moves remain frame-aware; legacy normalized execution is retained as a compatibility fallback for existing seeds.
+Runtime lowercase wide moves are frame-aware moves executed by `OrientedCube`. OLL and PLL seed notation is compiled once into the face-and-slice form used by the cubie engine, so every returned algorithm text describes the same moves the solver validates and executes.
 
 Examples:
 
