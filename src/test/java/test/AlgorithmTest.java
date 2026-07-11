@@ -79,15 +79,11 @@ public class AlgorithmTest {
     }
 
     @Test
-    void fromMoves_shouldPreserveDisplayNotationUntilMutated() {
-        Algorithm algorithm = Algorithm.fromMoves(List.of(Move.R, Move.M_PRIME), "r");
+    void toString_shouldAlwaysDescribeExecutableMoves() {
+        Algorithm algorithm = Algorithm.fromMoves(List.of(Move.R, Move.M_PRIME, Move.U, Move.R_PRIME, Move.M));
 
-        assertEquals(List.of(Move.R, Move.M_PRIME), algorithm.getMoves());
-        assertEquals("r", algorithm.toString());
-
-        algorithm.add(Move.U);
-
-        assertEquals("R M' U", algorithm.toString());
+        assertEquals("R M' U R' M", algorithm.toString());
+        assertEquals(algorithm.getMoves(), Algorithm.parse(algorithm.toString()).getMoves());
     }
 
     @Test
@@ -107,4 +103,5 @@ public class AlgorithmTest {
 
         assertEquals("y2 R2", normalized.toString());
     }
+
 }

@@ -7,6 +7,7 @@ import cfop.OLLAnalyzer;
 import cfop.PLLAnalyzer;
 import cube.Algorithm;
 import cube.CubeOrientation;
+import cube.CubeOrientationKey;
 import cube.CubeState;
 import cube.Face;
 import cube.Move;
@@ -68,19 +69,17 @@ public class PLLSolver {
             }
 
             var signature = PLLAnalyzer.extractSignature(trialCube, trialOrientation);
-            var match = caseDatabase.find(signature);
+            var orientationKey = CubeOrientationKey.from(trialOrientation);
             int candidatesBeforeLookup = candidates.size();
-            if (match.isPresent()) {
-                for (var solved : findSolvedCandidates(cube, orientation, preAuf, match.get().algorithm())) {
+            for (var pllCase : caseDatabase.findAll(orientationKey, signature)) {
+                for (var solved : findSolvedCandidates(cube, orientation, preAuf, pllCase.algorithm())) {
                     candidates.putIfAbsent(solved.toString(), solved);
                 }
             }
 
             if (candidates.size() == candidatesBeforeLookup) {
                 for (var pllCase : caseDatabase.allCases()) {
-                    if (match.isPresent() && pllCase == match.get()) {
-                        continue;
-                    }
+                    SolveCancellation.throwIfCancelled();
                     for (var solved : findSolvedCandidates(cube, orientation, preAuf, pllCase.algorithm())) {
                         candidates.putIfAbsent(solved.toString(), solved);
                     }
@@ -91,6 +90,7 @@ public class PLLSolver {
         return candidates.values().stream()
                 .min(Comparator
                         .comparingInt(Algorithm::getMoveCount)
+                        .thenComparingInt(PLLSolver::cubeRotationCount)
                         .thenComparingInt(algorithm -> algorithm.getMoves().size())
                         .thenComparing(Algorithm::toString))
                 .orElseThrow(() -> new IllegalStateException(
@@ -125,13 +125,10 @@ public class PLLSolver {
     ) {
         var solved = new java.util.ArrayList<Algorithm>();
         for (var postAuf : AUF_TRIALS) {
-            var legacy = preAuf.concat(algorithm).concat(postAuf);
-            var displayed = Algorithm.parse(legacy.toString());
-            if (solvesPll(cube, orientation, displayed)) {
-                solved.add(displayed);
-            }
-            if (!legacy.getMoves().equals(displayed.getMoves()) && solvesPll(cube, orientation, legacy)) {
-                solved.add(legacy);
+            SolveCancellation.throwIfCancelled();
+            var candidate = Algorithm.normalize(preAuf.concat(algorithm).concat(postAuf));
+            if (solvesPll(cube, orientation, candidate)) {
+                solved.add(candidate);
             }
         }
         return List.copyOf(solved);
@@ -147,6 +144,16 @@ public class PLLSolver {
         var orientedCube = new OrientedCube(cube, orientation);
         orientedCube.applyMoves(moves);
         return orientedCube.orientation();
+    }
+
+    private static int cubeRotationCount(Algorithm algorithm) {
+        int count = 0;
+        for (var move : algorithm.getMoves()) {
+            if (move.isCubeRotation()) {
+                count++;
+            }
+        }
+        return count;
     }
 
 }
