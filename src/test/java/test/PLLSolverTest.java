@@ -126,12 +126,14 @@ public class PLLSolverTest {
     @Test
     void solve_shouldCoverEverySeededCaseAcrossAllFramesAndFinalAufsWithoutCubeRotations() {
         var database = PLLCaseDatabase.seedCases();
+        var solver = new PLLSolver(database);
 
         for (var pllCase : database.allCases()) {
             for (var orientationKey : CubeOrientationKey.all()) {
                 for (var finalAuf : AUF_TRIALS) {
-                    var solution = Algorithm.normalize(pllCase.algorithm().concat(finalAuf));
-                    var cube = setupCubeFor(orientationKey, solution);
+                    var setupAlgorithm = Algorithm.normalize(pllCase.algorithm().concat(finalAuf));
+                    var cube = setupCubeFor(orientationKey, setupAlgorithm);
+                    var solution = solver.solve(cube);
                     cube.applyMoves(solution.getMoves());
 
                     assertTrue(solution.getMoves().stream().noneMatch(Move::isCubeRotation), pllCase.name());

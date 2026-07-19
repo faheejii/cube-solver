@@ -8,6 +8,7 @@ import solver.CfopSolveResult;
 import solver.F2LMode;
 import solver.SolveCancellation;
 import solver.SolveCancelledException;
+import solver.SolveDeadlineExceededException;
 
 import java.util.Map;
 import java.util.UUID;
@@ -21,21 +22,35 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
-final class SolveJobManager {
+final class SolveJobManager implements AutoCloseable {
     private static final int MAX_RETAINED_FINISHED_JOBS = 100;
+    private static final long SOLVE_DEADLINE_NANOS = TimeUnit.SECONDS.toNanos(15);
 
     private final solver.CfopSolveService solveService;
     private final DatabaseManager databaseManager;
     private final SolveHistoryRepository repository;
+    private final long solveDeadlineNanos;
     private final ExecutorService optimizedExecutor;
     private final ExecutorService fastExecutor;
     private final Map<String, JobState> jobsById = new ConcurrentHashMap<>();
     private final ConcurrentLinkedDeque<String> finishedJobIds = new ConcurrentLinkedDeque<>();
 
     SolveJobManager(solver.CfopSolveService solveService, DatabaseManager databaseManager) {
+        this(solveService, databaseManager, SOLVE_DEADLINE_NANOS);
+    }
+
+    SolveJobManager(
+            solver.CfopSolveService solveService,
+            DatabaseManager databaseManager,
+            long solveDeadlineNanos
+    ) {
         this.solveService = solveService;
         this.databaseManager = databaseManager;
         this.repository = new SolveHistoryRepository(databaseManager);
+        if (solveDeadlineNanos <= 0) {
+            throw new IllegalArgumentException("solveDeadlineNanos must be positive");
+        }
+        this.solveDeadlineNanos = solveDeadlineNanos;
         this.optimizedExecutor = boundedExecutor("optimized-solve-worker", 1, configuredQueueSize("server.optimized.queue", 4));
         this.fastExecutor = boundedExecutor("fast-solve-worker", 2, configuredQueueSize("server.fast.queue", 16));
     }
@@ -53,7 +68,8 @@ final class SolveJobManager {
                 UUID.randomUUID().toString(),
                 userId,
                 solveId,
-                saveOnComplete
+                saveOnComplete,
+                System.nanoTime() + solveDeadlineNanos
         );
         jobsById.put(job.id, job);
         var executor = request.f2lMode() == F2LMode.OPTIMIZED ? optimizedExecutor : fastExecutor;
@@ -74,11 +90,33 @@ final class SolveJobManager {
     }
 
     JobSnapshot find(String jobId) {
-        return requireJob(jobId).snapshot();
+        var job = requireJob(jobId);
+        if (job.expireIfQueued()) {
+            retainFinished(job);
+        }
+        return job.snapshot();
+    }
+
+    JobSnapshot find(String jobId, String requesterUserId) {
+        var job = requireJob(jobId);
+        requireOwner(job, requesterUserId);
+        if (job.expireIfQueued()) {
+            retainFinished(job);
+        }
+        return job.snapshot();
     }
 
     JobSnapshot cancel(String jobId) {
         var job = requireJob(jobId);
+        if (job.cancel()) {
+            retainFinished(job);
+        }
+        return job.snapshot();
+    }
+
+    JobSnapshot cancel(String jobId, String requesterUserId) {
+        var job = requireJob(jobId);
+        requireOwner(job, requesterUserId);
         if (job.cancel()) {
             retainFinished(job);
         }
@@ -102,13 +140,18 @@ final class SolveJobManager {
             boolean saveOnComplete
     ) {
         if (!job.markRunning()) {
+            if (job.isTerminal()) {
+                retainFinished(job);
+            }
             return;
         }
         try {
-            var result = solveService.solveWithProgress(request, progress -> {
-                SolveCancellation.throwIfCancelled();
-                job.updateProgress(progress);
-            });
+            var result = SolveCancellation.withDeadline(job.remainingNanos(), () ->
+                    solveService.solveWithProgress(request, progress -> {
+                        SolveCancellation.throwIfCancelled();
+                        job.updateProgress(progress);
+                    })
+            );
             SolveCancellation.throwIfCancelled();
             CheckedRunnable saveAction = saveOnComplete
                     ? () -> repository.upsertSolution(toSaveCommand(
@@ -124,6 +167,10 @@ final class SolveJobManager {
             }
         } catch (SolveCancelledException exception) {
             if (job.cancel()) {
+                retainFinished(job);
+            }
+        } catch (SolveDeadlineExceededException exception) {
+            if (job.timeout()) {
                 retainFinished(job);
             }
         } catch (Exception exception) {
@@ -145,6 +192,12 @@ final class SolveJobManager {
             throw new IllegalArgumentException("Solve job not found");
         }
         return job;
+    }
+
+    private static void requireOwner(JobState job, String requesterUserId) {
+        if (job.userId != null && !java.util.Objects.equals(job.userId, requesterUserId)) {
+            throw new IllegalArgumentException("Solve job not found");
+        }
     }
 
     private void validateSaveRequest(String userId, Long solveId, boolean saveOnComplete) {
@@ -196,6 +249,12 @@ final class SolveJobManager {
         } catch (NumberFormatException exception) {
             return defaultValue;
         }
+    }
+
+    @Override
+    public void close() {
+        optimizedExecutor.shutdownNow();
+        fastExecutor.shutdownNow();
     }
 
     static final class CapacityException extends IllegalStateException {
@@ -288,6 +347,7 @@ final class SolveJobManager {
         private final String userId;
         private final Long solveId;
         private final boolean saveOnComplete;
+        private final long expiresAtNanos;
         private final AtomicLong statesExplored = new AtomicLong();
         private final AtomicLong statesPruned = new AtomicLong();
         private final AtomicLong duplicateStates = new AtomicLong();
@@ -316,19 +376,44 @@ final class SolveJobManager {
         private volatile Future<?> future;
         private boolean retained;
 
-        private JobState(String id, String userId, Long solveId, boolean saveOnComplete) {
+        private JobState(String id, String userId, Long solveId, boolean saveOnComplete, long expiresAtNanos) {
             this.id = id;
             this.userId = userId;
             this.solveId = solveId;
             this.saveOnComplete = saveOnComplete;
+            this.expiresAtNanos = expiresAtNanos;
         }
 
         private synchronized boolean markRunning() {
             if (!"queued".equals(status)) {
                 return false;
             }
+            if (expireIfQueuedLocked()) {
+                return false;
+            }
             status = "running";
             return true;
+        }
+
+        private synchronized boolean expireIfQueued() {
+            return expireIfQueuedLocked();
+        }
+
+        private boolean expireIfQueuedLocked() {
+            if (!"queued".equals(status) || System.nanoTime() < expiresAtNanos) {
+                return false;
+            }
+            status = "timed_out";
+            error = "Solve deadline exceeded";
+            var submitted = future;
+            if (submitted != null) {
+                submitted.cancel(false);
+            }
+            return true;
+        }
+
+        private long remainingNanos() {
+            return Math.max(1L, expiresAtNanos - System.nanoTime());
         }
 
         private synchronized boolean complete(
@@ -359,6 +444,19 @@ final class SolveJobManager {
             }
             status = "cancelled";
             error = "Solve cancelled";
+            var submitted = future;
+            if (submitted != null) {
+                submitted.cancel(true);
+            }
+            return true;
+        }
+
+        private synchronized boolean timeout() {
+            if (isTerminal()) {
+                return false;
+            }
+            status = "timed_out";
+            error = "Solve deadline exceeded";
             var submitted = future;
             if (submitted != null) {
                 submitted.cancel(true);
@@ -402,7 +500,8 @@ final class SolveJobManager {
         private boolean isTerminal() {
             return "completed".equals(status)
                     || "failed".equals(status)
-                    || "cancelled".equals(status);
+                    || "cancelled".equals(status)
+                    || "timed_out".equals(status);
         }
 
         private JobSnapshot snapshot() {

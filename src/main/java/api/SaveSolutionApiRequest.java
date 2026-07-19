@@ -46,6 +46,11 @@ public record SaveSolutionApiRequest(
                 || ollMoves == null || pllMoves == null) {
             throw new IllegalArgumentException("solution metrics cannot be null");
         }
+        if (f2lSetupCaseCount < 0 || f2lInsertCaseCount < 0 || totalMoves < 0
+                || crossMoves < 0 || f2lMoves < 0 || ollMoves < 0 || pllMoves < 0
+                || !Double.isFinite(solveElapsedMs) || solveElapsedMs < 0) {
+            throw new IllegalArgumentException("solution metrics must be non-negative and finite");
+        }
     }
 
     private static void requireText(String value, String field) {

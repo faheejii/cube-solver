@@ -9,6 +9,7 @@ import solver.CfopSolveResult;
 import solver.CfopSolveService;
 import solver.CfopStageResult;
 import solver.SolveCancellation;
+import solver.SolveDeadlineExceededException;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -17,6 +18,8 @@ import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SolveJobManagerTest {
     @Test
@@ -189,6 +192,61 @@ class SolveJobManagerTest {
         optimizedRelease.countDown();
     }
 
+    @Test
+    void ownedJob_shouldRejectStatusAndCancellationFromAnotherUser() throws Exception {
+        var release = new CountDownLatch(1);
+        var manager = new SolveJobManager(
+                new ControlledSolveService(release),
+                new DatabaseManager(new DatabaseConfig(
+                        true,
+                        "jdbc:postgresql://invalid/test",
+                        "test",
+                        "test"
+                ))
+        );
+        var job = manager.submit(new SolveApiRequest("R", "U", "optimized"), "owner", 7L, true);
+
+        var ownedSnapshot = manager.find(job.id(), "owner");
+        assertTrue(ownedSnapshot.status().equals("queued") || ownedSnapshot.status().equals("running"));
+        assertThrows(IllegalArgumentException.class, () -> manager.find(job.id(), "other"));
+        assertThrows(IllegalArgumentException.class, () -> manager.cancel(job.id(), "other"));
+
+        manager.cancel(job.id(), "owner");
+        release.countDown();
+    }
+
+    @Test
+    void deadline_shouldTransitionJobToTimedOut() throws Exception {
+        var manager = manager(new ControlledSolveService(new CountDownLatch(0), true));
+        var job = manager.submit(
+                new SolveApiRequest("R", "U", "optimized"), null, null, false
+        );
+
+        assertEquals("timed_out", waitForStatus(manager, job.id(), "timed_out").status());
+    }
+
+    @Test
+    void queuedJob_shouldExpireFromSubmissionDeadline() throws Exception {
+        var release = new CountDownLatch(1);
+        var service = new ControlledSolveService(release);
+        var manager = new SolveJobManager(
+                service,
+                new DatabaseManager(DatabaseConfig.disabled()),
+                TimeUnit.MILLISECONDS.toNanos(25)
+        );
+        var running = manager.submit(
+                new SolveApiRequest("R", "U", "optimized"), null, null, false
+        );
+        waitForStatus(manager, running.id(), "running");
+        var queued = manager.submit(
+                new SolveApiRequest("U", "U", "optimized"), null, null, false
+        );
+
+        Thread.sleep(50);
+        assertEquals("timed_out", manager.find(queued.id()).status());
+        release.countDown();
+    }
+
     private static SolveJobManager manager(CfopSolveService service) {
         return new SolveJobManager(
                 service,
@@ -229,10 +287,16 @@ class SolveJobManagerTest {
 
     private static final class ControlledSolveService extends CfopSolveService {
         private final CountDownLatch optimizedRelease;
+        private final boolean timeout;
         private final AtomicInteger optimizedInvocations = new AtomicInteger();
 
         private ControlledSolveService(CountDownLatch optimizedRelease) {
+            this(optimizedRelease, false);
+        }
+
+        private ControlledSolveService(CountDownLatch optimizedRelease, boolean timeout) {
             this.optimizedRelease = optimizedRelease;
+            this.timeout = timeout;
         }
 
         @Override
@@ -241,6 +305,9 @@ class SolveJobManagerTest {
                 Consumer<solver.F2LSolver.F2LSearchProgress> optimizedProgressListener
         ) {
             if (request.f2lMode() == solver.F2LMode.OPTIMIZED) {
+                if (timeout) {
+                    throw new SolveDeadlineExceededException();
+                }
                 optimizedInvocations.incrementAndGet();
                 optimizedProgressListener.accept(new solver.F2LSolver.F2LSearchProgress(
                         3, 1, 1, 10, 2, 0, 18

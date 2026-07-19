@@ -88,14 +88,35 @@ public class OLLSolverTest {
     }
 
     @Test
-    void solve_shouldCoverEverySeededCaseAcrossAllFramesAndAufsWithoutCubeRotations() {
+    void seededCases_shouldReplayAcrossAllFramesAndAufsWithoutCubeRotations() {
         var database = OLLCaseDatabase.seedCases();
-
+        var solver = new OLLSolver(database);
+        for (var orientationKey : CubeOrientationKey.all()) {
+            var solved = new OrientedCube(new CubeState(), orientationKey.toOrientation());
+            assertTrue(CrossAnalyzer.isCrossSolved(solved.cubeState(), solved.orientation()),
+                    "solved cross frame=" + orientationKey);
+            assertTrue(F2LAnalyzer.isF2LSolved(solved.cubeState(), solved.orientation()),
+                    "solved F2L frame=" + orientationKey);
+        }
         for (var ollCase : database.allCases()) {
             for (var orientationKey : CubeOrientationKey.all()) {
                 for (var auf : AUF_TRIALS) {
-                    var solution = Algorithm.normalize(auf.concat(ollCase.algorithm()));
-                    var orientedCube = setupCubeFor(orientationKey, solution);
+                    var setupAlgorithm = Algorithm.normalize(auf.concat(ollCase.algorithm()));
+                    var orientedCube = setupCubeFor(orientationKey, setupAlgorithm);
+                    assertTrue(CrossAnalyzer.isCrossSolved(orientedCube.cubeState(), orientedCube.orientation()),
+                            ollCase.name() + " setup cross=" + CrossAnalyzer.countSolvedCrossEdges(orientedCube.cubeState(), orientedCube.orientation())
+                                    + " frame=" + orientationKey + " actual=" + orientedCube.orientation() + " auf=" + auf);
+                    assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()),
+                            ollCase.name() + " setup F2L frame=" + orientationKey + " auf=" + auf);
+                    Algorithm solution;
+                    try {
+                        solution = solver.solve(orientedCube);
+                    } catch (RuntimeException exception) {
+                        throw new AssertionError(
+                                ollCase.name() + " frame=" + orientationKey + " auf=" + auf,
+                                exception
+                        );
+                    }
                     orientedCube.applyMoves(solution.getMoves());
 
                     assertTrue(solution.getMoves().stream().noneMatch(Move::isCubeRotation), ollCase.name());
@@ -108,9 +129,7 @@ public class OLLSolverTest {
     }
 
     private static OrientedCube setupCubeFor(CubeOrientationKey setupOrientationKey, Algorithm algorithm) {
-        var solvedOrientation = new OrientedCube(new CubeState(), setupOrientationKey.toOrientation());
-        solvedOrientation.applyMoves(algorithm.getMoves());
-        var setup = new OrientedCube(new CubeState(), solvedOrientation.orientation());
+        var setup = new OrientedCube(new CubeState(), setupOrientationKey.toOrientation());
         setup.applyMoves(algorithm.inverse().getMoves());
         return setup;
     }

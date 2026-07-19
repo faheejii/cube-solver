@@ -18,7 +18,7 @@ public class OLLCaseDatabaseTest {
         var database = OLLCaseDatabase.seedCases();
 
         assertEquals(57, database.size());
-        assertEquals(57 * 24 * 4, database.frameVariantCount());
+        assertEquals(57 * 24, database.frameVariantCount());
     }
 
     @Test
@@ -30,6 +30,9 @@ public class OLLCaseDatabaseTest {
     void seedCases_shouldKeepEveryLogicalCaseAvailableForLookup() {
         var database = OLLCaseDatabase.seedCases();
         assertEquals(57, database.allCases().size());
+        for (var orientationKey : CubeOrientationKey.all()) {
+            assertTrue(database.lookupSignatureCount(orientationKey) >= 57);
+        }
     }
 
     @Test

@@ -1,6 +1,7 @@
 package test;
 
 import cube.CubeState;
+import cube.Algorithm;
 import cube.Move;
 import cube.MoveApplier;
 import org.junit.jupiter.api.Test;
@@ -87,14 +88,14 @@ public class MoveApplierTest {
 
     @Test
     void wideMoves_shouldMatchEquivalentFaceAndSliceAlgorithms() {
-        assertEquivalentExecutedAlgorithms("r", "L x");
-        assertEquivalentExecutedAlgorithms("r'", "L' x'");
-        assertEquivalentExecutedAlgorithms("r2", "L2 x2");
-        assertEquivalentExecutedAlgorithms("u", "D y");
-        assertEquivalentExecutedAlgorithms("u'", "D' y'");
-        assertEquivalentExecutedAlgorithms("f", "B z");
-        assertEquivalentExecutedAlgorithms("l", "R x'");
-        assertEquivalentExecutedAlgorithms("b'", "F' z");
+        assertEquivalentExecutedAlgorithms("r", "R M'");
+        assertEquivalentExecutedAlgorithms("r'", "R' M");
+        assertEquivalentExecutedAlgorithms("r2", "R2 M2");
+        assertEquivalentExecutedAlgorithms("u", "U E");
+        assertEquivalentExecutedAlgorithms("u'", "U' E'");
+        assertEquivalentExecutedAlgorithms("f", "F S");
+        assertEquivalentExecutedAlgorithms("l", "L M");
+        assertEquivalentExecutedAlgorithms("b'", "B' S");
     }
 
     @Test

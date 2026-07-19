@@ -3,13 +3,11 @@ package cfop;
 import cube.CubeOrientation;
 import cube.CubeState;
 import cube.Face;
+import cube.LogicalFaceletView;
 import cube.OrientationFrames;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import static cfop.F2LGeometry.isTargetSlotSolved;
-import static cfop.F2LGeometry.targetSlotFor;
 
 public class F2LAnalyzer {
     public static boolean isF2LSolved(CubeState cube) {
@@ -33,9 +31,10 @@ public class F2LAnalyzer {
     }
 
     public static int countSolvedSlots(CubeState cube, CubeOrientation orientation) {
+        var view = LogicalFaceletView.of(cube, orientation);
         int solved = 0;
         for (var slot : F2LSlot.values()) {
-            if (isSlotSolved(cube, slot, orientation)) {
+            if (isLogicalSlotSolved(view, slot)) {
                 solved++;
             }
         }
@@ -71,6 +70,31 @@ public class F2LAnalyzer {
     }
 
     private static boolean isSlotSolved(CubeState cube, F2LSlot slot, CubeOrientation orientation) {
-        return isTargetSlotSolved(cube, targetSlotFor(slot, orientation));
+        return isLogicalSlotSolved(LogicalFaceletView.of(cube, orientation), slot);
+    }
+
+    private static boolean isLogicalSlotSolved(LogicalFaceletView view, F2LSlot slot) {
+        return switch (slot) {
+            case FR -> view.sticker(Face.D, 2) == Face.D
+                    && view.sticker(Face.F, 8) == Face.F
+                    && view.sticker(Face.R, 6) == Face.R
+                    && view.sticker(Face.F, 5) == Face.F
+                    && view.sticker(Face.R, 3) == Face.R;
+            case FL -> view.sticker(Face.D, 0) == Face.D
+                    && view.sticker(Face.F, 6) == Face.F
+                    && view.sticker(Face.L, 8) == Face.L
+                    && view.sticker(Face.F, 3) == Face.F
+                    && view.sticker(Face.L, 5) == Face.L;
+            case BL -> view.sticker(Face.D, 6) == Face.D
+                    && view.sticker(Face.B, 8) == Face.B
+                    && view.sticker(Face.L, 6) == Face.L
+                    && view.sticker(Face.B, 5) == Face.B
+                    && view.sticker(Face.L, 3) == Face.L;
+            case BR -> view.sticker(Face.D, 8) == Face.D
+                    && view.sticker(Face.B, 6) == Face.B
+                    && view.sticker(Face.R, 8) == Face.R
+                    && view.sticker(Face.B, 3) == Face.B
+                    && view.sticker(Face.R, 5) == Face.R;
+        };
     }
 }

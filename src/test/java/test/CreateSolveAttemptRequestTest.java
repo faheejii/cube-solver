@@ -34,4 +34,18 @@ public class CreateSolveAttemptRequestTest {
                 false
         ));
     }
+
+    @Test
+    void constructor_shouldRejectInconsistentDnfAndPenalty() {
+        assertThrows(IllegalArgumentException.class, () -> new CreateSolveAttemptRequest(
+                "user-1", "attempt-2", "R", "U", 1_000, "dnf", null, false
+        ));
+    }
+
+    @Test
+    void constructor_shouldRejectNegativeTimes() {
+        assertThrows(IllegalArgumentException.class, () -> new CreateSolveAttemptRequest(
+                "user-1", "attempt-3", "R", "U", -1, "none", 1, false
+        ));
+    }
 }
