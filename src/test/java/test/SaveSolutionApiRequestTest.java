@@ -17,7 +17,20 @@ public class SaveSolutionApiRequestTest {
         assertThrows(IllegalArgumentException.class, () -> validRequest(""));
     }
 
+    @Test
+    void constructor_shouldRejectNegativeMetrics() {
+        assertThrows(IllegalArgumentException.class, () -> validRequestWithTotalMoves(-1));
+    }
+
     private static SaveSolutionApiRequest validRequest(String mode) {
+        return validRequestWithTotalMoves(52, mode);
+    }
+
+    private static SaveSolutionApiRequest validRequestWithTotalMoves(int totalMoves) {
+        return validRequestWithTotalMoves(totalMoves, "optimized");
+    }
+
+    private static SaveSolutionApiRequest validRequestWithTotalMoves(int totalMoves, String mode) {
         return new SaveSolutionApiRequest(
                 "user-1",
                 "CN",
@@ -26,7 +39,7 @@ public class SaveSolutionApiRequestTest {
                 121,
                 14,
                 "[FR, FL, BL, BR]",
-                52,
+                totalMoves,
                 true,
                 42.5,
                 "z2 R",

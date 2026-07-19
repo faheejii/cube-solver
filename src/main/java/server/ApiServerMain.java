@@ -13,12 +13,14 @@ public class ApiServerMain {
         var databaseManager = DatabaseManager.fromEnvironment();
         databaseManager.initialize();
 
-        HttpServer server = new CubeHttpServer(new CfopSolveService(), frontendDistDir, databaseManager).create(port);
+        var cubeHttpServer = new CubeHttpServer(new CfopSolveService(), frontendDistDir, databaseManager);
+        HttpServer server = cubeHttpServer.create(port);
         System.out.println("Cube server listening on http://localhost:" + port);
         System.out.println("Frontend dist: " + frontendDistDir);
         System.out.println("Database: " + (databaseManager.isConfigured() ? "configured" : "disabled (set DATABASE_URL)"));
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             server.stop(0);
+            cubeHttpServer.close();
             databaseManager.close();
         }, "cube-server-shutdown"));
         server.start();

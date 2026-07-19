@@ -8,11 +8,14 @@ import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import database.DatabaseManager;
 import database.CreateSolveAttemptCommand;
 import database.SaveSolutionCommand;
 import database.SolveHistoryRepository;
 import solver.CfopSolveService;
+import solver.SolveDeadlineExceededException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -22,15 +25,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.Executors;
 
-public class CubeHttpServer {
+public class CubeHttpServer implements AutoCloseable {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CubeHttpServer.class);
     private static final int MAX_JSON_BODY_BYTES = 64 * 1024;
-    private final CfopSolveService solveService;
     private final Path frontendDistDir;
     private final DatabaseManager databaseManager;
     private final SolveJobManager solveJobManager;
+    private java.util.concurrent.ExecutorService httpExecutor;
 
     public CubeHttpServer(CfopSolveService solveService, Path frontendDistDir, DatabaseManager databaseManager) {
-        this.solveService = solveService;
         this.frontendDistDir = frontendDistDir;
         this.databaseManager = databaseManager;
         this.solveJobManager = new SolveJobManager(solveService, databaseManager);
@@ -39,20 +42,29 @@ public class CubeHttpServer {
     public HttpServer create(int port) throws IOException {
         var server = HttpServer.create(new InetSocketAddress(port), 0);
         server.createContext("/api/health", exchange -> writeJson(exchange, 200, JsonSupport.healthJson(databaseManager.health())));
-        server.createContext("/api/solve", new SolveHandler(solveService));
+        server.createContext("/api/solve", new SolveHandler(solveJobManager));
         server.createContext("/api/solve-jobs", new SolveJobHandler(solveJobManager));
         server.createContext("/api/solves", new SolveHistoryHandler(databaseManager, solveJobManager));
         server.createContext("/api/stats", new StatisticsHandler(databaseManager));
         server.createContext("/", new StaticFileHandler(frontendDistDir));
-        server.setExecutor(Executors.newFixedThreadPool(
+        httpExecutor = Executors.newFixedThreadPool(
                 Math.max(4, Runtime.getRuntime().availableProcessors()),
                 runnable -> {
                     var thread = new Thread(runnable, "cube-http-worker");
                     thread.setDaemon(true);
                     return thread;
                 }
-        ));
+        );
+        server.setExecutor(httpExecutor);
         return server;
+    }
+
+    @Override
+    public void close() {
+        solveJobManager.close();
+        if (httpExecutor != null) {
+            httpExecutor.shutdownNow();
+        }
     }
 
     private static final class SolveJobHandler implements HttpHandler {
@@ -77,11 +89,13 @@ public class CubeHttpServer {
                     return;
                 }
                 if (pathParts.size() == 3 && "GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-                    writeJson(exchange, 200, JsonSupport.solveJobJson(jobManager.find(pathParts.get(2))));
+                    writeJson(exchange, 200, JsonSupport.solveJobJson(jobManager.find(
+                            pathParts.get(2), queryUserId(exchange))));
                     return;
                 }
                 if (pathParts.size() == 3 && "DELETE".equalsIgnoreCase(exchange.getRequestMethod())) {
-                    writeJson(exchange, 200, JsonSupport.solveJobJson(jobManager.cancel(pathParts.get(2))));
+                    writeJson(exchange, 200, JsonSupport.solveJobJson(jobManager.cancel(
+                            pathParts.get(2), queryUserId(exchange))));
                     return;
                 }
                 writeJson(exchange, 405, JsonSupport.errorJson("Method not allowed"));
@@ -89,7 +103,10 @@ public class CubeHttpServer {
                 writeJson(exchange, 429, JsonSupport.errorJson(exception.getMessage()));
             } catch (IllegalArgumentException exception) {
                 writeJson(exchange, 400, JsonSupport.errorJson(exception.getMessage()));
+            } catch (SolveDeadlineExceededException exception) {
+                writeJson(exchange, 504, JsonSupport.errorJson(exception.getMessage()));
             } catch (Exception exception) {
+                LOGGER.error("Synchronous solve request failed", exception);
                 writeJson(exchange, 500, JsonSupport.errorJson("Internal server error"));
             }
         }
@@ -112,13 +129,29 @@ public class CubeHttpServer {
             );
             writeJson(exchange, 202, JsonSupport.solveJobJson(job));
         }
+
+        private static String queryUserId(HttpExchange exchange) {
+            var rawQuery = exchange.getRequestURI().getRawQuery();
+            if (rawQuery == null || rawQuery.isBlank()) {
+                return null;
+            }
+            for (var pair : rawQuery.split("&")) {
+                var parts = pair.split("=", 2);
+                if ("userId".equals(java.net.URLDecoder.decode(parts[0], StandardCharsets.UTF_8))) {
+                    return parts.length > 1
+                            ? java.net.URLDecoder.decode(parts[1], StandardCharsets.UTF_8)
+                            : "";
+                }
+            }
+            return null;
+        }
     }
 
     private static final class SolveHandler implements HttpHandler {
-        private final CfopSolveService solveService;
+        private final SolveJobManager jobManager;
 
-        private SolveHandler(CfopSolveService solveService) {
-            this.solveService = solveService;
+        private SolveHandler(SolveJobManager jobManager) {
+            this.jobManager = jobManager;
         }
 
         @Override
@@ -138,11 +171,41 @@ public class CubeHttpServer {
                         JsonSupport.readString(body, "crossFace"),
                         JsonSupport.readString(body, "f2lMode")
                 );
-                var result = solveService.solve(request.toSolveRequest());
-                writeJson(exchange, 200, JsonSupport.solveResultJson(result));
+                var job = jobManager.submit(request, null, null, false);
+                while (true) {
+                    var snapshot = jobManager.find(job.id());
+                    if ("completed".equals(snapshot.status()) && snapshot.result() != null) {
+                        writeJson(exchange, 200, JsonSupport.solveResultJson(snapshot.result()));
+                        return;
+                    }
+                    if ("timed_out".equals(snapshot.status())) {
+                        writeJson(exchange, 504, JsonSupport.errorJson(snapshot.error()));
+                        return;
+                    }
+                    if ("failed".equals(snapshot.status())) {
+                        writeJson(exchange, 500, JsonSupport.errorJson(snapshot.error()));
+                        return;
+                    }
+                    if ("cancelled".equals(snapshot.status())) {
+                        writeJson(exchange, 409, JsonSupport.errorJson(snapshot.error()));
+                        return;
+                    }
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        jobManager.cancel(job.id());
+                        throw new IOException("Solve request interrupted", exception);
+                    }
+                }
             } catch (IllegalArgumentException exception) {
                 writeJson(exchange, 400, JsonSupport.errorJson(exception.getMessage()));
+            } catch (SolveJobManager.CapacityException exception) {
+                writeJson(exchange, 429, JsonSupport.errorJson(exception.getMessage()));
+            } catch (SolveDeadlineExceededException exception) {
+                writeJson(exchange, 504, JsonSupport.errorJson(exception.getMessage()));
             } catch (Exception exception) {
+                LOGGER.error("Solve request failed", exception);
                 writeJson(exchange, 500, JsonSupport.errorJson("Internal server error"));
             }
         }
