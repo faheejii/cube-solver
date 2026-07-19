@@ -45,6 +45,8 @@ Implemented:
 - validation-by-execution after database lookup in F2L, OLL, and PLL
 - AUF-only OLL and PLL lookup; all 24 frame variants are indexed at startup
 - bounded Fast and Optimized solve queues with cancellation support
+- a 15-second end-to-end solver deadline with explicit timeout status
+- graceful shutdown of HTTP and solver worker executors
 - pooled PostgreSQL connections and aggregate-based solve statistics
 - Java HTTP API and Vite/React frontend
 - 3D cube playback in the frontend through `cubing.js`
@@ -54,6 +56,7 @@ Known limitations:
 - F2L setup and insert coverage is intended to be complete enough for normal solves without falling back, but some seeded algorithms are still not optimal.
 - The IDA* fallback remains as a safety net for unexpected F2L misses.
 - Optimized F2L can be slower than fast mode on some scrambles because it evaluates more candidate lines before choosing a result.
+- OLL and PLL lookup is exhaustively validated across all 24 cube frames and four AUF variants. Runtime algorithms remain rotation-free; frame changes from Cross and F2L are preserved through the full CFOP pipeline.
 - Solve history currently uses a browser-local anonymous user ID. It is useful for local persistence, but it is not a real login system.
 - The API is intended for a trusted single-user deployment until real authentication is added.
 
@@ -156,6 +159,8 @@ Useful server tuning properties:
 ```
 
 JSON request bodies are limited to 64 KiB. A full solve queue returns `429` so the frontend can retry instead of allowing unbounded pending work.
+
+Solve jobs can include a browser-local `userId`. When present, status polling and cancellation require the same ID, preventing one local client from accessing another client's active job. Jobs that exceed the end-to-end deadline finish with `timed_out`; the frontend reports that state separately from cancellation and ordinary failures.
 
 Solve history uses separate solve and solution records:
 
