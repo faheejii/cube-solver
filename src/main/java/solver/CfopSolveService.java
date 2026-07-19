@@ -78,7 +78,6 @@ public class CfopSolveService {
             CfopSolveRequest request,
             Consumer<F2LSolver.F2LSearchProgress> optimizedProgressListener
     ) {
-        SolveCancellation.throwIfCancelled();
         if (request == null) {
             throw new IllegalArgumentException("request cannot be null");
         }
@@ -86,6 +85,7 @@ public class CfopSolveService {
             throw new IllegalArgumentException("Invalid scramble notation");
         }
 
+        SolveCancellation.throwIfCancelled();
         if (request.colorNeutralCross()) {
             return solveColorNeutral(request, optimizedProgressListener);
         }
@@ -99,18 +99,46 @@ public class CfopSolveService {
         if (request.f2lMode() == F2LMode.OPTIMIZED) {
             return solveColorNeutralOptimized(request, optimizedProgressListener);
         }
-        CfopSolveResult best = null;
+
+        var scrambledCube = new CubeState();
+        MoveApplier.applyAlgorithm(scrambledCube, request.scramble());
+        var crossSolver = new CrossSolver();
+        var crossCandidates = new ArrayList<CrossCandidate>();
         for (var face : COLOR_NEUTRAL_FACES) {
             SolveCancellation.throwIfCancelled();
-            var candidate = solveFixedCross(
-                    new CfopSolveRequest(request.scramble(), face, request.f2lMode()),
-                    optimizedProgressListener
-            );
-            if (best == null || SOLUTION_COMPARATOR.compare(candidate, best) < 0) {
-                best = candidate;
+            crossCandidates.add(new CrossCandidate(face, crossSolver.solve(scrambledCube, face)));
+        }
+        crossCandidates.sort(Comparator
+                .comparingInt((CrossCandidate candidate) -> candidate.algorithm().getMoveCount())
+                .thenComparingInt(candidate -> candidate.face().ordinal()));
+
+        var shortlisted = shortlistCrossCandidates(crossCandidates);
+        var baselineDeadlineNanos = System.nanoTime() + COLOR_NEUTRAL_BASELINE_BUDGET_NANOS;
+        FixedCrossBaseline best = null;
+        for (var crossCandidate : shortlisted) {
+            SolveCancellation.throwIfCancelled();
+            try {
+                var baseline = SolveCancellation.withStopSignal(
+                        () -> System.nanoTime() >= baselineDeadlineNanos,
+                        () -> prepareFixedCross(request.scramble(), crossCandidate)
+                );
+                if (best == null || SOLUTION_COMPARATOR.compare(
+                        resultFor(baseline, baseline.continuation(), F2LMode.GREEDY, 0),
+                        resultFor(best, best.continuation(), F2LMode.GREEDY, 0)
+                ) < 0) {
+                    best = baseline;
+                }
+            } catch (SolveBudgetExceededException ignored) {
+                break;
             }
         }
-        return best;
+
+        if (best == null) {
+            var fallback = shortlisted.get(0);
+            best = prepareFixedCross(request.scramble(), fallback);
+        }
+        return resultFor(best, best.continuation(), F2LMode.GREEDY,
+                System.nanoTime() - best.startTimeNanos());
     }
 
     private CfopSolveResult solveColorNeutralOptimized(

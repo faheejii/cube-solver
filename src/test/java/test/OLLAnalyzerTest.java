@@ -27,13 +27,13 @@ public class OLLAnalyzerTest {
     }
 
     @Test
-    void extractSignature_shouldDistinguishCase22AndCase50Patterns() {
+    void extractSignature_shouldDistinguishTwoDifferentOllPatterns() {
         var case22 = setupStateFor("R U2 R2 U' R2 U' R2 U2 R");
-        var case50 = setupStateFor("r' U r2 U' r2 U' r2 U r'");
+        var case13 = setupStateFor("F U R U' R2 F' R U R U' R'");
 
         assertNotEquals(
                 OLLAnalyzer.extractSignature(case22.cubeState(), case22.orientation()),
-                OLLAnalyzer.extractSignature(case50.cubeState(), case50.orientation())
+                OLLAnalyzer.extractSignature(case13.cubeState(), case13.orientation())
         );
     }
 

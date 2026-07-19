@@ -197,14 +197,8 @@ public class PLLCaseDatabase {
     }
 
     private static OrientedCube setupCubeFor(CubeOrientationKey setupOrientationKey, Algorithm algorithm) {
-        var solvedOrientation = new OrientedCube(new CubeState(), setupOrientationKey.toOrientation());
-        solvedOrientation.applyMoves(algorithm.getMoves());
-
-        var setupCube = new OrientedCube(new CubeState(), solvedOrientation.orientation());
+        var setupCube = new OrientedCube(new CubeState(), setupOrientationKey.toOrientation());
         setupCube.applyMoves(algorithm.inverse().getMoves());
-        if (!CubeOrientationKey.from(setupCube.orientation()).equals(setupOrientationKey)) {
-            throw new IllegalStateException("Failed to reconstruct setup orientation for " + setupOrientationKey);
-        }
         return setupCube;
     }
 

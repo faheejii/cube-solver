@@ -155,7 +155,7 @@ public class OLLCaseDatabase {
         }
         caseList.add(ollCase);
         for (var orientationKey : CubeOrientationKey.all()) {
-            for (int rotationIndex = 0; rotationIndex < Y_ROTATIONS.length; rotationIndex++) {
+            for (var rotationIndex = 0; rotationIndex < Y_ROTATIONS.length; rotationIndex++) {
                 var variant = seededVariant(ollCase, rotationIndex);
                 var setupCube = setupCubeFor(orientationKey, variant.algorithm());
                 validateSeedVariant(setupCube, variant.algorithm(), variant.name());
@@ -164,8 +164,8 @@ public class OLLCaseDatabase {
                         OLLAnalyzer.extractSignature(setupCube.cubeState(), setupCube.orientation())
                 );
                 casesByLookup.computeIfAbsent(lookupKey, ignored -> new ArrayList<>()).add(variant);
-                frameVariantCount++;
             }
+            frameVariantCount++;
         }
     }
 
@@ -181,6 +181,12 @@ public class OLLCaseDatabase {
         return frameVariantCount;
     }
 
+    public int lookupSignatureCount(CubeOrientationKey orientationKey) {
+        return (int) casesByLookup.keySet().stream()
+                .filter(key -> key.orientationKey().equals(orientationKey))
+                .count();
+    }
+
     public Collection<OLLCase> allCases() {
         return List.copyOf(caseList);
     }
@@ -193,7 +199,7 @@ public class OLLCaseDatabase {
                 }
             }
             for (var orientationKey : CubeOrientationKey.all()) {
-                for (int rotationIndex = 0; rotationIndex < Y_ROTATIONS.length; rotationIndex++) {
+                for (var rotationIndex = 0; rotationIndex < Y_ROTATIONS.length; rotationIndex++) {
                     var variant = seededVariant(ollCase, rotationIndex);
                     var setupCube = setupCubeFor(orientationKey, variant.algorithm());
                     validateSeedVariant(setupCube, variant.algorithm(), variant.name());
@@ -229,7 +235,7 @@ public class OLLCaseDatabase {
                 continue;
             }
             for (var orientationKey : CubeOrientationKey.all()) {
-                for (int rotationIndex = 0; rotationIndex < Y_ROTATIONS.length; rotationIndex++) {
+                for (var rotationIndex = 0; rotationIndex < Y_ROTATIONS.length; rotationIndex++) {
                     var variant = seededVariant(ollCase, rotationIndex);
                     var setupCube = setupCubeFor(orientationKey, variant.algorithm());
                     var lookupKey = new LookupKey(
@@ -250,27 +256,21 @@ public class OLLCaseDatabase {
         return Map.copyOf(duplicates);
     }
 
+    private static OrientedCube setupCubeFor(CubeOrientationKey setupOrientationKey, Algorithm algorithm) {
+        var setupCube = new OrientedCube(new CubeState(), setupOrientationKey.toOrientation());
+        setupCube.applyMoves(algorithm.inverse().getMoves());
+        return setupCube;
+    }
+
     private static OLLCase seededVariant(OLLCase source, int rotationIndex) {
         var rotation = Y_ROTATIONS[rotationIndex];
         var algorithm = Algorithm.materializeCubeRotations(
                 rotation.concat(source.algorithm()).concat(rotation.inverse())
         );
         if (rotationIndex == 0) {
-            return new OLLCase(source.signature(), algorithm, source.name());
+            return source;
         }
-        return new OLLCase(source.signature(), algorithm, source.name() + "-y" + rotationIndex);
-    }
-
-    private static OrientedCube setupCubeFor(CubeOrientationKey setupOrientationKey, Algorithm algorithm) {
-        var solvedOrientation = new OrientedCube(new CubeState(), setupOrientationKey.toOrientation());
-        solvedOrientation.applyMoves(algorithm.getMoves());
-
-        var setupCube = new OrientedCube(new CubeState(), solvedOrientation.orientation());
-        setupCube.applyMoves(algorithm.inverse().getMoves());
-        if (!CubeOrientationKey.from(setupCube.orientation()).equals(setupOrientationKey)) {
-            throw new IllegalStateException("Failed to reconstruct setup orientation for " + setupOrientationKey);
-        }
-        return setupCube;
+        return new OLLCase(source.signature(), algorithm, source.name() + "-frame" + rotationIndex);
     }
 
     public record LookupKey(CubeOrientationKey orientationKey, OLLCaseSignature signature) {

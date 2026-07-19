@@ -59,80 +59,34 @@ public class OrientedCube {
 
     private void applyWideMove(Move move) {
         switch (move) {
-            case RW -> {
-                applyMove(Move.L);
-                applyMove(Move.X);
-            }
-            case RW2 -> {
-                applyMove(Move.L2);
-                applyMove(Move.X2);
-            }
-            case RW_PRIME -> {
-                applyMove(Move.L_PRIME);
-                applyMove(Move.X_PRIME);
-            }
-            case LW -> {
-                applyMove(Move.R);
-                applyMove(Move.X_PRIME);
-            }
-            case LW2 -> {
-                applyMove(Move.R2);
-                applyMove(Move.X2);
-            }
-            case LW_PRIME -> {
-                applyMove(Move.R_PRIME);
-                applyMove(Move.X);
-            }
-            case UW -> {
-                applyMove(Move.D);
-                applyMove(Move.Y);
-            }
-            case UW2 -> {
-                applyMove(Move.D2);
-                applyMove(Move.Y2);
-            }
-            case UW_PRIME -> {
-                applyMove(Move.D_PRIME);
-                applyMove(Move.Y_PRIME);
-            }
-            case DW -> {
-                applyMove(Move.U);
-                applyMove(Move.Y_PRIME);
-            }
-            case DW2 -> {
-                applyMove(Move.U2);
-                applyMove(Move.Y2);
-            }
-            case DW_PRIME -> {
-                applyMove(Move.U_PRIME);
-                applyMove(Move.Y);
-            }
-            case FW -> {
-                applyMove(Move.B);
-                applyMove(Move.Z);
-            }
-            case FW2 -> {
-                applyMove(Move.B2);
-                applyMove(Move.Z2);
-            }
-            case FW_PRIME -> {
-                applyMove(Move.B_PRIME);
-                applyMove(Move.Z_PRIME);
-            }
-            case BW -> {
-                applyMove(Move.F);
-                applyMove(Move.Z_PRIME);
-            }
-            case BW2 -> {
-                applyMove(Move.F2);
-                applyMove(Move.Z2);
-            }
-            case BW_PRIME -> {
-                applyMove(Move.F_PRIME);
-                applyMove(Move.Z);
-            }
+            case RW, RW2, RW_PRIME -> applyLogicalWideComponents(move, Move.R, Move.M, true);
+            case LW, LW2, LW_PRIME -> applyLogicalWideComponents(move, Move.L, Move.M, false);
+            case UW, UW2, UW_PRIME -> applyLogicalWideComponents(move, Move.U, Move.E, false);
+            case DW, DW2, DW_PRIME -> applyLogicalWideComponents(move, Move.D, Move.E, true);
+            case FW, FW2, FW_PRIME -> applyLogicalWideComponents(move, Move.F, Move.S, false);
+            case BW, BW2, BW_PRIME -> applyLogicalWideComponents(move, Move.B, Move.S, true);
             default -> throw new IllegalArgumentException("Not a wide move: " + move);
         }
+    }
+
+    private void applyLogicalWideComponents(Move wideMove, Move outer, Move slice, boolean invertSlice) {
+        int amount = wideMove.ordinal() % 3;
+        applyMove(withAmount(outer, amount));
+        var logicalSlice = withAmount(slice, invertSlice ? invertAmount(amount) : amount);
+        applyMove(logicalSlice);
+    }
+
+    private static int invertAmount(int amount) {
+        return switch (amount) {
+            case 0 -> 2;
+            case 1 -> 1;
+            case 2 -> 0;
+            default -> throw new IllegalArgumentException("Unsupported wide move amount: " + amount);
+        };
+    }
+
+    private static Move withAmount(Move move, int amount) {
+        return Move.values()[move.ordinal() + amount];
     }
 
     private static Face[] edgeFaces(Edge edge) {

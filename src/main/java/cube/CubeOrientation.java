@@ -106,10 +106,10 @@ public class CubeOrientation {
             return sliceMove(Move.M, invertAmount(amount));
         }
         if (vector.equals(new Vector(0, -1, 0))) {
-            return sliceMove(Move.E, amount);
+            return sliceMove(Move.E, invertAmount(amount));
         }
         if (vector.equals(new Vector(0, 1, 0))) {
-            return sliceMove(Move.E, invertAmount(amount));
+            return sliceMove(Move.E, amount);
         }
         if (vector.equals(new Vector(0, 0, 1))) {
             return sliceMove(Move.S, amount);
