@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: cube_solver
+      POSTGRES_USER: cube_solver
+      POSTGRES_PASSWORD: cube_solver
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cube_solver -d cube_solver"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - cube-solver-postgres:/var/lib/postgresql/data
+
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://cube_solver:cube_solver@postgres:5432/cube_solver
+      SERVER_PORT: 8080
+      JAVA_OPTS: -Dserver.cors.origin=http://localhost:8080 -Dserver.cookie.secure=false
+    ports:
+      - "8080:8080"
+
+volumes:
+  cube-solver-postgres:

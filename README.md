@@ -40,6 +40,7 @@ Implemented:
 - color-neutral cross solving
 - shared CFOP orchestration through `CfopSolveService`
 - default two-phase F2L solving with separate setup and insert databases
+- database-only F2L production solving with fail-fast miss diagnostics
 - OLL solving from seeded sticker-orientation signatures
 - PLL solving from seeded last-layer permutation signatures, including final AUF handling
 - validation-by-execution after database lookup in F2L, OLL, and PLL
@@ -47,24 +48,24 @@ Implemented:
 - bounded Fast and Optimized solve queues with cancellation support
 - a 15-second end-to-end solver deadline with explicit timeout status
 - graceful shutdown of HTTP and solver worker executors
+- password-based accounts with revocable, server-side sessions
+- versioned PostgreSQL schema migrations through Flyway
 - pooled PostgreSQL connections and aggregate-based solve statistics
 - Java HTTP API and Vite/React frontend
 - 3D cube playback in the frontend through `cubing.js`
 
 Known limitations:
 
-- F2L setup and insert coverage is intended to be complete enough for normal solves without falling back, but some seeded algorithms are still not optimal.
-- The IDA* fallback remains as a safety net for unexpected F2L misses.
+- Some seeded F2L algorithms are not yet optimal; future algorithm-set expansion should target move count and candidate-evaluation efficiency.
+- F2L is database-only in production and fails fast with a diagnostic context when a case is missing.
 - Optimized F2L can be slower than fast mode on some scrambles because it evaluates more candidate lines before choosing a result.
-- OLL and PLL lookup is exhaustively validated across all 24 cube frames and four AUF variants. Runtime algorithms remain rotation-free; frame changes from Cross and F2L are preserved through the full CFOP pipeline.
-- Solve history currently uses a browser-local anonymous user ID. It is useful for local persistence, but it is not a real login system.
-- The API is intended for a trusted single-user deployment until real authentication is added.
+- Legacy anonymous history is preserved during migration but is not automatically claimed by newly registered accounts.
 
 ## Requirements
 
 - Java 17
 - Maven 3.9+
-- Node.js 20+ and npm 10+ for frontend development and builds
+- Node.js 22.12+ and npm 10+ for frontend development and builds
 
 ## Build And Test
 
@@ -72,6 +73,14 @@ Run the full Java test suite:
 
 ```bash
 mvn -q -Dmaven.compiler.useIncrementalCompilation=false test
+```
+
+Run the frontend unit tests and production build:
+
+```bash
+cd frontend
+npm test
+npm run build
 ```
 
 Compile the Java project:
@@ -101,9 +110,13 @@ The server exposes:
 - `PUT /api/solves/{id}/solutions/{mode}`
 - `GET /api/stats`
 - `GET /api/health`
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
+- `GET /api/auth/me`
 - static frontend files from `frontend/dist` when a frontend build exists
 
-Postgres is optional at startup. If `DATABASE_URL` is set, the server validates the connection and creates the history tables automatically.
+Postgres remains optional for anonymous solver API calls. Accounts, authenticated job ownership, history, and statistics require `DATABASE_URL`. When configured, Flyway applies versioned schema migrations during startup and the server fails clearly if migration cannot complete.
 
 The app supports any PostgreSQL database, not just Neon. You can use:
 
@@ -147,7 +160,7 @@ The default port is `8080`. To change it:
 mvn -q compile exec:java -Dexec.mainClass=server.ApiServerMain -Dserver.port=9090
 ```
 
-`GET /api/health` reports both API status and database status.
+`GET /api/health/live` reports process liveness. `GET /api/health/ready` and the compatibility endpoint `GET /api/health` report database readiness and return `503` when a configured database is unavailable.
 
 Useful server tuning properties:
 
@@ -155,12 +168,17 @@ Useful server tuning properties:
 -Ddatabase.pool.size=4
 -Dserver.fast.queue=16
 -Dserver.optimized.queue=4
+-Dserver.http.queue=128
+-Dserver.auth.requestsPerMinute=20
 -Dserver.cors.origin=http://localhost:5173
+-Dserver.cookie.secure=false
 ```
+
+Session cookies are secure by default. Set `-Dserver.cookie.secure=false` only for local HTTP development; keep the default for HTTPS production deployments.
 
 JSON request bodies are limited to 64 KiB. A full solve queue returns `429` so the frontend can retry instead of allowing unbounded pending work.
 
-Solve jobs can include a browser-local `userId`. When present, status polling and cancellation require the same ID, preventing one local client from accessing another client's active job. Jobs that exceed the end-to-end deadline finish with `timed_out`; the frontend reports that state separately from cancellation and ordinary failures.
+Persisted solve jobs derive ownership from the authenticated session cookie; client-supplied user IDs are not trusted. Anonymous jobs remain available when they do not save history. Jobs that exceed the end-to-end deadline finish with `timed_out`; the frontend reports that state separately from cancellation and ordinary failures.
 
 Solve history uses separate solve and solution records:
 
@@ -169,7 +187,19 @@ Solve history uses separate solve and solution records:
 
 That lets one timed solve keep separate Fast and Optimized solutions. Each mode can also use a different cross setup and can be replaced independently.
 
-Deleting a solve uses `DELETE /api/solves/{id}?userId=...`. The API checks ownership, cancels active jobs linked to that solve, removes the solve, deletes the saved Fast and Optimized solutions through database cascade, and rebuilds the user statistics before returning `204 No Content`.
+Deleting a solve uses `DELETE /api/solves/{id}`. The API derives ownership from the active session, cancels linked jobs, removes saved solutions through database cascade, and rebuilds user statistics before returning `204 No Content`.
+
+## Docker
+
+Build and run the complete app with PostgreSQL:
+
+```bash
+docker compose up --build
+```
+
+The app is available at `http://localhost:8080`. Compose uses a persistent PostgreSQL volume and development-only credentials; replace them and enable secure cookies for production.
+
+The liveness endpoint is `GET /api/health/live`, readiness is `GET /api/health/ready`, and process metrics are available at `GET /api/metrics`. CI runs [`scripts/docker-smoke-test.sh`](scripts/docker-smoke-test.sh) against the built Compose stack.
 
 ## Frontend Development
 
@@ -189,8 +219,17 @@ npm run dev
 The Vite app proxies `/api` to `http://localhost:8080`, so run the Java API server at the same time.
 The cube visualization uses `cubing.js` and can animate the full solution or individual CFOP stages.
 
+Run the deterministic browser authentication tests with:
+
+```bash
+npm run test:e2e
+```
+
+The Playwright tests mock the API and cover registration, login errors, session restoration, logout, protected history, and session expiry.
+
 Current frontend behavior:
 
+- supports registration, login, logout, session restoration, and expired-session handling
 - uses a responsive three-column timer dashboard
 - defaults to a dark theme while still supporting a light theme
 - generates a WCA 3x3 scramble on first load and on demand
@@ -261,6 +300,8 @@ mvn -q -Df2l.debug=true compile exec:java -Dexec.mainClass=solver.SolverMain
 ```bash
 mvn -q -Df2l.debug=true -Df2l.debug.verbose=true compile exec:java -Dexec.mainClass=solver.SolverMain
 ```
+
+Missing F2L database cases fail immediately with the missing phase, slot, frame, and signature context so they can be seeded and reviewed deliberately.
 
 ## Notation Support
 
