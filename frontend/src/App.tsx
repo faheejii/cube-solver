@@ -133,6 +133,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const attemptSavingRef = useRef<string | null>(null);
     const completedAttemptRef = useRef<CompletedAttemptSnapshot | null>(null);
     const modalJobRequestIdRef = useRef(0);
+    const historyLoadRequestedRef = useRef(false);
 
     const inspectionElapsedMs =
         inspectionStartedAt === null ? 0 : Math.max(0, clockMs - inspectionStartedAt);
@@ -174,9 +175,15 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
 
     useEffect(() => {
         void initializeScramble();
-        void loadHistory();
         void loadStatistics();
     }, []);
+
+    useEffect(() => {
+        if (activeView === "history" && !historyLoadRequestedRef.current) {
+            historyLoadRequestedRef.current = true;
+            void loadHistory();
+        }
+    }, [activeView]);
 
     useEffect(() => {
         if (!committedScramble) {
