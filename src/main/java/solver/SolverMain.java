@@ -25,7 +25,7 @@ public class SolverMain {
 
         System.out.println("OLL signature collisions handled by validation: " + ollCollisions.size());
         System.out.println("PLL collisions: " + pllCollisions);
-        System.out.println("F2L mode: two-phase DB + fallback");
+        System.out.println("F2L mode: two-phase database (database-only, fail-fast on missing cases)");
         System.out.println("F2L search mode: " + f2lMode.apiValue());
         System.out.println("Selected face: " + (colorNeutral ? "Color Neutral" : crossFace));
         System.out.println("Scramble count: " + scrambles.size());

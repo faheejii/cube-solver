@@ -22,18 +22,15 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.Predicate;
-import java.util.function.ToIntFunction;
-import java.util.function.ToLongFunction;
 import java.util.function.LongConsumer;
 import java.util.function.Consumer;
 import java.util.function.BooleanSupplier;
+import java.util.concurrent.atomic.LongAdder;
 
 import static cfop.F2LGeometry.ensureCrossSolved;
 import static cfop.F2LGeometry.isPairConnected;
@@ -48,7 +45,6 @@ public class F2LSolver {
     private static final int MAX_PATHS_PER_STATE = 3;
     private static final boolean DEBUG_DB = Boolean.getBoolean("f2l.debug");
     private static final boolean DEBUG_VERBOSE = Boolean.getBoolean("f2l.debug.verbose");
-    private static final int MAX_SLOT_SEARCH_DEPTH = 12;
     private static final Comparator<Algorithm> ALGORITHM_COMPARATOR = Comparator
             .comparingInt(Algorithm::getMoveCount)
             .thenComparingInt(algorithm -> algorithm.getMoves().size())
@@ -61,13 +57,6 @@ public class F2LSolver {
     private static final Comparator<PhaseSlotSolution> RAW_PHASE_SOLUTION_COMPARATOR = Comparator
             .comparing((PhaseSlotSolution solution) -> solution.algorithm(), RAW_ALGORITHM_COMPARATOR);
 
-    private static final Move[] FACE_TURNS = {
-            Move.U, Move.U2, Move.U_PRIME,
-            Move.R, Move.R2, Move.R_PRIME,
-            Move.F, Move.F2, Move.F_PRIME,
-            Move.D, Move.D2, Move.D_PRIME,
-            Move.L, Move.L2, Move.L_PRIME
-    };
     private static final Algorithm[] DB_PREFIX_TRIALS = {
             new Algorithm(),
             Algorithm.fromMoves(List.of(Move.U)),
@@ -88,6 +77,8 @@ public class F2LSolver {
     };
     private final F2LSetupCaseDatabase setupCaseDatabase;
     private final F2LInsertCaseDatabase insertCaseDatabase;
+    private final LongAdder setupDatabaseMisses = new LongAdder();
+    private final LongAdder insertDatabaseMisses = new LongAdder();
 
     public F2LSolver() {
         this(F2LSetupCaseDatabase.seedCases(), F2LInsertCaseDatabase.seedCases());
@@ -98,6 +89,13 @@ public class F2LSolver {
         this.insertCaseDatabase = insertCaseDatabase == null ? F2LInsertCaseDatabase.empty() : insertCaseDatabase;
         this.setupCaseDatabase.validate();
         this.insertCaseDatabase.validate();
+    }
+
+    public F2LDiagnostics diagnostics() {
+        return new F2LDiagnostics(
+                setupDatabaseMisses.sum(),
+                insertDatabaseMisses.sum()
+        );
     }
 
     public Algorithm solve(CubeState cube) {
@@ -157,8 +155,7 @@ public class F2LSolver {
                         orientation,
                         targetCrossForOrientation(orientation),
                         targetSlotFor(slot, orientation),
-                        List.of(),
-                        mapFaceTurns(orientation)
+                        List.of()
                 )
         );
     }
@@ -221,9 +218,8 @@ public class F2LSolver {
             }
 
             var targetCross = targetCrossForOrientation(currentOrientation);
-            var faceTurns = mapFaceTurns(currentOrientation);
             var targetSlot = fallbackTarget.get();
-            var slotSolution = solveSlotInternal(workingCube, currentOrientation, targetCross, targetSlot, protectedSlots, faceTurns);
+            var slotSolution = solveSlotInternal(workingCube, currentOrientation, targetCross, targetSlot, protectedSlots);
             currentOrientation = executeAndReturnOrientation(workingCube, currentOrientation, slotSolution.getMoves());
             solution = solution.concat(slotSolution);
             ensureTargetSlotSolved(workingCube, targetSlot, "fallback search");
@@ -494,8 +490,7 @@ public class F2LSolver {
             CubeOrientation orientation,
             Edge[] targetCross,
             TargetSlot targetSlot,
-            List<TargetSlot> protectedSlots,
-            Move[] faceTurns
+            List<TargetSlot> protectedSlots
     ) {
         ensureCrossSolved(cube, targetCross);
         if (areGoalsSolved(cube, targetCross, targetSlot, protectedSlots)) {
@@ -508,7 +503,7 @@ public class F2LSolver {
             return directInsert.get();
         }
 
-        var setup = solveSetupPhase(cube, orientation, targetCross, targetPair, targetSlot, protectedSlots, faceTurns);
+        var setup = solveSetupPhase(cube, orientation, targetCross, targetPair, targetSlot, protectedSlots);
         var setupCube = cube.copy();
         var setupOrientation = executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
 
@@ -517,8 +512,7 @@ public class F2LSolver {
                 setupOrientation,
                 targetCrossForOrientation(setupOrientation),
                 targetSlot,
-                protectedSlots,
-                mapFaceTurns(setupOrientation)
+                protectedSlots
         );
         return Algorithm.normalize(setup.concat(insert));
     }
@@ -529,24 +523,31 @@ public class F2LSolver {
             Edge[] targetCross,
             SlotPair targetPair,
             TargetSlot targetSlot,
-            List<TargetSlot> protectedSlots,
-            Move[] faceTurns
+            List<TargetSlot> protectedSlots
     ) {
+        if (isSetupGoalSolved(cube, orientation, targetCross, targetPair, protectedSlots)) {
+            return new Algorithm();
+        }
         var databaseSolution = findPrefixedSetupDatabaseSolution(cube, orientation, targetSlot, protectedSlots);
         if (databaseSolution.isPresent()) {
             return databaseSolution.get();
         }
 
-        return solveSearchPhase(
+        handleDatabaseMiss(databaseMissContext(
+                F2LDatabaseMissContext.Phase.SETUP,
                 cube,
-                faceTurns,
-                "F2L setup",
-                new SearchGoal(
-                        state -> isSetupGoalSolved(state, orientation, targetCross, targetPair, protectedSlots),
-                        state -> setupHeuristic(state, orientation, targetCross, targetPair, protectedSlots),
-                        state -> encodeState(state, targetCross, targetSlot, protectedSlots)
-                )
-        );
+                orientation,
+                targetSlot,
+                protectedSlots
+        ));
+
+        throw new F2LDatabaseMissException(databaseMissContext(
+                F2LDatabaseMissContext.Phase.SETUP,
+                cube,
+                orientation,
+                targetSlot,
+                protectedSlots
+        ));
     }
 
     private Algorithm solveInsertPhase(
@@ -554,24 +555,31 @@ public class F2LSolver {
             CubeOrientation orientation,
             Edge[] targetCross,
             TargetSlot targetSlot,
-            List<TargetSlot> protectedSlots,
-            Move[] faceTurns
+            List<TargetSlot> protectedSlots
     ) {
+        if (areGoalsSolved(cube, targetCross, targetSlot, protectedSlots)) {
+            return new Algorithm();
+        }
         var databaseSolution = findPrefixedInsertDatabaseSolution(cube, orientation, targetSlot, protectedSlots);
         if (databaseSolution.isPresent()) {
             return databaseSolution.get();
         }
 
-        return solveSearchPhase(
+        handleDatabaseMiss(databaseMissContext(
+                F2LDatabaseMissContext.Phase.INSERT,
                 cube,
-                faceTurns,
-                "F2L insert",
-                new SearchGoal(
-                        state -> areGoalsSolved(state, targetCross, targetSlot, protectedSlots),
-                        state -> canonicalHeuristic(state, targetCross, targetSlot, protectedSlots),
-                        state -> encodeState(state, targetCross, targetSlot, protectedSlots)
-                )
-        );
+                orientation,
+                targetSlot,
+                protectedSlots
+        ));
+
+        throw new F2LDatabaseMissException(databaseMissContext(
+                F2LDatabaseMissContext.Phase.INSERT,
+                cube,
+                orientation,
+                targetSlot,
+                protectedSlots
+        ));
     }
 
     private Optional<Algorithm> findPrefixedSetupDatabaseSolution(
@@ -847,96 +855,34 @@ public class F2LSolver {
         return Optional.empty();
     }
 
-    private Algorithm solveSearchPhase(
+    private F2LDatabaseMissContext databaseMissContext(
+            F2LDatabaseMissContext.Phase phase,
             CubeState cube,
-            Move[] faceTurns,
-            String phaseName,
-            SearchGoal goal
+            CubeOrientation orientation,
+            TargetSlot targetSlot,
+            List<TargetSlot> protectedSlots
     ) {
-        var path = new ArrayList<Move>();
-        int bound = goal.heuristic(cube);
-        while (bound <= MAX_SLOT_SEARCH_DEPTH) {
-            SolveCancellation.throwIfCancelled();
-            var outcome = idaSearch(
-                    cube.copy(),
-                    faceTurns,
-                    goal,
-                    path,
-                    null,
-                    0,
-                    bound,
-                    new HashMap<>()
-            );
-            if (outcome.solution() != null) {
-                return outcome.solution();
-            }
-            if (outcome.nextBound() == Integer.MAX_VALUE) {
-                break;
-            }
-            bound = outcome.nextBound();
-        }
-
-        throw new IllegalStateException("Failed to find an " + phaseName + " solution");
+        var insertSlot = visibleSlotForTarget(targetSlot, orientation);
+        return new F2LDatabaseMissContext(
+                phase,
+                insertSlot,
+                preservationMaskFor(protectedSlots, orientation),
+                F2LCaseSignatureExtractor.extract(cube, insertSlot, orientation),
+                setupCaseDatabase.size(),
+                insertCaseDatabase.size()
+        );
     }
 
-
-    private SearchOutcome idaSearch(
-            CubeState cube,
-            Move[] faceTurns,
-            SearchGoal goal,
-            List<Move> path,
-            Move lastMove,
-            int depth,
-            int bound,
-            Map<Long, Integer> visitedDepth
-    ) {
-        SolveCancellation.throwIfCancelled();
-        int estimate = depth + goal.heuristic(cube);
-        if (estimate > bound) {
-            return new SearchOutcome(null, estimate);
+    private void handleDatabaseMiss(F2LDatabaseMissContext context) {
+        if (DEBUG_DB) {
+            System.out.println("[F2L DATABASE MISS] " + context);
         }
-        if (goal.isSolved(cube)) {
-            return new SearchOutcome(Algorithm.fromMoves(List.copyOf(path)), depth);
+        if (context.phase() == F2LDatabaseMissContext.Phase.SETUP) {
+            setupDatabaseMisses.increment();
+        } else {
+            insertDatabaseMisses.increment();
         }
-
-        long stateKey = goal.stateKey(cube);
-        var bestDepth = visitedDepth.get(stateKey);
-        if (bestDepth != null && bestDepth <= depth) {
-            return new SearchOutcome(null, Integer.MAX_VALUE);
-        }
-        visitedDepth.put(stateKey, depth);
-
-        int nextBound = Integer.MAX_VALUE;
-
-        for (int i = 0; i < FACE_TURNS.length; i++) {
-            var move = FACE_TURNS[i];
-            if (lastMove != null && sameFace(lastMove, move)) {
-                continue;
-            }
-
-            var nextCube = cube.copy();
-            MoveApplier.applyMove(nextCube, faceTurns[i]);
-            path.add(move);
-
-            var outcome = idaSearch(
-                    nextCube,
-                    faceTurns,
-                    goal,
-                    path,
-                    move,
-                    depth + 1,
-                    bound,
-                    visitedDepth
-            );
-            if (outcome.solution() != null) {
-                return outcome;
-            }
-            nextBound = Math.min(nextBound, outcome.nextBound());
-
-            path.remove(path.size() - 1);
-        }
-
-        return new SearchOutcome(null, nextBound);
+        throw new F2LDatabaseMissException(context);
     }
 
 
@@ -1093,37 +1039,10 @@ public class F2LSolver {
         throw new IllegalStateException("Missing F2L edge: " + targetEdge);
     }
 
-    private static boolean sameFace(Move first, Move second) {
-        return faceFamily(first) == faceFamily(second);
-    }
-
-    private static Face faceFamily(Move move) {
-        return switch (move) {
-            case U, U2, U_PRIME -> Face.U;
-            case R, R2, R_PRIME -> Face.R;
-            case F, F2, F_PRIME -> Face.F;
-            case D, D2, D_PRIME -> Face.D;
-            case L, L2, L_PRIME -> Face.L;
-            default -> throw new IllegalArgumentException("Unexpected F2L move: " + move);
-        };
-    }
-
-    private static Move[] mapFaceTurns(CubeOrientation orientation) {
-        var mapped = new Move[FACE_TURNS.length];
-        for (int i = 0; i < FACE_TURNS.length; i++) {
-            mapped[i] = orientation.mapMove(FACE_TURNS[i]);
-        }
-        return mapped;
-    }
-
     private static CubeOrientation executeAndReturnOrientation(CubeState cube, CubeOrientation orientation, List<Move> moves) {
         var orientedCube = new OrientedCube(cube, orientation);
         orientedCube.applyMoves(moves);
         return orientedCube.orientation();
-    }
-
-    private static String printableAlgorithm(Algorithm algorithm) {
-        return algorithm.isEmpty() ? "<none>" : algorithm.toString();
     }
 
     private static List<Algorithm> distinctAlgorithms(List<Algorithm> algorithms) {
@@ -1494,24 +1413,13 @@ public class F2LSolver {
     ) {
     }
 
-    private record SearchOutcome(Algorithm solution, int nextBound) {
-    }
-
-    private record SearchGoal(
-            Predicate<CubeState> isSolved,
-            ToIntFunction<CubeState> heuristic,
-            ToLongFunction<CubeState> stateKey
+    public record F2LDiagnostics(
+            long setupDatabaseMisses,
+            long insertDatabaseMisses
     ) {
-        boolean isSolved(CubeState cube) {
-            return isSolved.test(cube);
-        }
-
-        int heuristic(CubeState cube) {
-            return heuristic.applyAsInt(cube);
-        }
-
-        long stateKey(CubeState cube) {
-            return stateKey.applyAsLong(cube);
+        public long totalDatabaseMisses() {
+            return setupDatabaseMisses + insertDatabaseMisses;
         }
     }
+
 }

@@ -8,12 +8,16 @@ import cube.Face;
 import cube.MoveApplier;
 import cube.OrientedCube;
 import org.junit.jupiter.api.Test;
+import solver.F2LDatabaseMissContext;
+import solver.F2LDatabaseMissException;
 import solver.F2LSolver;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class F2LSolverTest {
@@ -136,21 +140,46 @@ public class F2LSolverTest {
     }
 
     @Test
-    void solveOptimizedCandidates_withoutCasesShouldNotUseSearchFallback() {
+    void solveOptimizedCandidates_withoutCasesShouldFailFastBeforeSearchFallback() {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, "R U R' U'");
         var progressEvents = new AtomicInteger();
-
-        var candidates = new F2LSolver(
+        var solver = new F2LSolver(
                 algorithms.F2LSetupCaseDatabase.empty(),
                 algorithms.F2LInsertCaseDatabase.empty()
-        ).solveOptimizedCandidates(
-                new OrientedCube(cube),
-                progress -> progressEvents.incrementAndGet()
         );
 
-        assertTrue(candidates.isEmpty());
-        assertTrue(progressEvents.get() > 0);
+        var exception = assertThrows(F2LDatabaseMissException.class, () -> solver.solveOptimizedCandidates(
+                new OrientedCube(cube),
+                progress -> progressEvents.incrementAndGet()
+        ));
+
+        assertEquals(F2LDatabaseMissContext.Phase.INSERT, exception.context().phase());
+        assertEquals(cfop.F2LSlot.FR, exception.context().insertSlot());
+        assertEquals(0, exception.context().setupCaseCount());
+        assertEquals(0, exception.context().insertCaseCount());
+        assertEquals(0, progressEvents.get());
+        assertEquals(1, solver.diagnostics().insertDatabaseMisses());
+    }
+
+    @Test
+    void seededDatabaseCorpus_shouldSolveWithoutFallbackMisses() {
+        var solver = new F2LSolver();
+        var corpus = new String[]{
+                "R U R' U'",
+                "R U R'",
+                "R U' R' U' F U F'"
+        };
+
+        for (var scramble : corpus) {
+            var cube = new CubeState();
+            MoveApplier.applyAlgorithm(cube, scramble);
+            var solution = solver.solveAfterCross(cube, Face.D);
+            MoveApplier.executeMoves(cube, solution.getMoves());
+            assertTrue(F2LAnalyzer.isF2LSolved(cube), scramble);
+        }
+
+        assertEquals(0, solver.diagnostics().totalDatabaseMisses());
     }
 
     @Test

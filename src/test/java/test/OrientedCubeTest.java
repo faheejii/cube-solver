@@ -1,6 +1,7 @@
 package test;
 
 import cube.CubeState;
+import cube.CubeOrientationKey;
 import cube.Face;
 import cube.Move;
 import cube.MoveApplier;
@@ -42,6 +43,18 @@ public class OrientedCubeTest {
         orientedCube.applyMove(Move.Y);
         orientedCube.applyMove(Move.M);
         MoveApplier.applyMove(expected, Move.S);
+
+        assertSameState(expected, orientedCube.cubeState());
+    }
+
+    @Test
+    void sliceTurnsShouldPreserveEMoveTableDirectionWhenMappedFromM() {
+        var orientation = new CubeOrientationKey(Face.B, Face.D, Face.R).toOrientation();
+        var orientedCube = new OrientedCube(new CubeState(), orientation);
+        var expected = new CubeState();
+
+        orientedCube.applyMove(Move.M);
+        MoveApplier.applyMove(expected, Move.E);
 
         assertSameState(expected, orientedCube.cubeState());
     }

@@ -51,12 +51,14 @@ public class CfopSolveServiceTest {
 
     @Test
     void solve_withColorNeutralCross_shouldReturnChosenConcreteFace() {
-        var result = SERVICE.solve(CfopSolveRequest.colorNeutral("R D R' D2 R D' R'"));
+        var service = new CfopSolveService();
+        var result = service.solve(CfopSolveRequest.colorNeutral("R D R' D2 R D' R'"));
 
         assertTrue(java.util.Set.of("U", "D", "F", "B", "L", "R").contains(result.crossFace()));
         assertTrue(result.cross().solved());
         assertTrue(result.f2l().solved());
         assertTrue(result.fullySolved());
+        assertEquals(0, service.f2lDiagnostics().totalDatabaseMisses());
     }
 
     @Test
@@ -109,24 +111,27 @@ public class CfopSolveServiceTest {
     @Test
     void solve_regressionScrambleWithRcross_shouldNotCycleInGreedyF2l() {
         var scramble = "B R' F U D' R D' R2 B U2 R U2 L' D2 R F2 R2 D2 R B2 R2";
+        var service = new CfopSolveService();
 
         var result = assertTimeoutPreemptively(
                 Duration.ofSeconds(15),
-                () -> SERVICE.solve(new CfopSolveRequest(scramble, cube.Face.R, F2LMode.GREEDY))
+                () -> service.solve(new CfopSolveRequest(scramble, cube.Face.R, F2LMode.GREEDY))
         );
 
         assertTrue(result.f2l().solved());
         assertTrue(result.fullySolved());
+        assertEquals(0, service.f2lDiagnostics().totalDatabaseMisses());
     }
 
     @Test
     void solve_regressionScrambleColorNeutralOptimized_shouldUseExactlyThreeShortlistedColors() {
         var scramble = "B R' F U D' R D' R2 B U2 R U2 L' D2 R F2 R2 D2 R B2 R2";
         var shortlistSize = new AtomicInteger();
+        var service = new CfopSolveService();
 
         var result = assertTimeoutPreemptively(
                 Duration.ofSeconds(35),
-                () -> SERVICE.solveWithProgress(
+                () -> service.solveWithProgress(
                         CfopSolveRequest.colorNeutral(scramble, F2LMode.OPTIMIZED),
                         progress -> {
                             if (progress.phase() == solver.F2LSolver.SolvePhase.BASELINE_COMPARISON) {
@@ -138,6 +143,7 @@ public class CfopSolveServiceTest {
 
         assertEquals(3, shortlistSize.get());
         assertTrue(result.fullySolved());
+        assertEquals(0, service.f2lDiagnostics().totalDatabaseMisses());
     }
 
     private static int totalCfopMoves(solver.CfopSolveResult result) {

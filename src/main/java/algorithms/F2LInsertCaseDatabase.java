@@ -6,6 +6,8 @@ import cfop.F2LGeometry;
 import cfop.F2LPreservationMask;
 import cfop.F2LSlot;
 import cube.Algorithm;
+import cube.Corner;
+import cube.Edge;
 import cube.OrientedCube;
 import util.NotationNormalizer;
 
@@ -61,6 +63,17 @@ public class F2LInsertCaseDatabase {
         cases.add("F' R U R' U' R' F R", FR, "case-5.1");
 
         cases.add("F L' U' L U L F' L'", FL, "case-6.1");
+
+        cases.add(FR, List.of(FL, BL), new F2LCaseSignature(Corner.UBR, 0, Edge.BR, 1),
+                "R2 F R2 F'", "regression-color-neutral-fr");
+        cases.add(FR, List.of(), new F2LCaseSignature(Corner.ULB, 2, Edge.UR, 1),
+                "R2 U R' U' R2", "regression-r-cross-fr-first");
+        cases.add(FL, List.of(FR), new F2LCaseSignature(Corner.ULB, 0, Edge.BL, 1),
+                "L U2 L2 U2 L", "regression-r-cross-fl");
+        cases.add(BR, List.of(FL, BL), new F2LCaseSignature(Corner.URF, 1, Edge.UF, 0),
+                "R2 U2 R' U2 F R2 F'", "regression-r-cross-br");
+        cases.add(FR, List.of(FL, BL, BR), new F2LCaseSignature(Corner.UBR, 0, Edge.UB, 0),
+                "U' F2 U2 F U F' U F2", "regression-r-cross-fr-last");
 
         return cases.toList();
     }
@@ -188,6 +201,22 @@ public class F2LInsertCaseDatabase {
 
         private void add(String algorithm, F2LSlot insertSlot, String name) {
             cases.add(caseFromAlgorithm(algorithm, insertSlot, name));
+        }
+
+        private void add(
+                F2LSlot insertSlot,
+                List<F2LSlot> preservedSlots,
+                F2LCaseSignature signature,
+                String algorithm,
+                String name
+        ) {
+            cases.add(new F2LInsertCase(
+                    insertSlot,
+                    F2LPreservationMask.of(preservedSlots),
+                    signature,
+                    Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm)),
+                    name
+            ));
         }
 
         private List<F2LInsertCase> toList() {

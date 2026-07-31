@@ -67,6 +67,10 @@ public class CfopSolveService {
         });
     }
 
+    public F2LSolver.F2LDiagnostics f2lDiagnostics() {
+        return f2lSolver.diagnostics();
+    }
+
     public CfopSolveResult solve(CfopSolveRequest request, LongConsumer optimizedProgressListener) {
         return solveWithProgress(
                 request,

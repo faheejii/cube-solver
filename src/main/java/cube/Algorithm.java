@@ -68,6 +68,33 @@ public class Algorithm {
         return normalize(Algorithm.fromMoves(materialized));
     }
 
+    /**
+     * Compiles center-preserving wide/slice notation to outer turns before
+     * materializing the temporary cube rotations introduced by the rewrite.
+     */
+    public static Algorithm materializeWideAndSliceMoves(Algorithm algorithm) {
+        if (algorithm == null || algorithm.isEmpty()) {
+            return new Algorithm();
+        }
+
+        var expanded = new ArrayList<Move>();
+        for (var move : algorithm.moves) {
+            var quarterTurn = quarterTurnExpansion(move);
+            if (quarterTurn == null) {
+                expanded.add(move);
+                continue;
+            }
+
+            var turns = turnAmount(move);
+            var replacement = turns == 3 ? quarterTurn.inverse() : quarterTurn;
+            expanded.addAll(replacement.getMoves());
+            if (turns == 2) {
+                expanded.addAll(quarterTurn.getMoves());
+            }
+        }
+        return materializeCubeRotations(Algorithm.fromMoves(expanded));
+    }
+
     public List<Move> getMoves() {
         return List.copyOf(this.moves);
     }
@@ -162,5 +189,21 @@ public class Algorithm {
             case 3 -> 2;
             default -> throw new IllegalArgumentException("Unexpected turn amount: " + turnAmount);
         };
+    }
+
+    private static Algorithm quarterTurnExpansion(Move move) {
+        var moves = switch (familyIndex(move)) {
+            case 6 -> List.of(Move.Y, Move.D);                 // u = y D
+            case 7 -> List.of(Move.X, Move.L);                 // r = x L
+            case 8 -> List.of(Move.Z, Move.B);                 // f = z B
+            case 9 -> List.of(Move.Y_PRIME, Move.U);           // d = y' U
+            case 10 -> List.of(Move.X_PRIME, Move.R);          // l = x' R
+            case 11 -> List.of(Move.Z_PRIME, Move.F);          // b = z' F
+            case 12 -> List.of(Move.L_PRIME, Move.X_PRIME, Move.R); // M = L' x' R
+            case 13 -> List.of(Move.U_PRIME, Move.Y, Move.D);  // E = U' y D
+            case 14 -> List.of(Move.F_PRIME, Move.Z, Move.B);  // S = F' z B
+            default -> null;
+        };
+        return moves == null ? null : Algorithm.fromMoves(moves);
     }
 }
