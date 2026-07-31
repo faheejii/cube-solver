@@ -22,18 +22,16 @@ final class SessionCookie {
         return null;
     }
 
-    static String create(String token, Duration lifetime) {
+    static String create(String token, Duration lifetime, boolean secure) {
         return NAME + "=" + token + "; Path=/; Max-Age=" + lifetime.toSeconds()
-                + "; HttpOnly" + secureAttribute() + "; SameSite=Lax";
+                + "; HttpOnly" + secureAttribute(secure) + "; SameSite=Lax";
     }
 
-    static String clear() {
-        return NAME + "=; Path=/; Max-Age=0; HttpOnly" + secureAttribute() + "; SameSite=Lax";
+    static String clear(boolean secure) {
+        return NAME + "=; Path=/; Max-Age=0; HttpOnly" + secureAttribute(secure) + "; SameSite=Lax";
     }
 
-    private static String secureAttribute() {
-        return Boolean.parseBoolean(System.getProperty("server.cookie.secure", "true"))
-                ? "; Secure"
-                : "";
+    private static String secureAttribute(boolean secure) {
+        return secure ? "; Secure" : "";
     }
 }

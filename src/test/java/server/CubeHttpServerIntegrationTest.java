@@ -27,11 +27,15 @@ class CubeHttpServerIntegrationTest {
     @Test
     @EnabledIfEnvironmentVariable(named = "TEST_DATABASE_URL", matches = ".+")
     void authenticatedEndpoints_shouldEnforceSessionsOwnershipAndErrorContract() throws Exception {
-        System.setProperty("server.cookie.secure", "false");
         try (var postgres = PostgresTestDatabase.create()) {
             var database = postgres.manager();
             database.initialize();
-            var cubeServer = new CubeHttpServer(new CfopSolveService(), Path.of("missing-frontend"), database);
+            var cubeServer = new CubeHttpServer(
+                    new CfopSolveService(),
+                    Path.of("missing-frontend"),
+                    database,
+                    false
+            );
             var server = cubeServer.create(0);
             server.start();
 
@@ -118,8 +122,6 @@ class CubeHttpServerIntegrationTest {
                 server.stop(0);
                 cubeServer.close();
             }
-        } finally {
-            System.clearProperty("server.cookie.secure");
         }
     }
 

@@ -34,11 +34,22 @@ public class CubeHttpServer implements AutoCloseable {
     private final SolveJobManager solveJobManager;
     private final AuthService authService;
     private final OperationalMetrics operationalMetrics;
+    private final boolean secureCookies;
     private java.util.concurrent.ExecutorService httpExecutor;
 
     public CubeHttpServer(CfopSolveService solveService, Path frontendDistDir, DatabaseManager databaseManager) {
+        this(solveService, frontendDistDir, databaseManager, configuredSecureCookies());
+    }
+
+    CubeHttpServer(
+            CfopSolveService solveService,
+            Path frontendDistDir,
+            DatabaseManager databaseManager,
+            boolean secureCookies
+    ) {
         this.frontendDistDir = frontendDistDir;
         this.databaseManager = databaseManager;
+        this.secureCookies = secureCookies;
         this.operationalMetrics = new OperationalMetrics();
         this.solveJobManager = new SolveJobManager(solveService, databaseManager, operationalMetrics);
         this.authService = new AuthService(new AuthRepository(databaseManager));
@@ -51,7 +62,7 @@ public class CubeHttpServer implements AutoCloseable {
         server.createContext("/api/health/ready", healthMetricsHandler);
         server.createContext("/api/health", healthMetricsHandler);
         server.createContext("/api/metrics", healthMetricsHandler);
-        server.createContext("/api/auth", new AuthHandler(databaseManager, authService, solveJobManager));
+        server.createContext("/api/auth", new AuthHandler(databaseManager, authService, solveJobManager, secureCookies));
         server.createContext("/api/solve", new SolveHandler(solveJobManager));
         server.createContext("/api/solve-jobs", new SolveJobHandler(solveJobManager, authService));
         server.createContext("/api/solves", new SolveHistoryHandler(databaseManager, solveJobManager, authService));
@@ -87,6 +98,7 @@ public class CubeHttpServer implements AutoCloseable {
         private final DatabaseManager databaseManager;
         private final AuthService authService;
         private final SolveJobManager solveJobManager;
+        private final boolean secureCookies;
         private final RequestRateLimiter rateLimiter = new RequestRateLimiter(
                 configuredAuthRateLimit(),
                 java.time.Duration.ofMinutes(1)
@@ -95,11 +107,13 @@ public class CubeHttpServer implements AutoCloseable {
         private AuthHandler(
                 DatabaseManager databaseManager,
                 AuthService authService,
-                SolveJobManager solveJobManager
+                SolveJobManager solveJobManager,
+                boolean secureCookies
         ) {
             this.databaseManager = databaseManager;
             this.authService = authService;
             this.solveJobManager = solveJobManager;
+            this.secureCookies = secureCookies;
         }
 
         @Override
@@ -175,7 +189,7 @@ public class CubeHttpServer implements AutoCloseable {
                 solveJobManager.cancelOwnedJobs(user.externalId());
             }
             authService.logout(token);
-            exchange.getResponseHeaders().add("Set-Cookie", SessionCookie.clear());
+            exchange.getResponseHeaders().add("Set-Cookie", SessionCookie.clear(secureCookies));
             exchange.getResponseHeaders().set("Cache-Control", "no-store");
             addCorsHeaders(exchange.getResponseHeaders());
             exchange.sendResponseHeaders(204, -1);
@@ -189,14 +203,14 @@ public class CubeHttpServer implements AutoCloseable {
             writeJson(exchange, 200, JsonSupport.authUserJson(user));
         }
 
-        private static void writeAuthenticated(
+        private void writeAuthenticated(
                 HttpExchange exchange,
                 int status,
                 AuthService.AuthenticatedSession session
         ) throws IOException {
             exchange.getResponseHeaders().add(
                     "Set-Cookie",
-                    SessionCookie.create(session.token(), AuthService.SESSION_LIFETIME)
+                    SessionCookie.create(session.token(), AuthService.SESSION_LIFETIME, secureCookies)
             );
             exchange.getResponseHeaders().set("Cache-Control", "no-store");
             writeJson(exchange, status, JsonSupport.authUserJson(session.user()));
@@ -683,6 +697,10 @@ public class CubeHttpServer implements AutoCloseable {
 
     private static String configuredCorsOrigin() {
         return System.getProperty("server.cors.origin", "http://localhost:5173");
+    }
+
+    private static boolean configuredSecureCookies() {
+        return Boolean.parseBoolean(System.getProperty("server.cookie.secure", "true"));
     }
 
     private static int configuredAuthRateLimit() {

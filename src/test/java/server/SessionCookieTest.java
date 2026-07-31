@@ -1,7 +1,6 @@
 package server;
 
 import com.sun.net.httpserver.Headers;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
@@ -12,14 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SessionCookieTest {
-    @AfterEach
-    void clearSecureProperty() {
-        System.clearProperty("server.cookie.secure");
-    }
-
     @Test
     void create_shouldSetRequiredSecurityAttributes() {
-        var cookie = SessionCookie.create("opaque-token", Duration.ofDays(30));
+        var cookie = SessionCookie.create("opaque-token", Duration.ofDays(30), true);
 
         assertTrue(cookie.startsWith("cube_session=opaque-token;"));
         assertTrue(cookie.contains("HttpOnly"));
@@ -40,7 +34,7 @@ class SessionCookieTest {
 
     @Test
     void clear_shouldExpireCookie() {
-        var cookie = SessionCookie.clear();
+        var cookie = SessionCookie.clear(true);
 
         assertTrue(cookie.contains("Max-Age=0"));
         assertTrue(cookie.contains("HttpOnly"));
@@ -49,9 +43,7 @@ class SessionCookieTest {
 
     @Test
     void createAndClear_shouldAllowSecureAttributeToBeDisabledForLocalHttp() {
-        System.setProperty("server.cookie.secure", "false");
-
-        assertFalse(SessionCookie.create("opaque-token", Duration.ofMinutes(5)).contains("; Secure"));
-        assertFalse(SessionCookie.clear().contains("; Secure"));
+        assertFalse(SessionCookie.create("opaque-token", Duration.ofMinutes(5), false).contains("; Secure"));
+        assertFalse(SessionCookie.clear(false).contains("; Secure"));
     }
 }
