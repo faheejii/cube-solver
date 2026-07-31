@@ -1,4 +1,5 @@
-import {Activity, History, Moon, Sun, Timer} from "lucide-react";
+import {Activity, History, LogOut, Moon, Sun, Timer} from "lucide-react";
+import type {AuthUser} from "./types";
 
 export type DashboardView = "timer" | "history" | "processes";
 
@@ -6,16 +7,20 @@ type Props = {
     activeView: DashboardView;
     theme: "light" | "dark";
     activeProcessCount: number;
+    user: AuthUser;
     onViewChange: (view: DashboardView) => void;
     onToggleTheme: () => void;
+    onLogout: () => void;
 };
 
 export default function DashboardSidebar({
                                              activeView,
                                              theme,
                                              activeProcessCount,
+                                             user,
                                              onViewChange,
                                              onToggleTheme,
+                                             onLogout,
                                          }: Props) {
     return (
         <aside className="dashboard-sidebar">
@@ -62,7 +67,7 @@ export default function DashboardSidebar({
             </nav>
 
             <div className="dashboard-sidebar-footer">
-                <span>Local profile</span>
+                <span className="sidebar-user" title={user.email}>{user.displayName || user.email}</span>
                 <button
                     className="sidebar-theme-button"
                     type="button"
@@ -71,6 +76,9 @@ export default function DashboardSidebar({
                 >
                     {theme === "dark" ? <Sun size={18}/> : <Moon size={18}/>}
                     <span>{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+                </button>
+                <button className="sidebar-theme-button" type="button" onClick={onLogout}>
+                    <LogOut size={18}/><span>Sign out</span>
                 </button>
             </div>
         </aside>
