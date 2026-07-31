@@ -208,10 +208,34 @@ class SolveJobManagerTest {
 
         var ownedSnapshot = manager.find(job.id(), "owner");
         assertTrue(ownedSnapshot.status().equals("queued") || ownedSnapshot.status().equals("running"));
-        assertThrows(IllegalArgumentException.class, () -> manager.find(job.id(), "other"));
-        assertThrows(IllegalArgumentException.class, () -> manager.cancel(job.id(), "other"));
+        assertThrows(SolveJobManager.AuthenticationRequiredException.class, () -> manager.find(job.id(), null));
+        assertThrows(SolveJobManager.ForbiddenException.class, () -> manager.find(job.id(), "other"));
+        assertThrows(SolveJobManager.ForbiddenException.class, () -> manager.cancel(job.id(), "other"));
 
         manager.cancel(job.id(), "owner");
+        release.countDown();
+    }
+
+    @Test
+    void cancelOwnedJobs_shouldCancelOnlyTheAuthenticatedUsersJobs() throws Exception {
+        var release = new CountDownLatch(1);
+        var manager = new SolveJobManager(
+                new ControlledSolveService(release),
+                new DatabaseManager(new DatabaseConfig(
+                        true,
+                        "jdbc:postgresql://invalid/test",
+                        "test",
+                        "test"
+                ))
+        );
+        var owned = manager.submit(new SolveApiRequest("R", "U", "optimized"), "owner", 7L, true);
+        var other = manager.submit(new SolveApiRequest("U", "U", "optimized"), "other", 8L, true);
+
+        manager.cancelOwnedJobs("owner");
+
+        assertEquals("cancelled", manager.find(owned.id()).status());
+        assertNotEquals("cancelled", manager.find(other.id()).status());
+        manager.cancel(other.id());
         release.countDown();
     }
 

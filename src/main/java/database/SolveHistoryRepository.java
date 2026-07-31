@@ -21,7 +21,7 @@ public final class SolveHistoryRepository {
         try (var connection = databaseManager.openConnection()) {
             connection.setAutoCommit(false);
             try {
-                long userId = ensureUser(connection, command.userExternalId());
+                long userId = requireUserId(connection, command.userExternalId());
                 var existing = findAttemptByClientId(connection, userId, command.clientAttemptId());
                 if (existing != null) {
                     connection.commit();
@@ -420,21 +420,6 @@ public final class SolveHistoryRepository {
             throw new IllegalArgumentException("User not found");
         }
         return userId;
-    }
-
-    private static long ensureUser(Connection connection, String externalId) throws SQLException {
-        try (var statement = connection.prepareStatement("""
-                INSERT INTO users (external_id)
-                VALUES (?)
-                ON CONFLICT (external_id) DO UPDATE SET updated_at = NOW()
-                RETURNING id
-                """)) {
-            statement.setString(1, externalId);
-            try (var result = statement.executeQuery()) {
-                result.next();
-                return result.getLong("id");
-            }
-        }
     }
 
     private static SolveHistoryEntry findAttemptByClientId(

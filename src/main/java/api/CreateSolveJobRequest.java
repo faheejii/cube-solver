@@ -4,7 +4,6 @@ public record CreateSolveJobRequest(
         String scramble,
         String crossFace,
         String f2lMode,
-        String userId,
         Long solveId,
         boolean saveOnComplete
 ) {

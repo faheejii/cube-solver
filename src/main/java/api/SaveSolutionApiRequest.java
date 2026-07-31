@@ -1,7 +1,6 @@
 package api;
 
 public record SaveSolutionApiRequest(
-        String userId,
         String crossFaceRequested,
         String crossFaceChosen,
         String f2lMode,
@@ -29,7 +28,6 @@ public record SaveSolutionApiRequest(
         String pllStatus
 ) {
     public SaveSolutionApiRequest {
-        requireText(userId, "userId");
         requireText(crossFaceRequested, "crossFaceRequested");
         requireText(crossFaceChosen, "crossFaceChosen");
         requireText(f2lMode, "f2lMode");

@@ -1,7 +1,6 @@
 package api;
 
 public record CreateSolveAttemptRequest(
-        String userId,
         String clientAttemptId,
         String scramble,
         String crossFaceRequested,
@@ -11,9 +10,6 @@ public record CreateSolveAttemptRequest(
         boolean dnf
 ) {
     public CreateSolveAttemptRequest {
-        if (userId == null || userId.isBlank()) {
-            throw new IllegalArgumentException("userId cannot be null or blank");
-        }
         if (clientAttemptId == null || clientAttemptId.isBlank()) {
             throw new IllegalArgumentException("clientAttemptId cannot be null or blank");
         }

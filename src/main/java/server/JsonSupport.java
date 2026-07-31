@@ -1,6 +1,7 @@
 package server;
 
 import database.DatabaseHealth;
+import database.AuthUser;
 import database.SavedSolution;
 import database.SolveHistoryDetail;
 import database.SolveHistoryEntry;
@@ -44,6 +45,24 @@ final class JsonSupport {
 
     static String errorJson(String message) {
         return "{\"error\":\"" + escape(message) + "\"}";
+    }
+
+    static String errorMessage(String json) {
+        try {
+            var root = JSON.readTree(json);
+            var error = root == null ? null : root.get("error");
+            return error != null && error.isTextual() ? error.textValue() : null;
+        } catch (java.io.IOException exception) {
+            return null;
+        }
+    }
+
+    static String authUserJson(AuthUser user) {
+        return "{"
+                + "\"id\":\"" + escape(user.externalId()) + "\","
+                + "\"email\":\"" + escape(user.email()) + "\","
+                + "\"displayName\":" + nullableString(user.displayName())
+                + "}";
     }
 
     static Integer readInteger(String json, String fieldName) {
@@ -91,6 +110,10 @@ final class JsonSupport {
                 + "\"message\":\"" + escape(health.message()) + "\""
                 + "}"
                 + "}";
+    }
+
+    static String livenessJson() {
+        return "{\"status\":\"ok\"}";
     }
 
     static String solveHistoryEntryJson(SolveHistoryEntry entry) {
