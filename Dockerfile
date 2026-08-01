@@ -2,11 +2,11 @@ FROM node:22-alpine AS frontend-build
 
 WORKDIR /build/frontend
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN npm ci --ignore-scripts
 COPY frontend/ ./
 RUN npm run build
 
-FROM maven:3.9-eclipse-temurin-17 AS backend-build
+FROM maven:3.9-eclipse-temurin-25 AS backend-build
 
 WORKDIR /build
 COPY pom.xml ./
@@ -14,7 +14,7 @@ RUN mvn -q -DskipTests dependency:go-offline
 COPY src/ ./src/
 RUN mvn -q -DskipTests package dependency:copy-dependencies -DoutputDirectory=target/dependency
 
-FROM eclipse-temurin:17-jre-jammy
+FROM eclipse-temurin:25-jre-jammy
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl \

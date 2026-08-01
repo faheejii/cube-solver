@@ -34,7 +34,12 @@ final class StaticFileHandler implements HttpHandler {
         var requestPath = exchange.getRequestURI().getPath();
         var relativePath = requestPath.equals("/") ? "index.html" : requestPath.substring(1);
         var target = frontendDistDir.resolve(relativePath).normalize();
+        target = resolveGeneratedWorkerAlias(relativePath, target);
         if (!target.startsWith(frontendDistDir) || Files.isDirectory(target) || !Files.exists(target)) {
+            if (hasFileExtension(relativePath)) {
+                writePlainText(exchange, 404, "Not found");
+                return;
+            }
             target = frontendDistDir.resolve("index.html");
         }
 
@@ -67,5 +72,24 @@ final class StaticFileHandler implements HttpHandler {
         if (name.endsWith(".png")) return "image/png";
         if (name.endsWith(".ico")) return "image/x-icon";
         return "application/octet-stream";
+    }
+
+    private static boolean hasFileExtension(String path) {
+        var lastSegment = path.substring(path.lastIndexOf('/') + 1);
+        var extensionIndex = lastSegment.lastIndexOf('.');
+        return extensionIndex > 0 && extensionIndex < lastSegment.length() - 1;
+    }
+
+    private Path resolveGeneratedWorkerAlias(String relativePath, Path target) throws IOException {
+        if (Files.exists(target) || !relativePath.equals("assets/search-worker-entry.js")) {
+            return target;
+        }
+        try (var files = Files.list(frontendDistDir.resolve("assets"))) {
+            return files
+                    .filter(path -> path.getFileName().toString().startsWith("search-worker-entry-"))
+                    .filter(path -> path.getFileName().toString().endsWith(".js"))
+                    .findFirst()
+                    .orElse(target);
+        }
     }
 }

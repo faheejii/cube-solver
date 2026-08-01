@@ -1,6 +1,6 @@
 # CFOP Cube Solver
 
-Java 17 and Maven project for solving a 3x3 Rubik's Cube with a CFOP pipeline:
+Java 25 and Maven project for solving a 3x3 Rubik's Cube with a CFOP pipeline:
 
 1. `Cross`
 2. `F2L`
@@ -63,7 +63,7 @@ Known limitations:
 
 ## Requirements
 
-- Java 17
+- Java 25
 - Maven 3.9+
 - Node.js 22.12+ and npm 10+ for frontend development and builds
 
