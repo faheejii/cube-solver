@@ -199,6 +199,14 @@ docker compose up --build
 
 The app is available at `http://localhost:8080`. Compose uses a persistent PostgreSQL volume and development-only credentials; replace them and enable secure cookies for production.
 
+Compose exposes PostgreSQL on host port `5433` for host-run integration tests. With the database service running, execute the full database-backed suite with:
+
+```bash
+docker compose up -d postgres
+export TEST_DATABASE_URL='postgresql://cube_solver:cube_solver@localhost:5433/cube_solver'
+mvn -q -Dmaven.compiler.useIncrementalCompilation=false -Df2l.corpus=true test
+```
+
 The liveness endpoint is `GET /api/health/live`, readiness is `GET /api/health/ready`, and process metrics are available at `GET /api/metrics`. CI runs [`scripts/docker-smoke-test.sh`](scripts/docker-smoke-test.sh) against the built Compose stack.
 
 ## Frontend Development
