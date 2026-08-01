@@ -1,15 +1,11 @@
 package server;
 
-import database.DatabaseConfig;
 import database.DatabaseManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import test.PostgresTestDatabase;
 import solver.CfopSolveService;
 
-import java.net.CookieManager;
-import java.net.CookiePolicy;
-import java.net.HttpCookie;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -55,7 +51,7 @@ class CubeHttpServerIntegrationTest {
                 var aliceRegistration = register(alice, baseUri, aliceEmail);
                 assertEquals(201, aliceRegistration.statusCode());
                 assertTrue(aliceRegistration.body().contains(aliceEmail));
-                assertTrue(cookie(alice) != null);
+                assertTrue(alice.sessionToken != null);
 
                 var duplicateRegistration = register(alice, baseUri, aliceEmail);
                 assertError(duplicateRegistration, 409, "already exists");
@@ -67,6 +63,7 @@ class CubeHttpServerIntegrationTest {
 
                 var bobRegistration = register(bob, baseUri, bobEmail);
                 assertEquals(201, bobRegistration.statusCode());
+                assertTrue(SessionToken.isValid(alice.sessionToken));
 
                 var attempt = postJson(alice, baseUri.resolve("/api/solves"), """
                         {"userId":"forged-user","clientAttemptId":"attempt-%s","scramble":"R U",
@@ -84,9 +81,9 @@ class CubeHttpServerIntegrationTest {
                 assertFalse(bobHistory.body().contains(clientAttemptId));
 
                 var bobDetail = get(bob, baseUri.resolve("/api/solves/" + solveId));
-                assertError(bobDetail, 400, "Solve not found");
+                assertError(bobDetail, 404, "Solve not found");
                 var bobDelete = delete(bob, baseUri.resolve("/api/solves/" + solveId));
-                assertError(bobDelete, 400, "Solve not found");
+                assertError(bobDelete, 404, "Solve not found");
 
                 var aliceJobResponse = postJson(alice, baseUri.resolve("/api/solve-jobs"), """
                         {"scramble":"R","crossFace":"F","f2lMode":"greedy","userId":"forged-user",
@@ -98,14 +95,14 @@ class CubeHttpServerIntegrationTest {
                 var anonymousJob = get(client(), baseUri.resolve("/api/solve-jobs/" + jobId));
                 assertError(anonymousJob, 401, "Authentication required");
                 var bobJob = get(bob, baseUri.resolve("/api/solve-jobs/" + jobId));
-                assertError(bobJob, 403, "not allowed");
+                assertError(bobJob, 403, "belongs to another user");
                 var bobCancel = delete(bob, baseUri.resolve("/api/solve-jobs/" + jobId));
-                assertError(bobCancel, 403, "not allowed");
+                assertError(bobCancel, 403, "belongs to another user");
                 var aliceJob = get(alice, baseUri.resolve("/api/solve-jobs/" + jobId));
                 assertEquals(200, aliceJob.statusCode());
                 assertEquals(200, delete(alice, baseUri.resolve("/api/solve-jobs/" + jobId)).statusCode());
 
-                expireSession(database, cookie(alice).getValue());
+                expireSession(database, alice.sessionToken);
                 var expiredMe = get(alice, baseUri.resolve("/api/auth/me"));
                 assertError(expiredMe, 401, "Authentication required");
 
@@ -125,36 +122,45 @@ class CubeHttpServerIntegrationTest {
         }
     }
 
-    private static CookieManager cookies() {
-        return new CookieManager(null, CookiePolicy.ACCEPT_ALL);
+    private static TestClient client() {
+        return new TestClient();
     }
 
-    private static HttpClient client() {
-        return HttpClient.newBuilder().cookieHandler(cookies()).build();
-    }
-
-    private static HttpResponse<String> register(HttpClient client, URI baseUri, String email) throws Exception {
+    private static HttpResponse<String> register(TestClient client, URI baseUri, String email) throws Exception {
         return postJson(client, baseUri.resolve("/api/auth/register"), """
                 {"email":"%s","password":"integration-password","displayName":"Integration"}
                 """.formatted(email));
     }
 
-    private static HttpResponse<String> get(HttpClient client, URI uri) throws Exception {
-        return client.send(HttpRequest.newBuilder(uri).GET().build(), HttpResponse.BodyHandlers.ofString());
+    private static HttpResponse<String> get(TestClient client, URI uri) throws Exception {
+        return send(client, request(client, uri).GET().build());
     }
 
-    private static HttpResponse<String> delete(HttpClient client, URI uri) throws Exception {
-        return client.send(HttpRequest.newBuilder(uri).DELETE().build(), HttpResponse.BodyHandlers.ofString());
+    private static HttpResponse<String> delete(TestClient client, URI uri) throws Exception {
+        return send(client, request(client, uri).DELETE().build());
     }
 
-    private static HttpResponse<String> postJson(HttpClient client, URI uri, String body) throws Exception {
-        return client.send(
-                HttpRequest.newBuilder(uri)
+    private static HttpResponse<String> postJson(TestClient client, URI uri, String body) throws Exception {
+        return send(client,
+                request(client, uri)
                         .header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                        .build(),
-                HttpResponse.BodyHandlers.ofString()
+                        .build()
         );
+    }
+
+    private static HttpResponse<String> send(TestClient client, HttpRequest request) throws Exception {
+        var response = client.httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        response.headers().firstValue("Set-Cookie").ifPresent(client::captureCookie);
+        return response;
+    }
+
+    private static HttpRequest.Builder request(TestClient client, URI uri) {
+        var builder = HttpRequest.newBuilder(uri);
+        if (client.sessionToken != null) {
+            builder.header("Cookie", SessionCookie.NAME + "=" + client.sessionToken);
+        }
+        return builder;
     }
 
     private static void expireSession(DatabaseManager database, String token) throws SQLException {
@@ -165,13 +171,6 @@ class CubeHttpServerIntegrationTest {
             statement.setString(1, SessionToken.hash(token));
             assertEquals(1, statement.executeUpdate());
         }
-    }
-
-    private static HttpCookie cookie(HttpClient client) {
-        return ((CookieManager) client.cookieHandler().orElseThrow()).getCookieStore().getCookies().stream()
-                .filter(value -> SessionCookie.NAME.equals(value.getName()))
-                .findFirst()
-                .orElse(null);
     }
 
     private static void assertError(HttpResponse<String> response, int status, String message) {
@@ -186,5 +185,22 @@ class CubeHttpServerIntegrationTest {
 
     private static long jsonLong(String json, String field) throws Exception {
         return new com.fasterxml.jackson.databind.ObjectMapper().readTree(json).get(field).asLong();
+    }
+
+    private static final class TestClient {
+        private final HttpClient httpClient = HttpClient.newHttpClient();
+        private String sessionToken;
+
+        private void captureCookie(String setCookie) {
+            var prefix = SessionCookie.NAME + "=";
+            var start = setCookie.indexOf(prefix);
+            if (start < 0) {
+                return;
+            }
+            var valueStart = start + prefix.length();
+            var valueEnd = setCookie.indexOf(';', valueStart);
+            var value = setCookie.substring(valueStart, valueEnd < 0 ? setCookie.length() : valueEnd);
+            sessionToken = value.isEmpty() ? null : value;
+        }
     }
 }
