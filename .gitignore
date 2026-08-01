@@ -8,6 +8,7 @@ out/
 /target/
 frontend/node_modules/
 frontend/dist/
+frontend/test-results/
 frontend/*.tsbuildinfo
 frontend/vite.config.js
 frontend/vite.config.d.ts
@@ -17,6 +18,7 @@ frontend/.env.*
 .env.*
 *.log
 /.codex/
+AGENTS.md
 .kotlin/
 
 ### Eclipse ###

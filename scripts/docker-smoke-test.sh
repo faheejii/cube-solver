@@ -2,16 +2,18 @@
 set -Eeuo pipefail
 
 compose_file="${COMPOSE_FILE:-docker-compose.yml}"
+project_name="${SMOKE_PROJECT_NAME:-cube-solver-smoke}"
 base_url="${SMOKE_BASE_URL:-http://127.0.0.1:8080}"
 timeout_seconds="${SMOKE_TIMEOUT_SECONDS:-120}"
+compose=(docker compose -p "$project_name" -f "$compose_file")
 
 cleanup() {
-  docker compose -f "$compose_file" down --remove-orphans --volumes >/dev/null 2>&1 || true
+  "${compose[@]}" down --remove-orphans --volumes >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
-docker compose -f "$compose_file" config --quiet
-docker compose -f "$compose_file" up --build --detach --remove-orphans
+"${compose[@]}" config --quiet
+"${compose[@]}" up --build --detach --remove-orphans
 
 deadline=$((SECONDS + timeout_seconds))
 while (( SECONDS < deadline )); do
@@ -24,8 +26,8 @@ while (( SECONDS < deadline )); do
 done
 
 if (( SECONDS >= deadline )); then
-  docker compose -f "$compose_file" ps
-  docker compose -f "$compose_file" logs --no-color app postgres || true
+  "${compose[@]}" ps
+  "${compose[@]}" logs --no-color app postgres || true
   echo "Timed out waiting for liveness" >&2
   exit 1
 fi
@@ -37,5 +39,5 @@ metrics_body=$(curl --fail --silent --show-error "$base_url/api/metrics")
 [[ "$metrics_body" == *'"requests"'* ]]
 [[ "$metrics_body" == *'"solveJobs"'* ]]
 
-docker compose -f "$compose_file" ps
+"${compose[@]}" ps
 echo "Docker smoke test passed"

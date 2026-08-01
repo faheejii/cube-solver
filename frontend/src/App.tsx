@@ -1,5 +1,6 @@
 import {startTransition, useEffect, useRef, useState} from "react";
 import {randomScrambleForEvent} from "cubing/scramble";
+import {setSearchDebug} from "cubing/search";
 import {Save, X} from "lucide-react";
 import ActiveSolutionsView from "./ActiveSolutionsView";
 import DashboardSidebar, {type DashboardView} from "./DashboardSidebar";
@@ -37,6 +38,8 @@ import type {
     SolveStatistics,
 } from "./types";
 import {isTerminalProcess, SolveJobCancelledError, trimFinishedProcesses, waitForSolveJob} from "./jobs";
+
+setSearchDebug({prioritizeEsbuildWorkaroundForWorkerInstantiation: true});
 
 const DEFAULT_SCRAMBLE = "R D R' D2 R D' R'";
 const FACE_OPTIONS = [
