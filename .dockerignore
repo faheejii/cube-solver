@@ -1,0 +1,13 @@
+.git
+.github
+.idea
+.codex
+target
+frontend/node_modules
+frontend/dist
+frontend/*.tsbuildinfo
+.env
+.env.*
+*.log
+Dockerfile*
+docker-compose*.yml

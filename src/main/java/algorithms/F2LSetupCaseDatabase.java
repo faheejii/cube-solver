@@ -6,6 +6,8 @@ import cfop.F2LGeometry;
 import cfop.F2LPreservationMask;
 import cfop.F2LSlot;
 import cube.Algorithm;
+import cube.Corner;
+import cube.Edge;
 import cube.OrientedCube;
 import util.NotationNormalizer;
 
@@ -186,6 +188,13 @@ public class F2LSetupCaseDatabase {
 
         cases.add("R F U R U' R' F' U' R' y", "L' U L U L' U L", FL, "case-36.1");
         cases.add("R F U R U' R' F' U' R' y'", "R' U R U R' U R", BR, "case-36.2");
+
+        cases.add(FR, List.of(FL, BL), new F2LCaseSignature(Corner.URF, 2, Edge.BR, 1),
+                "F R2 F' R2 F' U2 F", "F' U2 F", "regression-color-neutral-fr");
+        cases.add(FL, List.of(FR), new F2LCaseSignature(Corner.DLF, 1, Edge.BL, 1),
+                "L' U2 L2 U2 L' F U' F'", "F U F'", "regression-r-cross-fl");
+        cases.add(FR, List.of(FL, BL, BR), new F2LCaseSignature(Corner.UFL, 0, Edge.UB, 0),
+                "F2 U' F U' F' U2 F2 U R U2 R' U2", "U2 R U2 R'", "regression-r-cross-fr-last");
         return cases.toList();
     }
 
@@ -333,6 +342,24 @@ public class F2LSetupCaseDatabase {
 
         private void add(String sourceSetup, String algorithm, F2LSlot nonPreservedSlot, String name) {
             cases.addAll(casesFromSetup(sourceSetup, algorithm, nonPreservedSlot, name));
+        }
+
+        private void add(
+                F2LSlot insertSlot,
+                List<F2LSlot> preservedSlots,
+                F2LCaseSignature signature,
+                String sourceSetup,
+                String algorithm,
+                String name
+        ) {
+            cases.add(new F2LSetupCase(
+                    insertSlot,
+                    F2LPreservationMask.of(preservedSlots),
+                    signature,
+                    Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm)),
+                    Algorithm.parse(NotationNormalizer.normalizePrimes(sourceSetup)),
+                    name
+            ));
         }
 
         private List<F2LSetupCase> toList() {

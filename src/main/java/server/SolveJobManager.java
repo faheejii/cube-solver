@@ -9,6 +9,8 @@ import solver.F2LMode;
 import solver.SolveCancellation;
 import solver.SolveCancelledException;
 import solver.SolveDeadlineExceededException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.UUID;
@@ -23,12 +25,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 final class SolveJobManager implements AutoCloseable {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SolveJobManager.class);
     private static final int MAX_RETAINED_FINISHED_JOBS = 100;
     private static final long SOLVE_DEADLINE_NANOS = TimeUnit.SECONDS.toNanos(15);
 
     private final solver.CfopSolveService solveService;
     private final DatabaseManager databaseManager;
     private final SolveHistoryRepository repository;
+    private final OperationalMetrics operationalMetrics;
     private final long solveDeadlineNanos;
     private final ExecutorService optimizedExecutor;
     private final ExecutorService fastExecutor;
@@ -36,7 +40,7 @@ final class SolveJobManager implements AutoCloseable {
     private final ConcurrentLinkedDeque<String> finishedJobIds = new ConcurrentLinkedDeque<>();
 
     SolveJobManager(solver.CfopSolveService solveService, DatabaseManager databaseManager) {
-        this(solveService, databaseManager, SOLVE_DEADLINE_NANOS);
+        this(solveService, databaseManager, SOLVE_DEADLINE_NANOS, new OperationalMetrics());
     }
 
     SolveJobManager(
@@ -44,9 +48,27 @@ final class SolveJobManager implements AutoCloseable {
             DatabaseManager databaseManager,
             long solveDeadlineNanos
     ) {
+        this(solveService, databaseManager, solveDeadlineNanos, new OperationalMetrics());
+    }
+
+    SolveJobManager(
+            solver.CfopSolveService solveService,
+            DatabaseManager databaseManager,
+            OperationalMetrics operationalMetrics
+    ) {
+        this(solveService, databaseManager, SOLVE_DEADLINE_NANOS, operationalMetrics);
+    }
+
+    private SolveJobManager(
+            solver.CfopSolveService solveService,
+            DatabaseManager databaseManager,
+            long solveDeadlineNanos,
+            OperationalMetrics operationalMetrics
+    ) {
         this.solveService = solveService;
         this.databaseManager = databaseManager;
         this.repository = new SolveHistoryRepository(databaseManager);
+        this.operationalMetrics = operationalMetrics;
         if (solveDeadlineNanos <= 0) {
             throw new IllegalArgumentException("solveDeadlineNanos must be positive");
         }
@@ -72,6 +94,7 @@ final class SolveJobManager implements AutoCloseable {
                 System.nanoTime() + solveDeadlineNanos
         );
         jobsById.put(job.id, job);
+        operationalMetrics.jobSubmitted();
         var executor = request.f2lMode() == F2LMode.OPTIMIZED ? optimizedExecutor : fastExecutor;
         try {
             job.future = executor.submit(() -> run(
@@ -131,6 +154,17 @@ final class SolveJobManager implements AutoCloseable {
         }
     }
 
+    void cancelOwnedJobs(String userId) {
+        if (userId == null) {
+            return;
+        }
+        for (var job : jobsById.values()) {
+            if (java.util.Objects.equals(job.userId, userId) && job.cancel()) {
+                retainFinished(job);
+            }
+        }
+    }
+
     private void run(
             JobState job,
             solver.CfopSolveRequest request,
@@ -145,6 +179,8 @@ final class SolveJobManager implements AutoCloseable {
             }
             return;
         }
+        operationalMetrics.jobStarted();
+        long startedAt = System.nanoTime();
         try {
             var result = SolveCancellation.withDeadline(job.remainingNanos(), () ->
                     solveService.solveWithProgress(request, progress -> {
@@ -163,17 +199,21 @@ final class SolveJobManager implements AutoCloseable {
                     : () -> {
                     };
             if (job.complete(result, saveAction)) {
+                operationalMetrics.jobCompleted(System.nanoTime() - startedAt);
                 retainFinished(job);
             }
         } catch (SolveCancelledException exception) {
             if (job.cancel()) {
+                operationalMetrics.jobCancelled(true);
                 retainFinished(job);
             }
         } catch (SolveDeadlineExceededException exception) {
             if (job.timeout()) {
+                operationalMetrics.jobTimedOut(true);
                 retainFinished(job);
             }
         } catch (Exception exception) {
+            StructuredLog.error(LOGGER, "solve_job_failed", exception, Map.of("jobId", job.id));
             if (Thread.currentThread().isInterrupted()) {
                 if (job.cancel()) {
                     retainFinished(job);
@@ -181,6 +221,7 @@ final class SolveJobManager implements AutoCloseable {
                 return;
             }
             if (job.fail(exception)) {
+                operationalMetrics.jobFailed(true);
                 retainFinished(job);
             }
         }
@@ -195,8 +236,14 @@ final class SolveJobManager implements AutoCloseable {
     }
 
     private static void requireOwner(JobState job, String requesterUserId) {
-        if (job.userId != null && !java.util.Objects.equals(job.userId, requesterUserId)) {
-            throw new IllegalArgumentException("Solve job not found");
+        if (job.userId == null) {
+            return;
+        }
+        if (requesterUserId == null) {
+            throw new AuthenticationRequiredException();
+        }
+        if (!java.util.Objects.equals(job.userId, requesterUserId)) {
+            throw new ForbiddenException();
         }
     }
 
@@ -260,6 +307,18 @@ final class SolveJobManager implements AutoCloseable {
     static final class CapacityException extends IllegalStateException {
         private CapacityException(String message) {
             super(message);
+        }
+    }
+
+    static final class AuthenticationRequiredException extends IllegalStateException {
+        private AuthenticationRequiredException() {
+            super("Authentication required");
+        }
+    }
+
+    static final class ForbiddenException extends IllegalStateException {
+        private ForbiddenException() {
+            super("Solve job belongs to another user");
         }
     }
 

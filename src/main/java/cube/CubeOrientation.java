@@ -105,11 +105,11 @@ public class CubeOrientation {
         if (vector.equals(new Vector(1, 0, 0))) {
             return sliceMove(Move.M, invertAmount(amount));
         }
-        if (vector.equals(new Vector(0, -1, 0))) {
-            return sliceMove(Move.E, invertAmount(amount));
-        }
         if (vector.equals(new Vector(0, 1, 0))) {
             return sliceMove(Move.E, amount);
+        }
+        if (vector.equals(new Vector(0, -1, 0))) {
+            return sliceMove(Move.E, invertAmount(amount));
         }
         if (vector.equals(new Vector(0, 0, 1))) {
             return sliceMove(Move.S, amount);
@@ -222,7 +222,8 @@ public class CubeOrientation {
     private static Vector sliceVector(Move move) {
         return switch (move) {
             case M -> new Vector(-1, 0, 0);
-            case E -> new Vector(0, -1, 0);
+            // MoveTables defines E in the positive-Y direction (u = U E).
+            case E -> new Vector(0, 1, 0);
             case S -> new Vector(0, 0, 1);
             default -> throw new IllegalArgumentException("Not a slice move: " + move);
         };

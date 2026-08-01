@@ -125,11 +125,9 @@ public class F2LPhaseCaseDatabaseTest {
     }
 
     @Test
-    void solver_shouldUseCanonicalSetupCaseWhenRuntimeFrameMapsTargetToDifferentVisibleSlot() {
-        var setupDatabase = F2LSetupCaseDatabase.empty();
-        setupDatabase.register("R U R' F R' F' R U", "R U' R'", F2LSlot.FR, "case-26.1");
-        var insertDatabase = F2LInsertCaseDatabase.empty();
-        insertDatabase.register("L' U L", F2LSlot.FL, "case-4.1");
+    void solver_shouldSolveRuntimeFrameCaseWithProductionDatabase() {
+        var setupDatabase = F2LSetupCaseDatabase.seedCases();
+        var insertDatabase = F2LInsertCaseDatabase.seedCases();
 
         var orientedCube = new OrientedCube();
         orientedCube.applyAlgorithm("L2 B2 D L2 B2 D' R2 U' L2 B2 D2 F' U' F D' L B U' R' U2");
@@ -139,11 +137,7 @@ public class F2LPhaseCaseDatabaseTest {
         var solution = new F2LSolver(setupDatabase, insertDatabase)
                 .solve(orientedCube);
 
-        assertTrue(solution.toString().startsWith("U2 R U' R' U2 L' U L"));
-        orientedCube.applyMoves(Algorithm.parse("U2 R U' R' U2 L' U L").getMoves());
-        assertTrue(F2LGeometry.isTargetSlotSolved(
-                orientedCube.cubeState(),
-                new F2LGeometry.TargetSlot(cube.Corner.URF, cube.Edge.FR)
-        ));
+        orientedCube.applyMoves(solution.getMoves());
+        assertTrue(cfop.F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()));
     }
 }

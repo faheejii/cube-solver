@@ -9,7 +9,6 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class OLLCaseDatabaseTest {
@@ -48,27 +47,21 @@ public class OLLCaseDatabaseTest {
     }
 
     @Test
-    void findAll_shouldNotResolveAnOllSignatureAcrossDifferentFrames() {
+    void findAll_shouldSeedLogicalSignaturesAsSeparateFrameEntries() {
         var database = OLLCaseDatabase.seedCases();
+        var ollCase = database.allCases().stream().findFirst().orElseThrow();
+        var sourceKey = CubeOrientationKey.all().get(0);
+        var targetKey = CubeOrientationKey.all().get(1);
+        var sourceSetup = setupCubeFor(sourceKey, ollCase.algorithm());
+        var targetSetup = setupCubeFor(targetKey, ollCase.algorithm());
+        var sourceSignature = OLLAnalyzer.extractSignature(sourceSetup.cubeState(), sourceSetup.orientation());
+        var targetSignature = OLLAnalyzer.extractSignature(targetSetup.cubeState(), targetSetup.orientation());
 
-        for (var ollCase : database.allCases()) {
-            for (var sourceKey : CubeOrientationKey.all()) {
-                var sourceSetup = setupCubeFor(sourceKey, ollCase.algorithm());
-                var signature = OLLAnalyzer.extractSignature(sourceSetup.cubeState(), sourceSetup.orientation());
-                assertFalse(database.findAll(sourceKey, signature).isEmpty());
-
-                for (var targetKey : CubeOrientationKey.all()) {
-                    if (targetKey.equals(sourceKey)) {
-                        continue;
-                    }
-                    if (database.findAll(targetKey, signature).isEmpty()) {
-                        return;
-                    }
-                }
-            }
-        }
-
-        throw new AssertionError("Expected at least one OLL signature to be frame-specific");
+        assertEquals(sourceSignature, targetSignature);
+        assertTrue(database.findAll(sourceKey, sourceSignature).stream()
+                .anyMatch(match -> match.name().startsWith(ollCase.name())));
+        assertTrue(database.findAll(targetKey, targetSignature).stream()
+                .anyMatch(match -> match.name().startsWith(ollCase.name())));
     }
 
     private static OrientedCube setupCubeFor(CubeOrientationKey setupOrientationKey, cube.Algorithm algorithm) {

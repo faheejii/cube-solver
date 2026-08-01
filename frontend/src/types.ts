@@ -29,9 +29,23 @@ export type SolveRequest = {
 };
 
 export type SolveJobRequest = SolveRequest & {
-    userId?: string;
     solveId?: number;
     saveOnComplete?: boolean;
+};
+
+export type AuthUser = {
+    id: string;
+    email: string;
+    displayName: string | null;
+};
+
+export type LoginRequest = {
+    email: string;
+    password: string;
+};
+
+export type RegisterRequest = LoginRequest & {
+    displayName: string;
 };
 
 export type SolveJob = {
@@ -85,7 +99,6 @@ export type SolutionProcess = {
 };
 
 export type CreateSolveAttemptRequest = {
-    userId: string;
     clientAttemptId: string;
     scramble: string;
     crossFaceRequested: string;
@@ -150,7 +163,6 @@ export type SolveHistoryDetail = {
 };
 
 export type SaveSolutionRequest = {
-    userId: string;
     crossFaceRequested: string;
     crossFaceChosen: string;
     f2lMode: string;

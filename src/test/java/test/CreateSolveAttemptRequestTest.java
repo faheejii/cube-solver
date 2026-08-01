@@ -10,7 +10,6 @@ public class CreateSolveAttemptRequestTest {
     @Test
     void constructor_shouldAcceptValidAttempt() {
         assertDoesNotThrow(() -> new CreateSolveAttemptRequest(
-                "user-1",
                 "attempt-1",
                 "R U R'",
                 "CN",
@@ -24,7 +23,6 @@ public class CreateSolveAttemptRequestTest {
     @Test
     void constructor_shouldRequireClientAttemptId() {
         assertThrows(IllegalArgumentException.class, () -> new CreateSolveAttemptRequest(
-                "user-1",
                 "",
                 "R U R'",
                 "U",
@@ -38,14 +36,14 @@ public class CreateSolveAttemptRequestTest {
     @Test
     void constructor_shouldRejectInconsistentDnfAndPenalty() {
         assertThrows(IllegalArgumentException.class, () -> new CreateSolveAttemptRequest(
-                "user-1", "attempt-2", "R", "U", 1_000, "dnf", null, false
+                "attempt-2", "R", "U", 1_000, "dnf", null, false
         ));
     }
 
     @Test
     void constructor_shouldRejectNegativeTimes() {
         assertThrows(IllegalArgumentException.class, () -> new CreateSolveAttemptRequest(
-                "user-1", "attempt-3", "R", "U", -1, "none", 1, false
+                "attempt-3", "R", "U", -1, "none", 1, false
         ));
     }
 }

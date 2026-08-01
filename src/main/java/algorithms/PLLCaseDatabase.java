@@ -164,7 +164,7 @@ public class PLLCaseDatabase {
     }
 
     private static Algorithm parseLastLayerAlgorithm(String algorithm) {
-        return Algorithm.materializeCubeRotations(
+        return Algorithm.materializeWideAndSliceMoves(
                 Algorithm.parse(NotationNormalizer.normalizeLastLayerAlgorithm(algorithm))
         );
     }

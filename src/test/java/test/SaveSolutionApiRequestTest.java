@@ -32,7 +32,6 @@ public class SaveSolutionApiRequestTest {
 
     private static SaveSolutionApiRequest validRequestWithTotalMoves(int totalMoves, String mode) {
         return new SaveSolutionApiRequest(
-                "user-1",
                 "CN",
                 "U",
                 mode,

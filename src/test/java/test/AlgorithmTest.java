@@ -104,4 +104,14 @@ public class AlgorithmTest {
         assertEquals("y2 R2", normalized.toString());
     }
 
+    @Test
+    void materializeWideAndSliceMoves_shouldProduceOnlyOuterTurns() {
+        var source = Algorithm.parse("r' R2 U R' U r U2 r' U M'");
+        var compiled = Algorithm.materializeWideAndSliceMoves(source);
+
+        assertEquals("L' R2 B R' B L U2 L' B R' L", compiled.toString());
+        assertTrue(compiled.getMoves().stream().noneMatch(move -> move.isCubeRotation() || move.isWideMove()));
+        assertTrue(compiled.getMoves().stream().noneMatch(move -> move.ordinal() / 3 >= 12));
+    }
+
 }

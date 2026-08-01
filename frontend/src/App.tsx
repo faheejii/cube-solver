@@ -11,7 +11,6 @@ import {
     createSolveAttempt,
     deleteSolve,
     cancelSolveJob,
-    fetchSolveJob,
     fetchSolveHistory,
     fetchSolveHistoryDetail,
     fetchSolveStatistics,
@@ -25,6 +24,7 @@ import {
     formatSolveTime,
 } from "./format";
 import type {
+    AuthUser,
     SolutionProcess,
     SolutionProcessSource,
     SolveJob,
@@ -36,6 +36,7 @@ import type {
     SolveResponse,
     SolveStatistics,
 } from "./types";
+import {isTerminalProcess, SolveJobCancelledError, trimFinishedProcesses, waitForSolveJob} from "./jobs";
 
 const DEFAULT_SCRAMBLE = "R D R' D2 R D' R'";
 const FACE_OPTIONS = [
@@ -77,8 +78,7 @@ function initialTheme(): Theme {
     return "dark";
 }
 
-export default function App() {
-    const [userId] = useState(() => getOrCreateClientUserId());
+export default function App({user, onLogout}: {user: AuthUser; onLogout: () => void}) {
     const [committedScramble, setCommittedScramble] = useState("");
     const [clientAttemptId, setClientAttemptId] = useState(() => crypto.randomUUID());
     const [draftScramble, setDraftScramble] = useState("");
@@ -133,6 +133,7 @@ export default function App() {
     const attemptSavingRef = useRef<string | null>(null);
     const completedAttemptRef = useRef<CompletedAttemptSnapshot | null>(null);
     const modalJobRequestIdRef = useRef(0);
+    const historyLoadRequestedRef = useRef(false);
 
     const inspectionElapsedMs =
         inspectionStartedAt === null ? 0 : Math.max(0, clockMs - inspectionStartedAt);
@@ -174,9 +175,15 @@ export default function App() {
 
     useEffect(() => {
         void initializeScramble();
-        void loadHistory();
         void loadStatistics();
     }, []);
+
+    useEffect(() => {
+        if (activeView === "history" && !historyLoadRequestedRef.current) {
+            historyLoadRequestedRef.current = true;
+            void loadHistory();
+        }
+    }, [activeView]);
 
     useEffect(() => {
         if (!committedScramble) {
@@ -196,13 +203,12 @@ export default function App() {
             scramble: committedScramble,
             crossFace,
             f2lMode,
-            userId,
         };
 
         void runTrackedSolve(solveRequest, "timer", undefined, (job) => {
             jobId = job.id;
             if (disposed && (job.status === "queued" || job.status === "running")) {
-                void cancelSolveJob(job.id, solveRequest.userId);
+                void cancelSolveJob(job.id);
             }
         })
             .then((nextResult) => {
@@ -227,7 +233,7 @@ export default function App() {
         return () => {
             disposed = true;
             if (jobId) {
-                void cancelSolveJob(jobId, solveRequest.userId);
+                void cancelSolveJob(jobId);
             }
         };
     }, [committedScramble, crossFace, f2lMode]);
@@ -397,7 +403,7 @@ export default function App() {
         setHistoryStatus("loading");
         setHistoryError(null);
         try {
-            const page = await fetchSolveHistory(userId, 25);
+            const page = await fetchSolveHistory(25);
             setHistoryEntries(page.items);
             setHistoryCursor(page.nextCursor);
             setHistoryStatus("ready");
@@ -414,7 +420,7 @@ export default function App() {
         }
         setHistoryLoadingMore(true);
         try {
-            const page = await fetchSolveHistory(userId, 25, historyCursor);
+            const page = await fetchSolveHistory(25, historyCursor);
             setHistoryEntries((current) => [
                 ...current,
                 ...page.items.filter((entry) => current.every((existing) => existing.id !== entry.id)),
@@ -431,7 +437,7 @@ export default function App() {
     async function loadStatistics() {
         setStatisticsLoading(true);
         try {
-            setStatistics(await fetchSolveStatistics(userId));
+            setStatistics(await fetchSolveStatistics());
         } catch {
             setStatistics(null);
         } finally {
@@ -446,7 +452,7 @@ export default function App() {
         setModalDetail(null);
         setModalResult(null);
         try {
-            const detail = await fetchSolveHistoryDetail(userId, entry.id);
+            const detail = await fetchSolveHistoryDetail(entry.id);
             const saved = detail.solutions[0];
             const nextMode = (saved?.mode ?? f2lMode) as F2LMode;
             const nextCross = saved?.crossFaceRequested ?? crossFace;
@@ -480,7 +486,7 @@ export default function App() {
         setDeletingSolveId(entry.id);
         setHistoryError(null);
         try {
-            await deleteSolve(userId, entry.id);
+            await deleteSolve(entry.id);
             setHistoryEntries((current) => current.filter((solve) => solve.id !== entry.id));
             setSaveNotice("Solve deleted");
             await Promise.all([loadHistory(), loadStatistics()]);
@@ -516,7 +522,6 @@ export default function App() {
                 scramble: detail.scramble,
                 crossFace: requestedCross,
                 f2lMode: mode,
-                userId: autoSave ? userId : undefined,
                 solveId: autoSave ? detail.id : undefined,
                 saveOnComplete: autoSave,
             }, "history", (progress) => {
@@ -541,7 +546,7 @@ export default function App() {
             }
             setModalResult(computed);
             if (autoSave) {
-                const refreshedDetail = await fetchSolveHistoryDetail(userId, detail.id);
+                const refreshedDetail = await fetchSolveHistoryDetail(detail.id);
                 setModalDetail(refreshedDetail);
                 setModalDirty(false);
                 await loadHistory();
@@ -620,7 +625,7 @@ export default function App() {
             const saved = await saveSolveSolution(
                 modalDetail.id,
                 modalMode,
-                buildSaveSolutionRequest(userId, modalCrossFace, modalResult),
+                buildSaveSolutionRequest(modalCrossFace, modalResult),
             );
             updateModalSavedSolution(saved);
             setModalResult(savedSolutionResult(modalDetail.scramble, saved));
@@ -758,7 +763,6 @@ export default function App() {
 
         try {
             const savedAttempt = await createSolveAttempt({
-                userId,
                 clientAttemptId: snapshot.clientAttemptId,
                 scramble: snapshot.scramble,
                 crossFaceRequested: snapshot.crossFace,
@@ -783,13 +787,12 @@ export default function App() {
                 ? saveSolveSolution(
                     savedAttempt.id,
                     snapshot.f2lMode,
-                    buildSaveSolutionRequest(userId, snapshot.crossFace, snapshot.result),
+                    buildSaveSolutionRequest(snapshot.crossFace, snapshot.result),
                 )
                 : runTrackedSolve({
                     scramble: snapshot.scramble,
                     crossFace: snapshot.crossFace,
                     f2lMode: snapshot.f2lMode,
-                    userId,
                     solveId: savedAttempt.id,
                     saveOnComplete: true,
                 }, "background");
@@ -932,7 +935,7 @@ export default function App() {
             .then((job) => {
                 onJobCreated?.(job);
                 updateProcessFromJob(processId, job);
-                return waitForSolveJob(job, request.userId, (progress) => {
+                return waitForSolveJob(job, (progress) => {
                     updateProcessFromJob(processId, progress);
                     onProgress?.(progress);
                 });
@@ -994,7 +997,7 @@ export default function App() {
             entry.id === process.id ? {...entry, cancelling: true} : entry
         ));
         try {
-            updateProcessFromJob(process.id, await cancelSolveJob(process.jobId, process.request.userId));
+            updateProcessFromJob(process.id, await cancelSolveJob(process.jobId));
         } catch (cancelError) {
             const message = cancelError instanceof Error ? cancelError.message : "Cancellation failed";
             setProcesses((current) => current.map((entry) =>
@@ -1021,8 +1024,10 @@ export default function App() {
                 activeView={activeView}
                 theme={theme}
                 activeProcessCount={processes.filter((process) => !isTerminalProcess(process)).length}
+                user={user}
                 onViewChange={setActiveView}
                 onToggleTheme={toggleTheme}
+                onLogout={onLogout}
             />
 
             <div className="dashboard-center">
@@ -1305,23 +1310,11 @@ export default function App() {
     );
 }
 
-function getOrCreateClientUserId(): string {
-    const existing = window.localStorage.getItem("cube-solver-user-id");
-    if (existing && existing.trim().length > 0) {
-        return existing;
-    }
-    const generated = `anon-${crypto.randomUUID()}`;
-    window.localStorage.setItem("cube-solver-user-id", generated);
-    return generated;
-}
-
 function buildSaveSolutionRequest(
-    userId: string,
     crossFaceRequested: string,
     result: SolveResponse,
 ): SaveSolutionRequest {
     return {
-        userId,
         crossFaceRequested,
         crossFaceChosen: result.crossFace,
         f2lMode: result.f2lMode,
@@ -1366,56 +1359,6 @@ function savedSolutionResult(scramble: string, saved: SavedSolution): SolveRespo
         totalMoveCount: saved.totalMoveCount,
         elapsedMs: saved.elapsedMs,
     };
-}
-
-async function waitForSolveJob(
-    initialJob: SolveJob,
-    userId: string | undefined,
-    onProgress?: (job: SolveJob) => void,
-): Promise<SolveResponse> {
-    let job = initialJob;
-    while (true) {
-        onProgress?.(job);
-        if (job.status === "completed") {
-            if (!job.result) {
-                throw new Error("Optimized solve completed without a result");
-            }
-            return job.result;
-        }
-        if (job.status === "failed") {
-            throw new Error(job.error ?? "Solve failed");
-        }
-        if (job.status === "cancelled") {
-            throw new SolveJobCancelledError();
-        }
-        if (job.status === "timed_out") {
-            throw new Error(job.error ?? "Solve timed out");
-        }
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 500));
-        job = await fetchSolveJob(job.id, userId);
-    }
-}
-
-class SolveJobCancelledError extends Error {
-    constructor() {
-        super("Solve cancelled");
-    }
-}
-
-function isTerminalProcess(process: SolutionProcess): boolean {
-    return process.status === "completed"
-        || process.status === "failed"
-        || process.status === "cancelled"
-        || process.status === "timed_out";
-}
-
-function trimFinishedProcesses(processes: SolutionProcess[]): SolutionProcess[] {
-    const active = processes.filter((process) => !isTerminalProcess(process));
-    const finished = processes
-        .filter(isTerminalProcess)
-        .sort((left, right) => right.updatedAt - left.updatedAt)
-        .slice(0, 20);
-    return [...active, ...finished];
 }
 
 function modalOverwriteMessage(

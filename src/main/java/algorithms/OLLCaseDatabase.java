@@ -18,13 +18,6 @@ import java.util.List;
 import java.util.Map;
 
 public class OLLCaseDatabase {
-    private static final Algorithm[] Y_ROTATIONS = {
-            new Algorithm(),
-            Algorithm.fromMoves(List.of(Move.Y)),
-            Algorithm.fromMoves(List.of(Move.Y2)),
-            Algorithm.fromMoves(List.of(Move.Y_PRIME))
-    };
-
     private final Map<LookupKey, List<OLLCase>> casesByLookup = new LinkedHashMap<>();
     private final List<OLLCase> caseList = new ArrayList<>();
     private int frameVariantCount;
@@ -155,16 +148,13 @@ public class OLLCaseDatabase {
         }
         caseList.add(ollCase);
         for (var orientationKey : CubeOrientationKey.all()) {
-            for (var rotationIndex = 0; rotationIndex < Y_ROTATIONS.length; rotationIndex++) {
-                var variant = seededVariant(ollCase, rotationIndex);
-                var setupCube = setupCubeFor(orientationKey, variant.algorithm());
-                validateSeedVariant(setupCube, variant.algorithm(), variant.name());
-                var lookupKey = new LookupKey(
-                        CubeOrientationKey.from(setupCube.orientation()),
-                        OLLAnalyzer.extractSignature(setupCube.cubeState(), setupCube.orientation())
-                );
-                casesByLookup.computeIfAbsent(lookupKey, ignored -> new ArrayList<>()).add(variant);
-            }
+            var setupCube = setupCubeFor(orientationKey, ollCase.algorithm());
+            validateSeedVariant(setupCube, ollCase.algorithm(), ollCase.name());
+            var lookupKey = new LookupKey(
+                    CubeOrientationKey.from(setupCube.orientation()),
+                    OLLAnalyzer.extractSignature(setupCube.cubeState(), setupCube.orientation())
+            );
+            casesByLookup.computeIfAbsent(lookupKey, ignored -> new ArrayList<>()).add(ollCase);
             frameVariantCount++;
         }
     }
@@ -199,11 +189,8 @@ public class OLLCaseDatabase {
                 }
             }
             for (var orientationKey : CubeOrientationKey.all()) {
-                for (var rotationIndex = 0; rotationIndex < Y_ROTATIONS.length; rotationIndex++) {
-                    var variant = seededVariant(ollCase, rotationIndex);
-                    var setupCube = setupCubeFor(orientationKey, variant.algorithm());
-                    validateSeedVariant(setupCube, variant.algorithm(), variant.name());
-                }
+                var setupCube = setupCubeFor(orientationKey, ollCase.algorithm());
+                validateSeedVariant(setupCube, ollCase.algorithm(), ollCase.name());
             }
         }
     }
@@ -223,7 +210,7 @@ public class OLLCaseDatabase {
     }
 
     private static Algorithm parseLastLayerAlgorithm(String algorithm) {
-        return Algorithm.materializeCubeRotations(
+        return Algorithm.materializeWideAndSliceMoves(
                 Algorithm.parse(NotationNormalizer.normalizeLastLayerAlgorithm(algorithm))
         );
     }
@@ -235,15 +222,12 @@ public class OLLCaseDatabase {
                 continue;
             }
             for (var orientationKey : CubeOrientationKey.all()) {
-                for (var rotationIndex = 0; rotationIndex < Y_ROTATIONS.length; rotationIndex++) {
-                    var variant = seededVariant(ollCase, rotationIndex);
-                    var setupCube = setupCubeFor(orientationKey, variant.algorithm());
-                    var lookupKey = new LookupKey(
-                            CubeOrientationKey.from(setupCube.orientation()),
-                            OLLAnalyzer.extractSignature(setupCube.cubeState(), setupCube.orientation())
-                    );
-                    grouped.computeIfAbsent(lookupKey, ignored -> new ArrayList<>()).add(variant);
-                }
+                var setupCube = setupCubeFor(orientationKey, ollCase.algorithm());
+                var lookupKey = new LookupKey(
+                        CubeOrientationKey.from(setupCube.orientation()),
+                        OLLAnalyzer.extractSignature(setupCube.cubeState(), setupCube.orientation())
+                );
+                grouped.computeIfAbsent(lookupKey, ignored -> new ArrayList<>()).add(ollCase);
             }
         }
 
@@ -260,17 +244,6 @@ public class OLLCaseDatabase {
         var setupCube = new OrientedCube(new CubeState(), setupOrientationKey.toOrientation());
         setupCube.applyMoves(algorithm.inverse().getMoves());
         return setupCube;
-    }
-
-    private static OLLCase seededVariant(OLLCase source, int rotationIndex) {
-        var rotation = Y_ROTATIONS[rotationIndex];
-        var algorithm = Algorithm.materializeCubeRotations(
-                rotation.concat(source.algorithm()).concat(rotation.inverse())
-        );
-        if (rotationIndex == 0) {
-            return source;
-        }
-        return new OLLCase(source.signature(), algorithm, source.name() + "-frame" + rotationIndex);
     }
 
     public record LookupKey(CubeOrientationKey orientationKey, OLLCaseSignature signature) {
