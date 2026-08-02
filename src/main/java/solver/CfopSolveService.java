@@ -310,8 +310,11 @@ public class CfopSolveService {
 
         var postCrossCube = orientedCube.cubeState().copy();
         var postCrossOrientation = orientedCube.orientation();
-        var fastF2l = f2lSolver.solve(new OrientedCube(postCrossCube.copy(), postCrossOrientation));
-        var continuation = evaluateContinuation(postCrossCube, postCrossOrientation, fastF2l, false);
+        var fastF2lTrace = f2lSolver.solveTrace(
+                new OrientedCube(postCrossCube.copy(), postCrossOrientation)
+        );
+        var fastF2l = fastF2lTrace.algorithm();
+        var continuation = evaluateContinuation(postCrossCube, postCrossOrientation, fastF2lTrace, false);
 
         return new FixedCrossBaseline(
                 startTime, scramble, crossFace, crossResult, postCrossCube, postCrossOrientation,
@@ -363,6 +366,22 @@ public class CfopSolveService {
             F2LMode f2lMode,
             long elapsedNanos
     ) {
+        var modeComparison = f2lMode == F2LMode.OPTIMIZED
+                ? F2LModeComparison.between(
+                        F2LModeSummary.from(
+                                baseline.crossFace().toString(),
+                                baseline.continuation().f2lTrace(),
+                                baseline.continuation().oll(),
+                                baseline.continuation().pll()
+                        ),
+                        F2LModeSummary.from(
+                                baseline.crossFace().toString(),
+                                continuation.f2lTrace(),
+                                continuation.oll(),
+                                continuation.pll()
+                        )
+                )
+                : null;
         return new CfopSolveResult(
                 baseline.scramble(),
                 baseline.crossFace().toString(),
@@ -375,7 +394,8 @@ public class CfopSolveService {
                 continuation.pll(),
                 solvedSlotSummary(continuation.cube(), continuation.orientation()),
                 continuation.fullySolved(),
-                elapsedNanos / 1_000_000.0
+                elapsedNanos / 1_000_000.0,
+                modeComparison
         );
     }
 
@@ -443,12 +463,12 @@ public class CfopSolveService {
     private Continuation evaluateContinuation(
             CubeState postCrossCube,
             CubeOrientation postCrossOrientation,
-            Algorithm f2lAlgorithm,
+            F2LSolveTrace f2lTrace,
             boolean optimizeLastLayer
     ) {
         var candidateCube = new OrientedCube(postCrossCube.copy(), postCrossOrientation);
-        candidateCube.applyMoves(f2lAlgorithm.getMoves());
-        return evaluateContinuation(candidateCube, f2lAlgorithm, optimizeLastLayer);
+        candidateCube.applyMoves(f2lTrace.algorithmMoves());
+        return evaluateContinuation(candidateCube, f2lTrace, optimizeLastLayer);
     }
 
     private Continuation evaluateContinuation(
@@ -457,16 +477,17 @@ public class CfopSolveService {
     ) {
         return evaluateContinuation(
                 new OrientedCube(candidate.cube().copy(), candidate.orientation()),
-                candidate.algorithm(),
+                candidate.trace(),
                 optimizeLastLayer
         );
     }
 
     private Continuation evaluateContinuation(
             OrientedCube candidateCube,
-            Algorithm f2lAlgorithm,
+            F2LSolveTrace f2lTrace,
             boolean optimizeLastLayer
     ) {
+        var f2lAlgorithm = f2lTrace.algorithm();
         var f2lResult = new CfopStageResult(
                 "f2l",
                 f2lAlgorithm.toString(),
@@ -496,6 +517,7 @@ public class CfopSolveService {
                     var pllResult = solvePll(solvedLastLayerCube.cubeState(), solvedLastLayerCube);
                     var evaluated = new Continuation(
                             f2lResult,
+                            f2lTrace,
                             ollResult,
                             pllResult,
                             solvedLastLayerCube.cubeState().copy(),
@@ -518,6 +540,7 @@ public class CfopSolveService {
         var pllResult = solvePll(lastLayerCube.cubeState(), lastLayerCube);
         return new Continuation(
                 f2lResult,
+                f2lTrace,
                 ollResult,
                 pllResult,
                 lastLayerCube.cubeState().copy(),
@@ -557,6 +580,7 @@ public class CfopSolveService {
 
     private record Continuation(
             CfopStageResult f2l,
+            F2LSolveTrace f2lTrace,
             CfopStageResult oll,
             CfopStageResult pll,
             CubeState cube,

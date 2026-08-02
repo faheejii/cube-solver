@@ -12,6 +12,7 @@ import cube.OrientedCube;
 import org.junit.jupiter.api.Test;
 import solver.CfopSolveRequest;
 import solver.CfopSolveService;
+import solver.F2LComparisonCode;
 import solver.F2LMode;
 
 import java.time.Duration;
@@ -47,6 +48,16 @@ public class CfopSolveServiceTest {
         assertTrue(optimized.f2l().solved());
         assertTrue(optimized.fullySolved());
         assertTrue(totalCfopMoves(optimized) <= totalCfopMoves(greedy));
+        assertTrue(optimized.modeComparison() != null);
+        assertEquals(optimized.crossFace(), optimized.modeComparison().fast().crossFace());
+        assertEquals(optimized.crossFace(), optimized.modeComparison().optimized().crossFace());
+        assertEquals(
+                totalCfopMoves(optimized) - totalCfopMoves(greedy),
+                optimized.modeComparison().totalMoveDifference()
+        );
+        assertTrue(optimized.modeComparison().explanationCodes().stream()
+                .allMatch(code -> code != F2LComparisonCode.LOCAL_PAIR_LONGER_GLOBAL_ROUTE_SHORTER
+                        || optimized.modeComparison().f2lMoveDifference() > 0));
     }
 
     @Test
