@@ -44,6 +44,7 @@ Implemented:
 - OLL solving from seeded sticker-orientation signatures
 - PLL solving from seeded last-layer permutation signatures, including final AUF handling
 - validation-by-execution after database lookup in F2L, OLL, and PLL
+- immutable internal F2L pair traces for greedy solves, including state/orientation snapshots, preserved-slot metadata, case descriptions, and factual selection evidence
 - AUF-only OLL and PLL lookup; all 24 frame variants are indexed at startup
 - bounded Fast and Optimized solve queues with cancellation support
 - a 15-second end-to-end solver deadline with explicit timeout status
@@ -58,6 +59,7 @@ Known limitations:
 
 - Some seeded F2L algorithms are not yet optimal; future algorithm-set expansion should target move count and candidate-evaluation efficiency.
 - F2L is database-only in production and fails fast with a diagnostic context when a case is missing.
+- F2L pair traces are currently an internal solver capability; pair-level API fields, Fast-versus-Optimized comparison data, and pair-card frontend playback are not exposed yet.
 - Optimized F2L can be slower than fast mode on some scrambles because it evaluates more candidate lines before choosing a result.
 - Legacy anonymous history is preserved during migration but is not automatically claimed by newly registered accounts.
 
@@ -73,6 +75,12 @@ Run the full Java test suite:
 
 ```bash
 mvn -q -Dmaven.compiler.useIncrementalCompilation=false test
+```
+
+Run the focused F2L trace tests:
+
+```bash
+mvn -q -Dtest=F2LTraceModelsTest,F2LGreedyTraceTest,F2LSolverTest test
 ```
 
 Run the frontend unit tests and production build:
