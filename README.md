@@ -263,7 +263,7 @@ Compose exposes PostgreSQL on host port `5433` for host-run integration tests. W
 ```bash
 docker compose up -d postgres
 export TEST_DATABASE_URL='postgresql://cube_solver:cube_solver@localhost:5433/cube_solver'
-mvn -q -Dmaven.compiler.useIncrementalCompilation=false -Df2l.corpus=true test
+mvn -q -Dmaven.compiler.useIncrementalCompilation=false test
 ```
 
 The liveness endpoint is `GET /api/health/live`, readiness is `GET /api/health/ready`, and process metrics are available at `GET /api/metrics`. CI runs [`scripts/docker-smoke-test.sh`](scripts/docker-smoke-test.sh) against the built Compose stack.
