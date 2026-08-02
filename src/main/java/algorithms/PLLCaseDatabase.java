@@ -35,47 +35,11 @@ public class PLLCaseDatabase {
     }
 
     public static PLLCaseDatabase seedCases() {
-        var database = new PLLCaseDatabase();
-        for (var pllCase : seedCaseList()) {
-            database.register(pllCase);
-        }
-        return database;
+        return AlgorithmCaseCatalog.pllDatabase();
     }
 
     public static Map<LookupKey, List<PLLCase>> duplicateSeedCases() {
-        return findDuplicateSignatures(seedCaseList());
-    }
-
-    private static List<PLLCase> seedCaseList() {
-        var pllCases = new ArrayList<PLLCase>();
-        var cases = List.of(
-                "x R' U R' D2 R U' R' D2 R2 x'",
-                "x R2 D2 R U R' D2 R U' R x'",
-                "x' R U' R' D R U R' D' R U R' D R U' R' D' x",
-                "R' U' F' R U R' U' R' F R2 U' R' U' R U R' U R",
-                "R2 U R' U R' U' R U' R2 D U' R' U R D'",
-                "R' U' R U D' R2 U R' U R U' R U' R2 D",
-                "R2 U' R U' R U R' U R2 D' U R U' R' D",
-                "R U R' U' D R2 U' R U' R' U R' U R2 D'",
-                "M2 U M2 U2 M2 U M2",
-                "L' U' L F L' U' L U L F' L2 U L",
-                "R U R' F' R U R' U' R' F R2 U' R'",
-                "R U R' U R U R' F' R U R' U' R' F R2 U' R' U2 R U' R'",
-                "R' U R U' R' F' U' F R U R' F R' F' R U' R",
-                "R U' R' U' R U R D R' U' R D' R' U2 R'",
-                "R2 F R U R U' R' F' R U2 R' U2 R",
-                "R U R' U' R' F R2 U' R' U' R U R' F'",
-                "R U' R U R U R U' R' U' R2",
-                "R2 U R U R' U' R' U' R' U R'",
-                "R' U R' U' y R' F' R2 U' R' U R' F R F",
-                "F R U' R' U' R U R' F' R U R' U' R' F R F'",
-                "M2 U M2 U M' U2 M2 U2 M'"
-        );
-        int count = 1;
-        for (var pllCase : cases) {
-            pllCases.add(caseFromAlgorithm(pllCase, String.format("case-%d", count++)));
-        }
-        return List.copyOf(pllCases);
+        return findDuplicateSignatures(AlgorithmCaseCatalog.pllDatabase().allCases());
     }
 
     private static PLLCase caseFromAlgorithm(String algorithm, String name) {
@@ -144,6 +108,21 @@ public class PLLCaseDatabase {
 
     public Collection<PLLCase> allCases() {
         return List.copyOf(caseList);
+    }
+
+    public void validate() {
+        for (var pllCase : caseList) {
+            for (var move : pllCase.algorithm().getMoves()) {
+                if (move.isCubeRotation()) {
+                    throw new IllegalArgumentException("PLL DB algorithms must not contain cube rotations: " + pllCase.name());
+                }
+            }
+            for (var orientationKey : CubeOrientationKey.all()) {
+                for (var finalAuf : FINAL_AUF_TRIALS) {
+                    validateSeedVariant(setupCubeFor(orientationKey, pllCase.algorithm().concat(finalAuf)), pllCase.algorithm().concat(finalAuf), pllCase.name());
+                }
+            }
+        }
     }
 
     private static void validateSeedVariant(OrientedCube setupCube, Algorithm algorithm, String name) {

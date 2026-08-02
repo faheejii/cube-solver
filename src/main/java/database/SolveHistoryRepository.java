@@ -306,7 +306,9 @@ public final class SolveHistoryRepository {
                 result.getInt("total_moves"),
                 result.getDouble("solve_elapsed_ms"),
                 result.getString("solver_version"),
-                result.getObject("updated_at", java.time.OffsetDateTime.class)
+                result.getObject("updated_at", java.time.OffsetDateTime.class),
+                result.getString("f2l_trace_json"),
+                result.getString("comparison_json")
         );
     }
 
@@ -325,6 +327,7 @@ public final class SolveHistoryRepository {
                 INSERT INTO solve_solutions (
                     solve_id, mode, status, cross_face_requested, cross_face_chosen,
                     solution, normalized_solution, f2l_setup_case_count, f2l_insert_case_count,
+                    f2l_trace_json, comparison_json,
                     cross_algorithm, cross_moves, cross_solved, cross_status,
                     f2l_algorithm, f2l_moves, f2l_solved, f2l_status,
                     oll_algorithm, oll_moves, oll_solved, oll_status,
@@ -334,6 +337,7 @@ public final class SolveHistoryRepository {
                 ) VALUES (
                     ?, ?, 'ready', ?, ?,
                     ?, ?, ?, ?,
+                    ?::jsonb, ?::jsonb,
                     ?, ?, ?, ?,
                     ?, ?, ?, ?,
                     ?, ?, ?, ?,
@@ -348,6 +352,8 @@ public final class SolveHistoryRepository {
                     normalized_solution = EXCLUDED.normalized_solution,
                     f2l_setup_case_count = EXCLUDED.f2l_setup_case_count,
                     f2l_insert_case_count = EXCLUDED.f2l_insert_case_count,
+                    f2l_trace_json = EXCLUDED.f2l_trace_json,
+                    comparison_json = EXCLUDED.comparison_json,
                     cross_algorithm = EXCLUDED.cross_algorithm,
                     cross_moves = EXCLUDED.cross_moves,
                     cross_solved = EXCLUDED.cross_solved,
@@ -380,6 +386,8 @@ public final class SolveHistoryRepository {
             statement.setString(i++, command.normalizedSolution());
             statement.setInt(i++, command.f2lSetupCaseCount());
             statement.setInt(i++, command.f2lInsertCaseCount());
+            statement.setString(i++, command.f2lTraceJson());
+            statement.setString(i++, command.comparisonJson());
             statement.setString(i++, command.crossAlgorithm());
             statement.setInt(i++, command.crossMoves());
             statement.setBoolean(i++, command.crossSolved());

@@ -30,6 +30,48 @@ public record SaveSolutionCommand(
         int pllMoves,
         boolean pllSolved,
         String pllStatus,
-        String solverVersion
+        String solverVersion,
+        String f2lTraceJson,
+        String comparisonJson
 ) {
+    public SaveSolutionCommand(
+            String userExternalId,
+            long solveId,
+            String mode,
+            String crossFaceRequested,
+            String crossFaceChosen,
+            String solution,
+            String normalizedSolution,
+            int f2lSetupCaseCount,
+            int f2lInsertCaseCount,
+            String solvedF2LSlots,
+            int totalMoves,
+            boolean fullySolved,
+            double solveElapsedMs,
+            String crossAlgorithm,
+            int crossMoves,
+            boolean crossSolved,
+            String crossStatus,
+            String f2lAlgorithm,
+            int f2lMoves,
+            boolean f2lSolved,
+            String f2lStatus,
+            String ollAlgorithm,
+            int ollMoves,
+            boolean ollSolved,
+            String ollStatus,
+            String pllAlgorithm,
+            int pllMoves,
+            boolean pllSolved,
+            String pllStatus,
+            String solverVersion
+    ) {
+        this(
+                userExternalId, solveId, mode, crossFaceRequested, crossFaceChosen, solution, normalizedSolution,
+                f2lSetupCaseCount, f2lInsertCaseCount, solvedF2LSlots, totalMoves, fullySolved, solveElapsedMs,
+                crossAlgorithm, crossMoves, crossSolved, crossStatus, f2lAlgorithm, f2lMoves, f2lSolved, f2lStatus,
+                ollAlgorithm, ollMoves, ollSolved, ollStatus, pllAlgorithm, pllMoves, pllSolved, pllStatus,
+                solverVersion, null, null
+        );
+    }
 }

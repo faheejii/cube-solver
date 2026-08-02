@@ -36,8 +36,25 @@ public final class DatabaseManager implements AutoCloseable {
                     .baselineVersion("0")
                     .load()
                     .migrate();
+            promoteConfiguredAdmin();
         } catch (RuntimeException exception) {
             throw new SQLException("Database migration failed", exception);
+        }
+    }
+
+    private void promoteConfiguredAdmin() throws SQLException {
+        var adminEmail = DatabaseConfig.adminEmailFromEnvironment();
+        if (adminEmail == null) {
+            return;
+        }
+        try (var connection = openConnection();
+             var statement = connection.prepareStatement("""
+                     UPDATE users
+                     SET role = 'admin', updated_at = NOW()
+                     WHERE LOWER(email) = LOWER(?)
+                     """)) {
+            statement.setString(1, adminEmail);
+            statement.executeUpdate();
         }
     }
 

@@ -30,6 +30,7 @@ const authenticatedUser: AuthUser = {
     id: "user-1",
     email: "cube@example.com",
     displayName: "Cube",
+    role: "user",
 };
 
 describe("AuthenticatedApp", () => {

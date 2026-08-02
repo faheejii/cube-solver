@@ -24,6 +24,8 @@ The solver works on a cubie model, which means it tracks where the pieces are an
 
 Cross, F2L, OLL, and PLL all keep the live `OrientedCube` frame. The OLL and PLL databases expand logical cases into all 24 cube orientations at startup, so last-layer lookup stays frame-aware without a runtime canonicalization bridge. Low-level physical face-turn execution still happens through `MoveApplier.applyMove`.
 
+The application has two database-backed roles: `user` and `admin`. Normal users can solve, save, and review their own history. Administrators additionally receive the Algorithms tab and may read the canonical algorithm catalog. Role checks are enforced by the backend; hiding the navigation item is only a frontend convenience.
+
 ## CFOP stages
 
 - `Cross`: solves the four cross edges on the chosen face
@@ -41,11 +43,18 @@ Implemented:
 - shared CFOP orchestration through `CfopSolveService`
 - default two-phase F2L solving with separate setup and insert databases
 - database-only F2L production solving with fail-fast miss diagnostics
+- F2L slot selection across all currently feasible pairs, with verified unpair recovery when inserted/blocking pairs prevent every direct route
 - OLL solving from seeded sticker-orientation signatures
 - PLL solving from seeded last-layer permutation signatures, including final AUF handling
 - validation-by-execution after database lookup in F2L, OLL, and PLL
 - immutable internal F2L pair traces for greedy solves, including state/orientation snapshots, preserved-slot metadata, case descriptions, and factual selection evidence
 - Fast-versus-Optimized route comparison in the Java result model, including stage move differences, continuation rotations, pair-order changes, and deterministic factual explanation codes
+- backward-compatible solve API fields exposing F2L pair traces, move ranges, snapshots, orientations, case facts, selection evidence, and route comparisons
+- frontend F2L pair cards with deterministic explanation tags and individual pair-level cube playback
+- nullable JSONB persistence for F2L traces and route comparisons in saved Fast/Optimized solutions
+- versioned canonical F2L, OLL, and PLL JSON corpora under `src/main/resources/algorithms/` shared by solver loading and the left-panel Algorithms tab
+- read-only admin `/api/algorithms` catalog with phase, slot, status, and text filters, derived signatures, copy actions, expandable details, and cube previews; `/api/algorithms/f2l` remains a compatibility route
+- admin-only Algorithms tab with a compact responsive row list for F2L setup/insert, OLL, and PLL cases
 - AUF-only OLL and PLL lookup; all 24 frame variants are indexed at startup
 - bounded Fast and Optimized solve queues with cancellation support
 - a 15-second end-to-end solver deadline with explicit timeout status
@@ -58,9 +67,12 @@ Implemented:
 
 Known limitations:
 
-- Some seeded F2L algorithms are not yet optimal; future algorithm-set expansion should target move count and candidate-evaluation efficiency.
+- Some canonical F2L algorithms are not yet optimal; future corpus expansion can target move count and candidate-evaluation efficiency.
 - F2L is database-only in production and fails fast with a diagnostic context when a case is missing.
-- F2L pair traces and comparison data are currently Java-side capabilities; pair-level API fields, persisted trace data, and pair-card frontend playback are not exposed yet.
+- Temporary regression-only F2L seed cases from the pre-database-fallback transition have been removed; uncovered real-world cases now surface as deliberate diagnostics for corpus review.
+- Color-neutral Fast/Optimized evaluation can still fail if every shortlisted cross baseline reaches an uncovered F2L route after recovery; the diagnostic includes the phase, target slot, preserved slots, and signature.
+- Existing saved rows without metadata continue to use the flattened stage display; new rows persist trace and comparison metadata.
+- Production-like Docker/browser verification should be rerun after changes to persisted pair playback, worker assets, static serving, or the Algorithms tab.
 - Optimized F2L can be slower than fast mode on some scrambles because it evaluates more candidate lines before choosing a result.
 - Legacy anonymous history is preserved during migration but is not automatically claimed by newly registered accounts.
 
@@ -78,11 +90,26 @@ Run the full Java test suite:
 mvn -q -Dmaven.compiler.useIncrementalCompilation=false test
 ```
 
+Run the focused catalog/database/API checks:
+
+```bash
+mvn -q -Dtest=F2LCaseCatalogTest,OLLCaseDatabaseTest,PLLCaseDatabaseTest,ApiResponsesTest test
+```
+
 Run the focused F2L trace tests:
 
 ```bash
 mvn -q -Dtest=F2LTraceModelsTest,F2LGreedyTraceTest,F2LOptimizedTraceTest,F2LModeComparisonTest,F2LSolverTest test
 ```
+
+The API response includes additive F2L fields on the `f2l` stage when a trace is available:
+
+- `traceComplete` and `pairs`
+- pair identity, target slot, complete moves, and inclusive move indexes
+- before/after cube snapshots and orientations
+- preserved slots, structured case facts, selection metrics, and reason codes
+
+Optimized responses also include a top-level `comparison` object with signed differences and factual explanation codes. Fast responses return `comparison: null`.
 
 Run the frontend unit tests and production build:
 
@@ -118,6 +145,8 @@ The server exposes:
 - `DELETE /api/solves/{id}`
 - `PUT /api/solves/{id}/solutions/{mode}`
 - `GET /api/stats`
+- `GET /api/algorithms`
+- `GET /api/algorithms/f2l` (backward-compatible F2L-only catalog)
 - `GET /api/health`
 - `POST /api/auth/register`
 - `POST /api/auth/login`
@@ -126,6 +155,25 @@ The server exposes:
 - static frontend files from `frontend/dist` when a frontend build exists
 
 Postgres remains optional for anonymous solver API calls. Accounts, authenticated job ownership, history, and statistics require `DATABASE_URL`. When configured, Flyway applies versioned schema migrations during startup and the server fails clearly if migration cannot complete.
+
+Set `ADMIN_EMAIL` to bootstrap an administrator. The matching account is promoted to `admin` during startup and newly registered accounts with that exact email are also assigned the admin role. All other registrations default to `user`; the role is never accepted from the registration request.
+
+Algorithm resources are organized by CFOP phase under `src/main/resources/algorithms/`:
+
+```text
+algorithms/
+├── f2l/
+│   ├── setup-cases.json
+│   └── insert-cases.json
+├── oll/
+│   └── cases.json
+└── pll/
+    └── cases.json
+```
+
+Each resource is versioned as `{ "version": "1", "cases": [...] }`. JSON is the source of algorithm identity and metadata; startup validation executes the algorithms to derive signatures and checks notation, duplicate names/signatures, preservation, completion, and orientation behavior. Production solving loads canonical cases only. Add a case to the appropriate resource, run the catalog/solver tests, review its derived metadata and cube preview in the admin Algorithms tab, and only then mark it canonical.
+
+The Algorithms tab is visible only to administrators. It supports phase, F2L slot, status, and text filters; copy-to-clipboard; expandable source/signature details; and `Test on cube`. Setup previews use their recorded source setup. OLL and PLL previews use generated inverse algorithms, while insert previews start from a solved cube when no setup is available.
 
 The app supports any PostgreSQL database, not just Neon. You can use:
 
@@ -208,12 +256,14 @@ docker compose up --build
 
 The app is available at `http://localhost:8080`. Compose uses a persistent PostgreSQL volume and development-only credentials; replace them and enable secure cookies for production.
 
+The checked-in Compose file uses `admin@admin.com` as a local development bootstrap email. Replace the app service's `ADMIN_EMAIL` value with the intended administrator address before sharing or deploying the stack. The server also accepts `ADMIN_EMAIL` from the environment when run outside this Compose configuration.
+
 Compose exposes PostgreSQL on host port `5433` for host-run integration tests. With the database service running, execute the full database-backed suite with:
 
 ```bash
 docker compose up -d postgres
 export TEST_DATABASE_URL='postgresql://cube_solver:cube_solver@localhost:5433/cube_solver'
-mvn -q -Dmaven.compiler.useIncrementalCompilation=false -Df2l.corpus=true test
+mvn -q -Dmaven.compiler.useIncrementalCompilation=false test
 ```
 
 The liveness endpoint is `GET /api/health/live`, readiness is `GET /api/health/ready`, and process metrics are available at `GET /api/metrics`. CI runs [`scripts/docker-smoke-test.sh`](scripts/docker-smoke-test.sh) against the built Compose stack.
@@ -261,6 +311,8 @@ Current frontend behavior:
 - includes cursor-paginated solve history with Fast/Optimized and cross-specific solution review
 - supports permanent deletion of owned solves, including the saved Fast and Optimized solutions
 - includes an Active Solutions page with live progress, result previews, retry, and termination
+- includes an admin-only Algorithms tab with a compact responsive case list, filters, copy actions, expandable details, and cube previews
+- hides admin navigation for normal users while retaining backend authorization for admin catalog access
 - reveals the solution only when requested
 - keeps the Timer tab fixed to the viewport and opens animation plus solve details in an internal modal
 - supports per-stage playback and playback speed changes
@@ -318,7 +370,7 @@ mvn -q -Df2l.debug=true compile exec:java -Dexec.mainClass=solver.SolverMain
 mvn -q -Df2l.debug=true -Df2l.debug.verbose=true compile exec:java -Dexec.mainClass=solver.SolverMain
 ```
 
-Missing F2L database cases fail immediately with the missing phase, slot, frame, and signature context so they can be seeded and reviewed deliberately.
+Missing F2L database cases fail immediately with the missing phase, slot, frame, and signature context so they can be seeded and reviewed deliberately. Before reporting a miss, F2L tries each slot-specific verified recovery trigger (`R U R'`, `L' U' L`, `R' U' R`, or `L U L'`) and accepts it only when it preserves the cross/protected pairs and exposes another database route.
 
 ## Notation Support
 
@@ -331,7 +383,7 @@ The parser supports:
 - cube rotations: `x y z`
 - lowercase wide moves: `r u f d l b`
 
-Runtime lowercase wide moves are frame-aware moves executed by `OrientedCube`. OLL and PLL seed notation is compiled once into the face-and-slice form used by the cubie engine, so every returned algorithm text describes the same moves the solver validates and executes.
+Runtime lowercase wide moves are frame-aware moves executed by `OrientedCube`. OLL and PLL resource notation is compiled once into the face-and-slice form used by the cubie engine, so every returned algorithm text describes the same moves the solver validates and executes.
 
 Examples:
 
@@ -367,6 +419,7 @@ CFOP analyzers:
 
 Case databases:
 
+- [`src/main/java/algorithms/AlgorithmCaseCatalog.java`](src/main/java/algorithms/AlgorithmCaseCatalog.java)
 - [`src/main/java/algorithms/F2LSetupCaseDatabase.java`](src/main/java/algorithms/F2LSetupCaseDatabase.java)
 - [`src/main/java/algorithms/F2LInsertCaseDatabase.java`](src/main/java/algorithms/F2LInsertCaseDatabase.java)
 - [`src/main/java/algorithms/OLLCaseDatabase.java`](src/main/java/algorithms/OLLCaseDatabase.java)

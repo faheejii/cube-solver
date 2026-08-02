@@ -5,9 +5,15 @@ import java.time.OffsetDateTime;
 
 public final class AuthRepository {
     private final DatabaseManager databaseManager;
+    private final String adminEmail;
 
     public AuthRepository(DatabaseManager databaseManager) {
+        this(databaseManager, DatabaseConfig.adminEmailFromEnvironment());
+    }
+
+    public AuthRepository(DatabaseManager databaseManager, String adminEmail) {
         this.databaseManager = databaseManager;
+        this.adminEmail = adminEmail;
     }
 
     public AuthUser createUserWithSession(
@@ -27,9 +33,9 @@ public final class AuthRepository {
                 try (var statement = connection.prepareStatement("""
                         INSERT INTO users (
                             external_id, email, display_name,
-                            password_hash, password_salt, password_iterations
-                        ) VALUES (?, ?, ?, ?, ?, ?)
-                        RETURNING id
+                            password_hash, password_salt, password_iterations, role
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        RETURNING id, role
                         """)) {
                     statement.setString(1, externalId);
                     statement.setString(2, email);
@@ -37,14 +43,16 @@ public final class AuthRepository {
                     statement.setString(4, passwordHash);
                     statement.setString(5, passwordSalt);
                     statement.setInt(6, passwordIterations);
+                    statement.setString(7, isAdminEmail(email) ? "admin" : "user");
                     try (var result = statement.executeQuery()) {
                         result.next();
                         userId = result.getLong("id");
+                        var role = result.getString("role");
+                        insertSession(connection, userId, tokenHash, expiresAt);
+                        connection.commit();
+                        return new AuthUser(userId, externalId, email, displayName, role);
                     }
                 }
-                insertSession(connection, userId, tokenHash, expiresAt);
-                connection.commit();
-                return new AuthUser(userId, externalId, email, displayName);
             } catch (SQLException exception) {
                 connection.rollback();
                 throw exception;
@@ -58,7 +66,7 @@ public final class AuthRepository {
         try (var connection = databaseManager.openConnection();
              var statement = connection.prepareStatement("""
                      SELECT id, external_id, email, display_name,
-                            password_hash, password_salt, password_iterations
+                            password_hash, password_salt, password_iterations, role
                      FROM users
                      WHERE LOWER(email) = LOWER(?) AND password_hash IS NOT NULL
                      """)) {
@@ -71,7 +79,8 @@ public final class AuthRepository {
                         result.getLong("id"),
                         result.getString("external_id"),
                         result.getString("email"),
-                        result.getString("display_name")
+                        result.getString("display_name"),
+                        result.getString("role")
                 );
                 return new StoredCredential(
                         user,
@@ -115,7 +124,7 @@ public final class AuthRepository {
                      WHERE session.token_hash = ?
                        AND session.expires_at > ?
                        AND session.user_id = account.id
-                     RETURNING account.id, account.external_id, account.email, account.display_name
+                     RETURNING account.id, account.external_id, account.email, account.display_name, account.role
                      """)) {
             statement.setObject(1, now);
             statement.setString(2, tokenHash);
@@ -128,7 +137,8 @@ public final class AuthRepository {
                         result.getLong("id"),
                         result.getString("external_id"),
                         result.getString("email"),
-                        result.getString("display_name")
+                        result.getString("display_name"),
+                        result.getString("role")
                 );
             }
         }
@@ -140,5 +150,9 @@ public final class AuthRepository {
             statement.setString(1, tokenHash);
             statement.executeUpdate();
         }
+    }
+
+    private boolean isAdminEmail(String email) {
+        return adminEmail != null && email != null && adminEmail.equalsIgnoreCase(email.trim());
     }
 }

@@ -9,6 +9,7 @@ import api.SolveApiRequest;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
+import algorithms.AlgorithmCaseCatalog;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import database.DatabaseManager;
@@ -67,6 +68,7 @@ public class CubeHttpServer implements AutoCloseable {
         server.createContext("/api/solve-jobs", new SolveJobHandler(solveJobManager, authService));
         server.createContext("/api/solves", new SolveHistoryHandler(databaseManager, solveJobManager, authService));
         server.createContext("/api/stats", new StatisticsHandler(databaseManager, authService));
+        server.createContext("/api/algorithms", new AlgorithmCatalogHandler(databaseManager, authService));
         server.createContext("/", new StaticFileHandler(frontendDistDir));
         int httpWorkers = Math.max(4, Runtime.getRuntime().availableProcessors());
         httpExecutor = new java.util.concurrent.ThreadPoolExecutor(
@@ -364,6 +366,79 @@ public class CubeHttpServer implements AutoCloseable {
         }
     }
 
+    private static final class AlgorithmCatalogHandler implements HttpHandler {
+        private final DatabaseManager databaseManager;
+        private final AuthService authService;
+
+        private AlgorithmCatalogHandler(DatabaseManager databaseManager, AuthService authService) {
+            this.databaseManager = databaseManager;
+            this.authService = authService;
+        }
+
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (ApiResponses.handleCors(exchange)) {
+                return;
+            }
+            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
+                writeJson(exchange, 405, JsonSupport.errorJson("Method not allowed"));
+                return;
+            }
+            if (!databaseManager.isConfigured()) {
+                writeJson(exchange, 503, JsonSupport.errorJson("Database is not configured"));
+                return;
+            }
+            try {
+                requireAdmin(exchange, authService);
+                var path = exchange.getRequestURI().getPath();
+                var f2lOnly = path.endsWith("/f2l");
+                if (!f2lOnly && !path.equals("/api/algorithms")) {
+                    writeJson(exchange, 404, JsonSupport.errorJson("Not found"));
+                    return;
+                }
+                var query = queryParameters(exchange.getRequestURI().getRawQuery());
+                var includeNonCanonical = "true".equalsIgnoreCase(query.get("includeNonCanonical"));
+                var phase = query.get("phase");
+                var slot = query.get("slot");
+                var status = query.get("status");
+                var search = query.getOrDefault("q", "").toLowerCase(java.util.Locale.ROOT);
+                var entries = AlgorithmCaseCatalog.entries(includeNonCanonical).stream()
+                        .filter(entry -> !f2lOnly || "setup".equals(entry.phase()) || "insert".equals(entry.phase()))
+                        .filter(entry -> phase == null || phase.isBlank() || entry.phase().equalsIgnoreCase(phase))
+                        .filter(entry -> slot == null || slot.isBlank() || entry.slot().name().equalsIgnoreCase(slot))
+                        .filter(entry -> status == null || status.isBlank() || "all".equalsIgnoreCase(status) || entry.status().equalsIgnoreCase(status))
+                        .filter(entry -> search.isBlank()
+                                || entry.name().toLowerCase(java.util.Locale.ROOT).contains(search)
+                                || entry.algorithm().toLowerCase(java.util.Locale.ROOT).contains(search))
+                        .toList();
+                writeJson(exchange, 200, JsonSupport.algorithmCatalogJson(entries, AlgorithmCaseCatalog.VERSION));
+            } catch (IllegalArgumentException exception) {
+                writeJson(exchange, 400, JsonSupport.errorJson(exception.getMessage()));
+            } catch (AuthService.UnauthorizedException exception) {
+                writeJson(exchange, 401, JsonSupport.errorJson(exception.getMessage()));
+            } catch (AuthService.ForbiddenException exception) {
+                writeJson(exchange, 403, JsonSupport.errorJson(exception.getMessage()));
+            } catch (Exception exception) {
+                LOGGER.error("Algorithm catalog request failed", exception);
+                writeJson(exchange, 500, JsonSupport.errorJson("Internal server error"));
+            }
+        }
+
+        private static java.util.Map<String, String> queryParameters(String rawQuery) {
+            var values = new java.util.HashMap<String, String>();
+            if (rawQuery == null || rawQuery.isBlank()) {
+                return values;
+            }
+            for (var part : rawQuery.split("&")) {
+                var pair = part.split("=", 2);
+                var key = java.net.URLDecoder.decode(pair[0], StandardCharsets.UTF_8);
+                var value = pair.length == 1 ? "" : java.net.URLDecoder.decode(pair[1], StandardCharsets.UTF_8);
+                values.put(key, value);
+            }
+            return values;
+        }
+    }
+
     private static final class SolveHistoryHandler implements HttpHandler {
         private final DatabaseManager databaseManager;
         private final SolveHistoryRepository repository;
@@ -495,7 +570,9 @@ public class CubeHttpServer implements AutoCloseable {
                     request.pllMoves(),
                     request.pllSolved(),
                     request.pllStatus(),
-                    DatabaseManager.SOLVER_VERSION
+                    DatabaseManager.SOLVER_VERSION,
+                    request.f2lTraceJson(),
+                    request.comparisonJson()
             ));
             writeJson(exchange, 200, JsonSupport.savedSolutionJson(saved));
         }
@@ -553,7 +630,9 @@ public class CubeHttpServer implements AutoCloseable {
                     JsonSupport.readString(body, "pllAlgorithm"),
                     JsonSupport.readInteger(body, "pllMoves"),
                     JsonSupport.readBoolean(body, "pllSolved"),
-                    JsonSupport.readString(body, "pllStatus")
+                    JsonSupport.readString(body, "pllStatus"),
+                    JsonSupport.readRawField(body, "f2lTraceJson"),
+                    JsonSupport.readRawField(body, "comparisonJson")
             );
         }
 
@@ -641,6 +720,14 @@ public class CubeHttpServer implements AutoCloseable {
         var user = optionalAuthenticated(exchange, authService);
         if (user == null) {
             throw new AuthService.UnauthorizedException("Authentication required");
+        }
+        return user;
+    }
+
+    private static AuthUser requireAdmin(HttpExchange exchange, AuthService authService) throws Exception {
+        var user = requireAuthenticated(exchange, authService);
+        if (!user.isAdmin()) {
+            throw new AuthService.ForbiddenException("Administrator access required");
         }
         return user;
     }

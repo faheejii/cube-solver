@@ -395,7 +395,8 @@ public class CfopSolveService {
                 solvedSlotSummary(continuation.cube(), continuation.orientation()),
                 continuation.fullySolved(),
                 elapsedNanos / 1_000_000.0,
-                modeComparison
+                modeComparison,
+                continuation.f2lTrace()
         );
     }
 

@@ -81,6 +81,15 @@ public record DatabaseConfig(
         return new DatabaseConfig(false, null, null, null);
     }
 
+    public static String adminEmailFromEnvironment() {
+        var dotenv = Dotenv.loadDefault();
+        return firstNonBlank(
+                System.getProperty("admin.email"),
+                System.getenv("ADMIN_EMAIL"),
+                dotenv.get("ADMIN_EMAIL")
+        );
+    }
+
     private static Credentials parseUserInfo(String rawUserInfo) {
         if (rawUserInfo == null || rawUserInfo.isBlank()) {
             var dotenv = Dotenv.loadDefault();

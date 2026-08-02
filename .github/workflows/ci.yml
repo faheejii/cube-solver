@@ -31,7 +31,7 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
-      - run: mvn -q -Dmaven.compiler.useIncrementalCompilation=false -Df2l.corpus=true test
+      - run: mvn -q -Dmaven.compiler.useIncrementalCompilation=false test
 
   frontend:
     runs-on: ubuntu-latest

@@ -34,6 +34,22 @@ public final class CubeStateSnapshot {
         return cube;
     }
 
+    public byte[] cornerPerm() {
+        return cornerPerm.clone();
+    }
+
+    public byte[] cornerOri() {
+        return cornerOri.clone();
+    }
+
+    public byte[] edgePerm() {
+        return edgePerm.clone();
+    }
+
+    public byte[] edgeOri() {
+        return edgeOri.clone();
+    }
+
     private static byte[] copyAndValidate(byte[] values, int expectedLength, String name) {
         if (values == null || values.length != expectedLength) {
             throw new IllegalArgumentException(name + " must contain " + expectedLength + " values");

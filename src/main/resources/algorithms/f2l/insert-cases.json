@@ -1,0 +1,103 @@
+{
+  "version": "1",
+  "cases": [
+    {
+      "name": "case-1.1",
+      "slot": "FR",
+      "algorithm": "R U R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-1.2",
+      "slot": "BL",
+      "algorithm": "L U L'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-1.3",
+      "slot": "FL",
+      "algorithm": "F U F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-2.1",
+      "slot": "FR",
+      "algorithm": "R U' R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-2.2",
+      "slot": "BL",
+      "algorithm": "L U' L'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-2.3",
+      "slot": "FL",
+      "algorithm": "F U' F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-3.1",
+      "slot": "FL",
+      "algorithm": "L' U' L",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-3.2",
+      "slot": "BR",
+      "algorithm": "R' U' R",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-3.3",
+      "slot": "FR",
+      "algorithm": "F' U' F",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-4.1",
+      "slot": "FL",
+      "algorithm": "L' U L",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-4.2",
+      "slot": "BR",
+      "algorithm": "R' U R",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-4.3",
+      "slot": "FR",
+      "algorithm": "F' U F",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-5.1",
+      "slot": "FR",
+      "algorithm": "F' R U R' U' R' F R",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-6.1",
+      "slot": "FL",
+      "algorithm": "F L' U' L U L F' L'",
+      "status": "canonical",
+      "notes": ""
+    }
+  ]
+}

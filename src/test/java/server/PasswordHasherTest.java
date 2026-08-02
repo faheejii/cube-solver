@@ -25,7 +25,7 @@ class PasswordHasherTest {
     @Test
     void verify_shouldRejectMalformedStoredCredential() {
         var malformed = new StoredCredential(
-                new AuthUser(1, "external", "user@example.com", null),
+                new AuthUser(1, "external", "user@example.com", null, "user"),
                 "not-base64!",
                 "not-base64!",
                 PasswordHasher.ITERATIONS
@@ -36,7 +36,7 @@ class PasswordHasherTest {
 
     private static StoredCredential stored(PasswordHasher.PasswordCredential credential) {
         return new StoredCredential(
-                new AuthUser(1, "external", "user@example.com", null),
+                new AuthUser(1, "external", "user@example.com", null, "user"),
                 credential.hash(),
                 credential.salt(),
                 credential.iterations()

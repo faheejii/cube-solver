@@ -11,6 +11,7 @@ import type {
     SolveStatistics,
     LoginRequest,
     RegisterRequest,
+    AlgorithmCatalogResponse,
 } from "./types";
 
 const REQUEST_TIMEOUT_MS = 12_000;
@@ -173,4 +174,36 @@ export async function saveSolveSolution(
         },
         body: JSON.stringify(request),
     });
+}
+
+export async function fetchAlgorithms(filters?: {
+    phase?: string;
+    slot?: string;
+    search?: string;
+    status?: string;
+}): Promise<AlgorithmCatalogResponse> {
+    const params = new URLSearchParams();
+    if (filters?.phase) params.set("phase", filters.phase);
+    if (filters?.slot) params.set("slot", filters.slot);
+    if (filters?.search) params.set("q", filters.search);
+    if (filters?.status) params.set("status", filters.status);
+    const query = params.toString();
+    return requestJson<AlgorithmCatalogResponse>(
+        `/api/algorithms${query ? `?${query}` : ""}`
+    );
+}
+
+export async function fetchF2LAlgorithms(filters?: {
+    phase?: string;
+    slot?: string;
+    search?: string;
+    status?: string;
+}): Promise<AlgorithmCatalogResponse> {
+    const params = new URLSearchParams();
+    if (filters?.phase) params.set("phase", filters.phase);
+    if (filters?.slot) params.set("slot", filters.slot);
+    if (filters?.search) params.set("q", filters.search);
+    if (filters?.status) params.set("status", filters.status);
+    const query = params.toString();
+    return requestJson<AlgorithmCatalogResponse>(`/api/algorithms/f2l${query ? `?${query}` : ""}`);
 }

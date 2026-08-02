@@ -6,6 +6,87 @@ export type SolveStage = {
     status: string;
 };
 
+export type CubeStateSnapshot = {
+    cornerPerm: number[];
+    cornerOri: number[];
+    edgePerm: number[];
+    edgeOri: number[];
+};
+
+export type CubeOrientationKey = {
+    up: string;
+    right: string;
+    front: string;
+};
+
+export type F2LCaseDescription = {
+    cornerPosition: string;
+    cornerOrientation: number;
+    edgePosition: string;
+    edgeOrientation: number;
+    initiallyConnected: boolean;
+    cornerInTargetSlot: boolean;
+    edgeInMiddleLayer: boolean;
+};
+
+export type F2LSelectionEvidence = {
+    pairMoveCount: number;
+    remainingF2LMoveCount: number;
+    totalRouteMoveCount: number;
+    rotationCount: number;
+    preservesSolvedSlots: boolean;
+    pairWasAlreadyConnected: boolean;
+    shortestAvailablePair: boolean;
+    selectedForGlobalRoute: boolean;
+    reasonCodes: string[];
+};
+
+export type F2LPair = {
+    order: number;
+    corner: string;
+    edge: string;
+    targetSlot: string;
+    algorithm: string;
+    moveCount: number;
+    completeMoves: string[];
+    startMoveIndex: number;
+    endMoveIndex: number;
+    moveBreakdownAvailable: boolean;
+    setupAlgorithm: string | null;
+    pairingAlgorithm: string | null;
+    insertionAlgorithm: string | null;
+    stateBefore: CubeStateSnapshot;
+    orientationBefore: CubeOrientationKey;
+    stateAfter: CubeStateSnapshot;
+    orientationAfter: CubeOrientationKey;
+    preservedSlots: string[];
+    case: F2LCaseDescription;
+    selectionEvidence: F2LSelectionEvidence;
+};
+
+export type F2LModeSummary = {
+    crossFace: string;
+    f2lMoves: number;
+    ollMoves: number;
+    pllMoves: number;
+    totalMoves: number;
+    rotationCount: number;
+    pairOrder: string[];
+    pairTraceComplete: boolean;
+};
+
+export type F2LModeComparison = {
+    fast: F2LModeSummary;
+    optimized: F2LModeSummary;
+    f2lMoveDifference: number;
+    ollMoveDifference: number;
+    pllMoveDifference: number;
+    totalMoveDifference: number;
+    rotationDifference: number;
+    pairOrderChanged: boolean;
+    explanationCodes: string[];
+};
+
 export type SolveResponse = {
     scramble: string;
     crossFace: string;
@@ -13,13 +94,18 @@ export type SolveResponse = {
     f2lSetupCaseCount: number;
     f2lInsertCaseCount: number;
     cross: SolveStage;
-    f2l: SolveStage;
+    f2l: SolveStage & {
+        traceComplete?: boolean;
+        pairAlgorithmMatchesStage?: boolean;
+        pairs?: F2LPair[];
+    };
     oll: SolveStage;
     pll: SolveStage;
     solvedF2LSlots: string;
     fullySolved: boolean;
     totalMoveCount: number;
     elapsedMs: number;
+    comparison?: F2LModeComparison | null;
 };
 
 export type SolveRequest = {
@@ -27,6 +113,50 @@ export type SolveRequest = {
     crossFace: string;
     f2lMode: string;
 };
+
+export type F2LAlgorithmCatalogEntry = {
+    phase: "setup" | "insert";
+    name: string;
+    slot: string;
+    preservedSlots: string[];
+    signature: {
+        kind: "f2l";
+        cornerPosition: string;
+        cornerOrientation: number;
+        edgePosition: string;
+        edgeOrientation: number;
+    };
+    algorithm: string;
+    sourceSetup: string | null;
+    status: "canonical" | "experimental" | "deprecated" | "test-only" | string;
+    notes: string;
+    previewSetup: string | null;
+};
+
+export type LastLayerAlgorithmCatalogEntry = {
+    phase: "oll" | "pll";
+    name: string;
+    slot: null;
+    preservedSlots: string[];
+    signature: {
+        kind: "oll" | "pll";
+        [key: string]: string | boolean;
+    };
+    algorithm: string;
+    sourceSetup: null;
+    previewSetup: string;
+    status: "canonical" | "experimental" | "deprecated" | "test-only" | string;
+    notes: string;
+};
+
+export type AlgorithmCatalogEntry = F2LAlgorithmCatalogEntry | LastLayerAlgorithmCatalogEntry;
+
+export type AlgorithmCatalogResponse = {
+    version: string;
+    items: AlgorithmCatalogEntry[];
+};
+
+export type F2LAlgorithmCatalogResponse = AlgorithmCatalogResponse;
 
 export type SolveJobRequest = SolveRequest & {
     solveId?: number;
@@ -37,6 +167,7 @@ export type AuthUser = {
     id: string;
     email: string;
     displayName: string | null;
+    role: "user" | "admin" | string;
 };
 
 export type LoginRequest = {
@@ -188,4 +319,6 @@ export type SaveSolutionRequest = {
     pllMoves: number;
     pllSolved: boolean;
     pllStatus: string;
+    f2lTraceJson?: string | null;
+    comparisonJson?: string | null;
 };

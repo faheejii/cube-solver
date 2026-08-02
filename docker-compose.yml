@@ -22,6 +22,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://cube_solver:cube_solver@postgres:5432/cube_solver
+      ADMIN_EMAIL: admin@admin.com
       SERVER_PORT: 8080
       JAVA_OPTS: -Dserver.cors.origin=http://localhost:8080 -Dserver.cookie.secure=false
     ports:
