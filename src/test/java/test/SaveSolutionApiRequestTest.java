@@ -22,6 +22,15 @@ public class SaveSolutionApiRequestTest {
         assertThrows(IllegalArgumentException.class, () -> validRequestWithTotalMoves(-1));
     }
 
+    @Test
+    void constructor_shouldRejectMalformedMetadata() {
+        assertThrows(IllegalArgumentException.class, () -> new SaveSolutionApiRequest(
+                "CN", "U", "optimized", 121, 14, "[FR]", 52, true, 42.5,
+                "z2 R", 1, true, "ok", "R U", 3, true, "ok", "R U", 3, true, "ok",
+                "U", 1, true, "ok", "{bad", "{}"
+        ));
+    }
+
     private static SaveSolutionApiRequest validRequest(String mode) {
         return validRequestWithTotalMoves(52, mode);
     }

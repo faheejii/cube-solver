@@ -106,4 +106,10 @@ final class AuthService {
             super(message);
         }
     }
+
+    static final class ForbiddenException extends RuntimeException {
+        ForbiddenException(String message) {
+            super(message);
+        }
+    }
 }

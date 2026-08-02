@@ -19,6 +19,8 @@ public record SavedSolution(
         int totalMoves,
         double elapsedMs,
         String solverVersion,
-        OffsetDateTime updatedAt
+        OffsetDateTime updatedAt,
+        String f2lTraceJson,
+        String comparisonJson
 ) {
 }

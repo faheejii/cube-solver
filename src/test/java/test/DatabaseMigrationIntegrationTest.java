@@ -22,6 +22,16 @@ class DatabaseMigrationIntegrationTest {
             try (var connection = database.manager().openConnection(); var statement = connection.createStatement()) {
                 try (var result = statement.executeQuery("SELECT COUNT(*) FROM flyway_schema_history WHERE success")) {
                     assertTrue(result.next());
+                    assertEquals(3, result.getInt(1));
+                }
+                try (var result = statement.executeQuery("""
+                        SELECT COUNT(*)
+                        FROM information_schema.columns
+                        WHERE table_schema = current_schema()
+                          AND table_name = 'solve_solutions'
+                          AND column_name IN ('f2l_trace_json', 'comparison_json')
+                        """)) {
+                    assertTrue(result.next());
                     assertEquals(2, result.getInt(1));
                 }
                 try (var result = statement.executeQuery("""

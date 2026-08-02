@@ -1,7 +1,7 @@
-import {Activity, History, LogOut, Moon, Sun, Timer} from "lucide-react";
+import {Activity, BookOpen, History, LogOut, Moon, Sun, Timer} from "lucide-react";
 import type {AuthUser} from "./types";
 
-export type DashboardView = "timer" | "history" | "processes";
+export type DashboardView = "timer" | "history" | "processes" | "algorithms";
 
 type Props = {
     activeView: DashboardView;
@@ -64,6 +64,16 @@ export default function DashboardSidebar({
                         <strong className="dashboard-nav-badge">{activeProcessCount}</strong>
                     ) : null}
                 </button>
+                {user.role === "admin" ? (
+                    <button
+                        className={activeView === "algorithms" ? "dashboard-nav-item active" : "dashboard-nav-item"}
+                        type="button"
+                        onClick={() => onViewChange("algorithms")}
+                    >
+                        <BookOpen size={19}/>
+                        <span>Algorithms</span>
+                    </button>
+                ) : null}
             </nav>
 
             <div className="dashboard-sidebar-footer">

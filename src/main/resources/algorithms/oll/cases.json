@@ -1,0 +1,347 @@
+{
+  "version": "1",
+  "cases": [
+    {
+      "name": "case-1",
+      "algorithm": "R U2 R2 F R F' U2 R' F R F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-2",
+      "algorithm": "r U r' U2 r U2 R' U2 R U' r'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-3",
+      "algorithm": "r' R2 U R' U r U2 r' U M'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-4",
+      "algorithm": "M U' r U2 r' U' R U' R' M'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-5",
+      "algorithm": "l' U2 L U L' U l",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-6",
+      "algorithm": "r U2 R' U' R U' r'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-7",
+      "algorithm": "r U R' U R U2 r'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-8",
+      "algorithm": "l' U' L U' L' U2 l",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-9",
+      "algorithm": "R U R' U' R' F R2 U R' U' F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-10",
+      "algorithm": "R U R' U R' F R F' R U2 R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-11",
+      "algorithm": "r U R' U R' F R F' R U2 r'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-12",
+      "algorithm": "M' R' U' R U' R' U2 R U' R r'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-13",
+      "algorithm": "F U R U' R2 F' R U R U' R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-14",
+      "algorithm": "R' F R U R' F' R F U' F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-15",
+      "algorithm": "l' U' l L' U' L U l' U l",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-16",
+      "algorithm": "r U r' R U R' U' r U' r'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-17",
+      "algorithm": "F R' F' R2 r' U R U' R' U' M'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-18",
+      "algorithm": "r U R' U R U2 r2 U' R U' R' U2 r",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-19",
+      "algorithm": "r' R U R U R' U' M' R' F R F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-20",
+      "algorithm": "r U R' U' M2 U R U' R' U' M'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-21",
+      "algorithm": "R U2 R' U' R U R' U' R U' R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-22",
+      "algorithm": "R U2 R2 U' R2 U' R2 U2 R",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-23",
+      "algorithm": "R2 D' R U2 R' D R U2 R",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-24",
+      "algorithm": "r U R' U' r' F R F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-25",
+      "algorithm": "R' F R B' R' F' R B",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-26",
+      "algorithm": "R U2 R' U' R U' R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-27",
+      "algorithm": "R U R' U R U2 R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-28",
+      "algorithm": "r U R' U' r' R U R U' R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-29",
+      "algorithm": "R U R' U' R U' R' F' U' F R U R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-30",
+      "algorithm": "F R' F R2 U' R' U' R U R' F2",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-31",
+      "algorithm": "R' U' F U R U' R' F' R",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-32",
+      "algorithm": "L U F' U' L' U L F L'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-33",
+      "algorithm": "R U R' U' R' F R F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-34",
+      "algorithm": "R U R2 U' R' F R U R U' F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-35",
+      "algorithm": "R U2 R2 F R F' R U2 R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-36",
+      "algorithm": "L' U' L U' L' U L U L F' L' F",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-37",
+      "algorithm": "F R' F' R U R U' R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-38",
+      "algorithm": "R U R' U R U' R' U' R' F R F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-39",
+      "algorithm": "L F' L' U' L U F U' L'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-40",
+      "algorithm": "R' F R U R' U' F' U R",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-41",
+      "algorithm": "R U R' U R U2 R' F R U R' U' F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-42",
+      "algorithm": "R' U' R U' R' U2 R F R U R' U' F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-43",
+      "algorithm": "F' U' L' U L F",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-44",
+      "algorithm": "F U R U' R' F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-45",
+      "algorithm": "F R U R' U' F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-46",
+      "algorithm": "R' U' R' F R F' U R",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-47",
+      "algorithm": "R' U' R' F R F' R' F R F' U R",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-48",
+      "algorithm": "F R U R' U' R U R' U' F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-49",
+      "algorithm": "r U' r2 U r2 U r2 U' r",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-50",
+      "algorithm": "r' U r2 U' r2 U' r2 U r'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-51",
+      "algorithm": "F U R U' R' U R U' R' F'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-52",
+      "algorithm": "R U R' U R U' B U' B' R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-53",
+      "algorithm": "l' U2 L U L' U' L U L' U l",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-54",
+      "algorithm": "r U2 R' U' R U R' U' R U' r'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-55",
+      "algorithm": "R' F R U R U' R2 F' R2 U' R' U R U R'",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-56",
+      "algorithm": "r' U' r U' R' U R U' R' U R r' U r",
+      "status": "canonical",
+      "notes": ""
+    },
+    {
+      "name": "case-57",
+      "algorithm": "R U R' U' M' U R U' r'",
+      "status": "canonical",
+      "notes": ""
+    }
+  ]
+}

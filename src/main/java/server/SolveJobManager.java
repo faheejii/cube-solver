@@ -359,7 +359,9 @@ final class SolveJobManager implements AutoCloseable {
                 result.pll().moveCount(),
                 result.pll().solved(),
                 result.pll().status(),
-                DatabaseManager.SOLVER_VERSION
+                DatabaseManager.SOLVER_VERSION,
+                result.f2lTrace() == null ? null : JsonSupport.f2lTraceJson(result.f2l(), result.f2lTrace()),
+                JsonSupport.modeComparisonJson(result.modeComparison())
         );
     }
 

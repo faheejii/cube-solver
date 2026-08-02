@@ -10,6 +10,7 @@ import cube.OrientedCube;
 import org.junit.jupiter.api.Test;
 import solver.F2LDatabaseMissContext;
 import solver.F2LDatabaseMissException;
+import solver.F2LReasonCode;
 import solver.F2LSolver;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -137,6 +138,27 @@ public class F2LSolverTest {
         orientedCube.applyMoves(solution.getMoves());
         assertTrue(states.get() > 0);
         assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()));
+    }
+
+    @Test
+    void solveOptimized_shouldUnpairABlockingPairWhenNoDirectRouteExists() {
+        var cube = new CubeState();
+        MoveApplier.applyAlgorithm(cube,
+                "U' D' F' L' B U' L' F2 D R2 D' L2 B2 R2 D' B2 U' R2 F2 B' D2");
+        var cross = new solver.CrossSolver().solve(cube, Face.D);
+        MoveApplier.executeMoves(cube, cross.getMoves());
+
+        var orientedCube = new OrientedCube(cube);
+        var candidate = new F2LSolver().solveOptimizedCandidates(
+                orientedCube, ignored -> { }
+        ).stream().findFirst().orElseThrow();
+
+        orientedCube.applyMoves(candidate.algorithm().getMoves());
+        assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()));
+        assertTrue(candidate.trace().pairSteps().stream()
+                        .anyMatch(step -> step.selectionEvidence().reasonCodes()
+                                .contains(F2LReasonCode.RECOVERY_UNPAIR)),
+                "expected the trace to record the verified unpair recovery");
     }
 
     @Test

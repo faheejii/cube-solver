@@ -6,8 +6,15 @@ import database.SavedSolution;
 import database.SolveHistoryDetail;
 import database.SolveHistoryEntry;
 import database.SolveHistoryPage;
+import algorithms.AlgorithmCaseCatalog;
 import solver.CfopSolveResult;
 import solver.CfopStageResult;
+import solver.F2LCaseDescription;
+import solver.F2LModeComparison;
+import solver.F2LModeSummary;
+import solver.F2LPairStep;
+import solver.F2LSelectionEvidence;
+import solver.F2LSolveTrace;
 import statistics.RollingAverage;
 import statistics.SolveStatistics;
 
@@ -25,6 +32,14 @@ final class JsonSupport {
         return field != null && field.isTextual() ? field.textValue() : null;
     }
 
+    static String readRawField(String json, String fieldName) {
+        var field = field(json, fieldName);
+        if (field == null || field.isNull()) {
+            return null;
+        }
+        return field.isTextual() ? field.textValue() : field.toString();
+    }
+
     static String solveResultJson(CfopSolveResult result) {
         return "{"
                 + "\"scramble\":\"" + escape(result.scramble()) + "\","
@@ -33,18 +48,79 @@ final class JsonSupport {
                 + "\"f2lSetupCaseCount\":" + result.f2lSetupCaseCount() + ","
                 + "\"f2lInsertCaseCount\":" + result.f2lInsertCaseCount() + ","
                 + "\"cross\":" + stageJson(result.cross()) + ","
-                + "\"f2l\":" + stageJson(result.f2l()) + ","
+                + "\"f2l\":" + f2lStageJson(result.f2l(), result.f2lTrace()) + ","
                 + "\"oll\":" + stageJson(result.oll()) + ","
                 + "\"pll\":" + stageJson(result.pll()) + ","
                 + "\"solvedF2LSlots\":\"" + escape(result.solvedF2LSlots()) + "\","
                 + "\"fullySolved\":" + result.fullySolved() + ","
                 + "\"totalMoveCount\":" + result.totalMoveCount() + ","
-                + "\"elapsedMs\":" + String.format(java.util.Locale.US, "%.3f", result.elapsedMs())
+                + "\"elapsedMs\":" + String.format(java.util.Locale.US, "%.3f", result.elapsedMs()) + ","
+                + "\"comparison\":" + modeComparisonJson(result.modeComparison())
                 + "}";
     }
 
     static String errorJson(String message) {
         return "{\"error\":\"" + escape(message) + "\"}";
+    }
+
+    static String algorithmCatalogJson(java.util.List<AlgorithmCaseCatalog.CatalogEntry> entries, String version) {
+        var builder = new StringBuilder("{\"version\":\"")
+                .append(escape(version)).append("\",\"items\":[");
+        for (int i = 0; i < entries.size(); i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            var entry = entries.get(i);
+            builder.append('{')
+                    .append("\"phase\":\"").append(escape(entry.phase())).append("\",")
+                    .append("\"name\":\"").append(escape(entry.name())).append("\",")
+                    .append("\"slot\":").append(entry.slot() == null ? "null" : "\"" + entry.slot().name() + "\"").append(',')
+                    .append("\"preservedSlots\":[");
+            var preservedSlots = entry.preservedSlots() == null ? java.util.List.<cfop.F2LSlot>of() : entry.preservedSlots().slots();
+            for (int slotIndex = 0; slotIndex < preservedSlots.size(); slotIndex++) {
+                if (slotIndex > 0) {
+                    builder.append(',');
+                }
+                builder.append('\"').append(preservedSlots.get(slotIndex).name()).append('\"');
+            }
+            builder.append("],\"signature\":").append(catalogSignatureJson(entry.signature())).append(',')
+                    .append("\"algorithm\":\"").append(escape(entry.algorithm())).append("\",")
+                    .append("\"sourceSetup\":").append(nullableString(entry.sourceSetup())).append(',')
+                    .append("\"previewSetup\":").append(nullableString(entry.previewSetup())).append(',')
+                    .append("\"status\":\"").append(escape(entry.status())).append("\",")
+                    .append("\"notes\":\"").append(escape(entry.notes())).append("\"}");
+        }
+        return builder.append("]}").toString();
+    }
+
+    static String f2lCatalogJson(java.util.List<AlgorithmCaseCatalog.CatalogEntry> entries, String version) {
+        return algorithmCatalogJson(entries.stream().filter(entry -> "setup".equals(entry.phase()) || "insert".equals(entry.phase())).toList(), version);
+    }
+
+    private static String catalogSignatureJson(Object signature) {
+        if (signature instanceof cfop.F2LCaseSignature f2l) {
+            return "{\"kind\":\"f2l\",\"cornerPosition\":\"" + f2l.cornerPosition()
+                    + "\",\"cornerOrientation\":" + f2l.cornerOrientation()
+                    + ",\"edgePosition\":\"" + f2l.edgePosition()
+                    + "\",\"edgeOrientation\":" + f2l.edgeOrientation() + "}";
+        }
+        if (signature instanceof cfop.OLLCaseSignature oll) {
+            return "{\"kind\":\"oll\",\"u0\":" + oll.u0() + ",\"u1\":" + oll.u1()
+                    + ",\"u2\":" + oll.u2() + ",\"u3\":" + oll.u3() + ",\"u5\":" + oll.u5()
+                    + ",\"u6\":" + oll.u6() + ",\"u7\":" + oll.u7() + ",\"u8\":" + oll.u8()
+                    + ",\"f0\":" + oll.f0() + ",\"f1\":" + oll.f1() + ",\"f2\":" + oll.f2()
+                    + ",\"r0\":" + oll.r0() + ",\"r1\":" + oll.r1() + ",\"r2\":" + oll.r2()
+                    + ",\"b0\":" + oll.b0() + ",\"b1\":" + oll.b1() + ",\"b2\":" + oll.b2()
+                    + ",\"l0\":" + oll.l0() + ",\"l1\":" + oll.l1() + ",\"l2\":" + oll.l2() + "}";
+        }
+        if (signature instanceof cfop.PLLCaseSignature pll) {
+            return "{\"kind\":\"pll\",\"urfPiece\":\"" + pll.urfPiece()
+                    + "\",\"uflPiece\":\"" + pll.uflPiece() + "\",\"ulbPiece\":\"" + pll.ulbPiece()
+                    + "\",\"ubrPiece\":\"" + pll.ubrPiece() + "\",\"urPiece\":\"" + pll.urPiece()
+                    + "\",\"ufPiece\":\"" + pll.ufPiece() + "\",\"ulPiece\":\"" + pll.ulPiece()
+                    + "\",\"ubPiece\":\"" + pll.ubPiece() + "\"}";
+        }
+        return "null";
     }
 
     static String errorMessage(String json) {
@@ -59,9 +135,10 @@ final class JsonSupport {
 
     static String authUserJson(AuthUser user) {
         return "{"
-                + "\"id\":\"" + escape(user.externalId()) + "\","
-                + "\"email\":\"" + escape(user.email()) + "\","
+                + "\"id\":\"" + escape(user.externalId()) + "\"," 
+                + "\"email\":\"" + escape(user.email()) + "\"," 
                 + "\"displayName\":" + nullableString(user.displayName())
+                + ",\"role\":\"" + escape(user.role()) + "\""
                 + "}";
     }
 
@@ -220,13 +297,14 @@ final class JsonSupport {
                 + "\"f2lSetupCaseCount\":" + solution.f2lSetupCaseCount() + ","
                 + "\"f2lInsertCaseCount\":" + solution.f2lInsertCaseCount() + ","
                 + "\"cross\":" + stageJson(solution.cross()) + ","
-                + "\"f2l\":" + stageJson(solution.f2l()) + ","
+                + "\"f2l\":" + f2lStageJson(solution.f2l(), solution.f2lTraceJson()) + ","
                 + "\"oll\":" + stageJson(solution.oll()) + ","
                 + "\"pll\":" + stageJson(solution.pll()) + ","
                 + "\"solvedF2LSlots\":\"" + escape(solution.solvedF2LSlots()) + "\","
                 + "\"fullySolved\":" + solution.fullySolved() + ","
                 + "\"totalMoveCount\":" + solution.totalMoves() + ","
                 + "\"elapsedMs\":" + String.format(java.util.Locale.US, "%.3f", solution.elapsedMs()) + ","
+                + "\"comparison\":" + (isJsonObject(solution.comparisonJson()) ? solution.comparisonJson() : "null") + ","
                 + "\"solverVersion\":" + nullableString(solution.solverVersion()) + ","
                 + "\"updatedAt\":\"" + escape(solution.updatedAt().toString()) + "\""
                 + "}";
@@ -240,6 +318,200 @@ final class JsonSupport {
                 + "\"solved\":" + stage.solved() + ","
                 + "\"status\":\"" + escape(stage.status()) + "\""
                 + "}";
+    }
+
+    static String f2lStageJson(CfopStageResult stage, String metadataJson) {
+        var metadata = isJsonObject(metadataJson)
+                ? metadataJson
+                : "{\"traceComplete\":false,\"pairs\":[]}";
+        return appendMetadata(stageJson(stage), metadata);
+    }
+
+    private static String f2lStageJson(CfopStageResult stage, F2LSolveTrace trace) {
+        return appendMetadata(stageJson(stage), f2lTraceJson(stage, trace));
+    }
+
+    static String f2lTraceJson(CfopStageResult stage, F2LSolveTrace trace) {
+        if (trace == null) {
+            return "{\"traceComplete\":false,\"pairs\":[]}";
+        }
+        var builder = new StringBuilder("{");
+        builder.append("\"traceComplete\":").append(trace.hasCompletePairTrace())
+                .append(",\"pairAlgorithmMatchesStage\":")
+                .append(trace.algorithmMatchesPairSteps() && trace.algorithm().toString().equals(stage.algorithm()))
+                .append(",\"pairs\":[");
+        int moveIndex = 0;
+        for (int i = 0; i < trace.pairSteps().size(); i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            var pair = trace.pairSteps().get(i);
+            builder.append(pairJson(pair, moveIndex));
+            moveIndex += pair.completeMoves().size();
+        }
+        return builder.append("]}").toString();
+    }
+
+    private static String appendMetadata(String stageJson, String metadataJson) {
+        var builder = new StringBuilder(stageJson);
+        builder.setLength(builder.length() - 1);
+        var metadata = metadataJson.trim();
+        builder.append(',').append(metadata, 1, metadata.length() - 1);
+        return builder.append('}').toString();
+    }
+
+    private static boolean isJsonObject(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+        try {
+            var node = JSON.readTree(value);
+            return node != null && node.isObject();
+        } catch (java.io.IOException exception) {
+            return false;
+        }
+    }
+
+    private static String pairJson(F2LPairStep pair, int startMoveIndex) {
+        var completeMoves = movesJson(pair.completeMoves());
+        var endMoveIndex = startMoveIndex + pair.completeMoves().size() - 1;
+        return "{"
+                + "\"order\":" + pair.order() + ","
+                + "\"corner\":\"" + pair.corner().name() + "\","
+                + "\"edge\":\"" + pair.edge().name() + "\","
+                + "\"targetSlot\":\"" + pair.targetSlot().name() + "\","
+                + "\"algorithm\":\"" + escape(pair.completeAlgorithm().toString()) + "\","
+                + "\"moveCount\":" + pair.moveCount() + ","
+                + "\"completeMoves\":" + completeMoves + ","
+                + "\"startMoveIndex\":" + startMoveIndex + ","
+                + "\"endMoveIndex\":" + endMoveIndex + ","
+                + "\"moveBreakdownAvailable\":" + pair.moveBreakdownAvailable() + ","
+                + "\"setupAlgorithm\":" + optionalAlgorithm(pair.setupMoves(), pair.moveBreakdownAvailable()) + ","
+                + "\"pairingAlgorithm\":" + optionalAlgorithm(pair.pairingMoves(), pair.moveBreakdownAvailable()) + ","
+                + "\"insertionAlgorithm\":" + optionalAlgorithm(pair.insertionMoves(), pair.moveBreakdownAvailable()) + ","
+                + "\"stateBefore\":" + stateJson(pair.stateBefore()) + ","
+                + "\"orientationBefore\":" + orientationJson(pair.orientationBefore()) + ","
+                + "\"stateAfter\":" + stateJson(pair.stateAfter()) + ","
+                + "\"orientationAfter\":" + orientationJson(pair.orientationAfter()) + ","
+                + "\"preservedSlots\":" + stringArrayJson(pair.preservedSlots().slots()) + ","
+                + "\"case\":" + caseDescriptionJson(pair.caseDescription()) + ","
+                + "\"selectionEvidence\":" + selectionEvidenceJson(pair.selectionEvidence())
+                + "}";
+    }
+
+    static String modeComparisonJson(F2LModeComparison comparison) {
+        if (comparison == null) {
+            return "null";
+        }
+        return "{"
+                + "\"fast\":" + modeSummaryJson(comparison.fast()) + ","
+                + "\"optimized\":" + modeSummaryJson(comparison.optimized()) + ","
+                + "\"f2lMoveDifference\":" + comparison.f2lMoveDifference() + ","
+                + "\"ollMoveDifference\":" + comparison.ollMoveDifference() + ","
+                + "\"pllMoveDifference\":" + comparison.pllMoveDifference() + ","
+                + "\"totalMoveDifference\":" + comparison.totalMoveDifference() + ","
+                + "\"rotationDifference\":" + comparison.rotationDifference() + ","
+                + "\"pairOrderChanged\":" + comparison.pairOrderChanged() + ","
+                + "\"explanationCodes\":" + enumArrayJson(comparison.explanationCodes())
+                + "}";
+    }
+
+    private static String modeSummaryJson(F2LModeSummary summary) {
+        return "{"
+                + "\"crossFace\":\"" + escape(summary.crossFace()) + "\","
+                + "\"f2lMoves\":" + summary.f2lMoves() + ","
+                + "\"ollMoves\":" + summary.ollMoves() + ","
+                + "\"pllMoves\":" + summary.pllMoves() + ","
+                + "\"totalMoves\":" + summary.totalMoves() + ","
+                + "\"rotationCount\":" + summary.rotationCount() + ","
+                + "\"pairOrder\":" + enumArrayJson(summary.pairOrder()) + ","
+                + "\"pairTraceComplete\":" + summary.pairTraceComplete()
+                + "}";
+    }
+
+    private static String caseDescriptionJson(F2LCaseDescription description) {
+        var signature = description.signature();
+        return "{"
+                + "\"cornerPosition\":\"" + signature.cornerPosition().name() + "\","
+                + "\"cornerOrientation\":" + signature.cornerOrientation() + ","
+                + "\"edgePosition\":\"" + signature.edgePosition().name() + "\","
+                + "\"edgeOrientation\":" + signature.edgeOrientation() + ","
+                + "\"initiallyConnected\":" + description.initiallyConnected() + ","
+                + "\"cornerInTargetSlot\":" + description.cornerInTargetSlot() + ","
+                + "\"edgeInMiddleLayer\":" + description.edgeInMiddleLayer()
+                + "}";
+    }
+
+    private static String selectionEvidenceJson(F2LSelectionEvidence evidence) {
+        return "{"
+                + "\"pairMoveCount\":" + evidence.pairMoveCount() + ","
+                + "\"remainingF2LMoveCount\":" + evidence.remainingF2LMoveCount() + ","
+                + "\"totalRouteMoveCount\":" + evidence.totalRouteMoveCount() + ","
+                + "\"rotationCount\":" + evidence.rotationCount() + ","
+                + "\"preservesSolvedSlots\":" + evidence.preservesSolvedSlots() + ","
+                + "\"pairWasAlreadyConnected\":" + evidence.pairWasAlreadyConnected() + ","
+                + "\"shortestAvailablePair\":" + evidence.shortestAvailablePair() + ","
+                + "\"selectedForGlobalRoute\":" + evidence.selectedForGlobalRoute() + ","
+                + "\"reasonCodes\":" + enumArrayJson(evidence.reasonCodes())
+                + "}";
+    }
+
+    private static String stateJson(cube.CubeStateSnapshot state) {
+        return "{"
+                + "\"cornerPerm\":" + byteArrayJson(state.cornerPerm()) + ","
+                + "\"cornerOri\":" + byteArrayJson(state.cornerOri()) + ","
+                + "\"edgePerm\":" + byteArrayJson(state.edgePerm()) + ","
+                + "\"edgeOri\":" + byteArrayJson(state.edgeOri())
+                + "}";
+    }
+
+    private static String orientationJson(cube.CubeOrientationKey orientation) {
+        return "{"
+                + "\"up\":\"" + orientation.up().name() + "\","
+                + "\"right\":\"" + orientation.right().name() + "\","
+                + "\"front\":\"" + orientation.front().name() + "\""
+                + "}";
+    }
+
+    private static String optionalAlgorithm(java.util.List<cube.Move> moves, boolean available) {
+        return available ? "\"" + escape(cube.Algorithm.fromMoves(moves).toString()) + "\"" : "null";
+    }
+
+    private static String movesJson(java.util.List<cube.Move> moves) {
+        var builder = new StringBuilder("[");
+        for (int i = 0; i < moves.size(); i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append('"').append(escape(moves.get(i).getNotation())).append('"');
+        }
+        return builder.append(']').toString();
+    }
+
+    private static String byteArrayJson(byte[] values) {
+        var builder = new StringBuilder("[");
+        for (int i = 0; i < values.length; i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append(values[i]);
+        }
+        return builder.append(']').toString();
+    }
+
+    private static String stringArrayJson(java.util.List<?> values) {
+        var builder = new StringBuilder("[");
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) {
+                builder.append(',');
+            }
+            builder.append('"').append(escape(values.get(i).toString())).append('"');
+        }
+        return builder.append(']').toString();
+    }
+
+    private static String enumArrayJson(java.util.List<?> values) {
+        return stringArrayJson(values);
     }
 
     private static JsonNode field(String json, String fieldName) {

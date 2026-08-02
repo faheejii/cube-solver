@@ -3,6 +3,7 @@ import {randomScrambleForEvent} from "cubing/scramble";
 import {setSearchDebug} from "cubing/search";
 import {Save, X} from "lucide-react";
 import ActiveSolutionsView from "./ActiveSolutionsView";
+import AlgorithmsView from "./AlgorithmsView";
 import DashboardSidebar, {type DashboardView} from "./DashboardSidebar";
 import HistoryView from "./HistoryView";
 import SolutionResultBody from "./SolutionResultBody";
@@ -1028,7 +1029,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 theme={theme}
                 activeProcessCount={processes.filter((process) => !isTerminalProcess(process)).length}
                 user={user}
-                onViewChange={setActiveView}
+                onViewChange={(view) => setActiveView(view === "algorithms" && user.role !== "admin" ? "timer" : view)}
                 onToggleTheme={toggleTheme}
                 onLogout={onLogout}
             />
@@ -1113,7 +1114,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                         onDeleteSolve={(entry) => void handleDeleteSolve(entry)}
                     />
                 ) : (
-                    <ActiveSolutionsView
+                    activeView === "algorithms" && user.role === "admin" ? <AlgorithmsView/> : <ActiveSolutionsView
                         processes={processes}
                         onCancel={(process) => void terminateProcess(process)}
                         onRetry={retryProcess}
@@ -1343,6 +1344,14 @@ function buildSaveSolutionRequest(
         pllMoves: result.pll.moveCount,
         pllSolved: result.pll.solved,
         pllStatus: result.pll.status,
+        f2lTraceJson: result.f2l.pairs
+            ? JSON.stringify({
+                traceComplete: result.f2l.traceComplete ?? false,
+                pairAlgorithmMatchesStage: result.f2l.pairAlgorithmMatchesStage ?? false,
+                pairs: result.f2l.pairs,
+            })
+            : null,
+        comparisonJson: result.comparison ? JSON.stringify(result.comparison) : null,
     };
 }
 
@@ -1361,6 +1370,7 @@ function savedSolutionResult(scramble: string, saved: SavedSolution): SolveRespo
         fullySolved: saved.fullySolved,
         totalMoveCount: saved.totalMoveCount,
         elapsedMs: saved.elapsedMs,
+        comparison: saved.comparison ?? null,
     };
 }
 

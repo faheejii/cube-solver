@@ -6,8 +6,6 @@ import cfop.F2LGeometry;
 import cfop.F2LPreservationMask;
 import cfop.F2LSlot;
 import cube.Algorithm;
-import cube.Corner;
-import cube.Edge;
 import cube.OrientedCube;
 import util.NotationNormalizer;
 
@@ -29,53 +27,7 @@ public class F2LInsertCaseDatabase {
     }
 
     public static F2LInsertCaseDatabase seedCases() {
-        var database = new F2LInsertCaseDatabase();
-        for (var insertCase : seedCaseList()) {
-            database.register(insertCase);
-        }
-        database.validate();
-        return database;
-    }
-
-    private static List<F2LInsertCase> seedCaseList() {
-        var cases = new SeedCaseList();
-        var FR = F2LSlot.FR;
-        var BR = F2LSlot.BR;
-        var FL = F2LSlot.FL;
-        var BL = F2LSlot.BL;
-
-        cases.add("R U R'", FR, "case-1.1");
-        cases.add("L U L'", BL, "case-1.2");
-        cases.add("F U F'", FL, "case-1.3");
-
-        cases.add("R U' R'", FR, "case-2.1");
-        cases.add("L U' L'", BL, "case-2.2");
-        cases.add("F U' F'", FL, "case-2.3");
-
-        cases.add("L' U' L", FL, "case-3.1");
-        cases.add("R' U' R", BR, "case-3.2");
-        cases.add("F' U' F", FR, "case-3.3");
-
-        cases.add("L' U L", FL, "case-4.1");
-        cases.add("R' U R", BR, "case-4.2");
-        cases.add("F' U F", FR, "case-4.3");
-
-        cases.add("F' R U R' U' R' F R", FR, "case-5.1");
-
-        cases.add("F L' U' L U L F' L'", FL, "case-6.1");
-
-        cases.add(FR, List.of(FL, BL), new F2LCaseSignature(Corner.UBR, 0, Edge.BR, 1),
-                "R2 F R2 F'", "regression-color-neutral-fr");
-        cases.add(FR, List.of(), new F2LCaseSignature(Corner.ULB, 2, Edge.UR, 1),
-                "R2 U R' U' R2", "regression-r-cross-fr-first");
-        cases.add(FL, List.of(FR), new F2LCaseSignature(Corner.ULB, 0, Edge.BL, 1),
-                "L U2 L2 U2 L", "regression-r-cross-fl");
-        cases.add(BR, List.of(FL, BL), new F2LCaseSignature(Corner.URF, 1, Edge.UF, 0),
-                "R2 U2 R' U2 F R2 F'", "regression-r-cross-br");
-        cases.add(FR, List.of(FL, BL, BR), new F2LCaseSignature(Corner.UBR, 0, Edge.UB, 0),
-                "U' F2 U2 F U F' U F2", "regression-r-cross-fr-last");
-
-        return cases.toList();
+        return AlgorithmCaseCatalog.insertDatabase();
     }
 
     public void register(String algorithm, F2LSlot insertSlot, String name) {
@@ -193,34 +145,6 @@ public class F2LInsertCaseDatabase {
             if (!F2LGeometry.isTargetSlotSolved(source.cubeState(), target)) {
                 throw new IllegalArgumentException("F2L insert case does not preserve slot " + target + ": " + insertCase.name());
             }
-        }
-    }
-
-    private static final class SeedCaseList {
-        private final List<F2LInsertCase> cases = new ArrayList<>();
-
-        private void add(String algorithm, F2LSlot insertSlot, String name) {
-            cases.add(caseFromAlgorithm(algorithm, insertSlot, name));
-        }
-
-        private void add(
-                F2LSlot insertSlot,
-                List<F2LSlot> preservedSlots,
-                F2LCaseSignature signature,
-                String algorithm,
-                String name
-        ) {
-            cases.add(new F2LInsertCase(
-                    insertSlot,
-                    F2LPreservationMask.of(preservedSlots),
-                    signature,
-                    Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm)),
-                    name
-            ));
-        }
-
-        private List<F2LInsertCase> toList() {
-            return List.copyOf(cases);
         }
     }
 
