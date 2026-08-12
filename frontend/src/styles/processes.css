@@ -1,0 +1,184 @@
+.process-section + .process-section {
+    margin-top: 32px;
+}
+
+.process-section-heading {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 12px;
+    color: var(--muted);
+    font-size: 0.74rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.process-section-heading strong {
+    display: grid;
+    place-items: center;
+    min-width: 23px;
+    height: 23px;
+    border-radius: 999px;
+    background: var(--panel-muted);
+    color: var(--text-soft);
+    font-family: "Space Mono", monospace;
+    font-size: 0.68rem;
+}
+
+.process-list {
+    display: grid;
+    gap: 12px;
+}
+
+.process-card {
+    display: grid;
+    gap: 14px;
+    border: 1px solid var(--border);
+    border-radius: 17px;
+    background: rgba(255, 255, 255, 0.015);
+    padding: 17px 18px;
+}
+
+.process-card.status-running,
+.process-card.status-queued {
+    border-color: color-mix(in srgb, var(--blue) 32%, var(--border));
+    background: linear-gradient(110deg, rgba(52, 126, 236, 0.07), transparent 58%);
+}
+
+.process-card.status-failed {
+    border-color: color-mix(in srgb, var(--red) 38%, var(--border));
+}
+
+.process-card-topline,
+.process-card-topline > div,
+.process-metadata,
+.process-actions {
+    display: flex;
+    align-items: center;
+}
+
+.process-card-topline {
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.process-card-topline > div,
+.process-metadata,
+.process-actions {
+    flex-wrap: wrap;
+    gap: 9px;
+}
+
+.process-status,
+.process-source,
+.process-metadata span {
+    border-radius: 999px;
+    background: var(--panel-muted);
+    color: var(--muted);
+    padding: 5px 9px;
+    font-size: 0.67rem;
+}
+
+.process-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-soft);
+    font-weight: 600;
+}
+
+.process-status svg {
+    animation: spin 1s linear infinite;
+}
+
+.process-status.status-completed {
+    color: var(--green);
+}
+
+.process-status.status-cancelled {
+    color: var(--amber);
+}
+
+.process-status.status-failed {
+    color: var(--red);
+}
+
+.process-scramble {
+    margin: 0;
+    color: var(--text);
+    font-family: "Space Mono", monospace;
+    font-size: 0.82rem;
+    line-height: 1.55;
+}
+
+.process-progress {
+    display: grid;
+    gap: 8px;
+}
+
+.process-progress p,
+.process-error {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.72rem;
+}
+
+.process-error {
+    color: var(--red);
+}
+
+.process-progress-bar {
+    height: 4px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--panel-muted);
+}
+
+.process-progress-bar i {
+    display: block;
+    width: 32%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--blue), var(--cyan));
+    animation: process-progress 1.25s ease-in-out infinite;
+}
+
+.process-icon-button {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+}
+
+.process-icon-button:hover {
+    background: var(--panel-hover);
+    color: var(--text);
+}
+
+.dashboard-secondary-button.danger {
+    border-color: color-mix(in srgb, var(--red) 35%, var(--border));
+    color: var(--red);
+}
+
+.process-preview-modal {
+    width: min(1180px, calc(100vw - 32px));
+}
+
+.timer-solution-modal {
+    width: min(1180px, calc(100vw - 36px));
+}
+
+@keyframes process-progress {
+    from {
+        transform: translateX(-120%);
+    }
+    to {
+        transform: translateX(330%);
+    }
+}
+
