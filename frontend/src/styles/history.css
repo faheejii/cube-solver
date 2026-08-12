@@ -1,0 +1,166 @@
+.history-view-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.history-view-header h1 {
+    margin: 5px 0;
+    font-size: clamp(2rem, 4vw, 3.5rem);
+    letter-spacing: -0.05em;
+}
+
+.history-view-header p {
+    margin: 0;
+    color: var(--muted);
+}
+
+.history-table {
+    display: grid;
+    gap: 9px;
+}
+
+.history-table-row {
+    display: grid;
+    grid-template-columns: 42px 130px minmax(200px, 1fr) minmax(190px, auto) auto;
+    align-items: center;
+    gap: 18px;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.015);
+    padding: 14px 16px;
+}
+
+.history-table-row:hover {
+    border-color: var(--border-strong);
+    background: var(--panel-muted);
+}
+
+.history-index {
+    color: var(--muted);
+    font-family: "Space Mono", monospace;
+    font-size: 0.74rem;
+}
+
+.history-time-cell {
+    display: grid;
+    gap: 3px;
+}
+
+.history-time-cell strong {
+    font-family: "Space Mono", monospace;
+    font-size: 1rem;
+}
+
+.history-time-cell small,
+.history-variants {
+    color: var(--muted);
+    font-size: 0.7rem;
+}
+
+.history-table-row > p {
+    margin: 0;
+    color: var(--text-soft);
+    font-family: "Space Mono", monospace;
+    font-size: 0.76rem;
+    line-height: 1.45;
+}
+
+.history-row-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 7px;
+}
+
+.history-delete-button {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid color-mix(in srgb, var(--red) 28%, var(--border));
+    border-radius: 10px;
+    background: transparent;
+    color: var(--red);
+    cursor: pointer;
+}
+
+.history-delete-button:hover {
+    border-color: color-mix(in srgb, var(--red) 55%, var(--border));
+    background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+
+.history-delete-button svg {
+    animation: none;
+}
+
+.history-delete-button:disabled svg[data-lucide="loader-circle"] {
+    animation: spin 1s linear infinite;
+}
+
+.history-variants {
+    display: grid;
+    gap: 2px;
+}
+
+.history-loading,
+.history-empty-state {
+    display: grid;
+    place-items: center;
+    gap: 8px;
+    min-height: 260px;
+    color: var(--muted);
+}
+
+.history-loading svg {
+    animation: spin 1s linear infinite;
+}
+
+.history-empty-state strong {
+    color: var(--text);
+}
+
+.history-load-more {
+    display: flex;
+    margin: 20px auto 0;
+}
+
+.dashboard-alert,
+.dashboard-toast {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    background: var(--panel);
+    padding: 12px 15px;
+}
+
+.dashboard-alert.error {
+    border-color: color-mix(in srgb, var(--red) 40%, var(--border));
+    color: var(--red);
+}
+
+.save-status {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.dashboard-toast {
+    border-color: color-mix(in srgb, var(--green) 40%, var(--border));
+    color: var(--green);
+    cursor: pointer;
+    text-align: left;
+}
+
+.section-label {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+

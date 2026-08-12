@@ -91,6 +91,7 @@ export default function CubeAnimator({
                     puzzle="3x3x3"
                     experimental-setup-alg={activeOption.setupAlgorithm}
                     alg={activeOption.algorithm}
+                    data-playback-alg={activeOption.algorithm}
                     tempo-scale={String(playbackSpeed)}
                     background="none"
                     control-panel="bottom-row"
