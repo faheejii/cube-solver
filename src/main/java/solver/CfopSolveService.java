@@ -35,8 +35,7 @@ public class CfopSolveService {
     private final OLLCaseDatabase ollDatabase;
     private final PLLCaseDatabase pllDatabase;
     private final F2LSolver f2lSolver;
-    private final OLLSolver ollSolver;
-    private final PLLSolver pllSolver;
+    private final LastLayerSolver lastLayerSolver;
 
     public CfopSolveService() {
         this(
@@ -58,8 +57,7 @@ public class CfopSolveService {
         this.ollDatabase = ollDatabase == null ? OLLCaseDatabase.empty() : ollDatabase;
         this.pllDatabase = pllDatabase == null ? PLLCaseDatabase.empty() : pllDatabase;
         this.f2lSolver = new F2LSolver(this.f2lSetupDatabase, this.f2lInsertDatabase);
-        this.ollSolver = this.ollDatabase.size() == 0 ? null : new OLLSolver(this.ollDatabase);
-        this.pllSolver = this.pllDatabase.size() == 0 ? null : new PLLSolver(this.pllDatabase);
+        this.lastLayerSolver = new LastLayerSolver(this.ollDatabase, this.pllDatabase);
     }
 
     public CfopSolveResult solve(CfopSolveRequest request) {
@@ -418,49 +416,6 @@ public class CfopSolveService {
         ));
     }
 
-    private CfopStageResult solveOll(CubeState cube, OrientedCube orientedCube) {
-        if (ollDatabase.size() == 0) {
-            return new CfopStageResult("oll", "", 0, false, "skipped (no seeded OLL cases)");
-        }
-
-        try {
-            var ollSolution = ollSolver.solve(orientedCube);
-            orientedCube.applyMoves(ollSolution.getMoves());
-            return new CfopStageResult(
-                    "oll",
-                    ollSolution.toString(),
-                    ollSolution.getMoveCount(),
-                    OLLAnalyzer.isOllSolved(cube, orientedCube.orientation()),
-                    "ok"
-            );
-        } catch (IllegalArgumentException | IllegalStateException exception) {
-            return new CfopStageResult("oll", "", 0, false, "not solved (" + exception.getMessage() + ")");
-        }
-    }
-
-    private CfopStageResult solvePll(CubeState cube, OrientedCube orientedCube) {
-        if (pllDatabase.size() == 0) {
-            return new CfopStageResult("pll", "", 0, false, "skipped (no seeded PLL cases)");
-        }
-        if (!OLLAnalyzer.isOllSolved(cube, orientedCube.orientation())) {
-            return new CfopStageResult("pll", "", 0, false, "skipped (OLL not solved)");
-        }
-
-        try {
-            var pllSolution = pllSolver.solve(orientedCube);
-            orientedCube.applyMoves(pllSolution.getMoves());
-            return new CfopStageResult(
-                    "pll",
-                    pllSolution.toString(),
-                    pllSolution.getMoveCount(),
-                    PLLAnalyzer.isPllSolved(cube, orientedCube.orientation()),
-                    "ok"
-            );
-        } catch (IllegalArgumentException | IllegalStateException exception) {
-            return new CfopStageResult("pll", "", 0, false, "not solved (" + exception.getMessage() + ")");
-        }
-    }
-
     private Continuation evaluateContinuation(
             CubeState postCrossCube,
             CubeOrientation postCrossOrientation,
@@ -501,7 +456,7 @@ public class CfopSolveService {
         if (optimizeLastLayer && ollDatabase.size() > 0) {
             try {
                 Continuation best = null;
-                for (var ollAlgorithm : ollSolver.solveCandidates(lastLayerCube)) {
+                for (var ollAlgorithm : lastLayerSolver.ollCandidates(lastLayerCube)) {
                     SolveCancellation.throwIfCancelled();
                     var solvedLastLayerCube = new OrientedCube(
                             lastLayerCube.cubeState().copy(),
@@ -515,7 +470,7 @@ public class CfopSolveService {
                             OLLAnalyzer.isOllSolved(solvedLastLayerCube.cubeState(), solvedLastLayerCube.orientation()),
                             "ok"
                     );
-                    var pllResult = solvePll(solvedLastLayerCube.cubeState(), solvedLastLayerCube);
+                    var pllResult = lastLayerSolver.solvePll(solvedLastLayerCube.cubeState(), solvedLastLayerCube);
                     var evaluated = new Continuation(
                             f2lResult,
                             f2lTrace,
@@ -537,8 +492,8 @@ public class CfopSolveService {
             }
         }
 
-        var ollResult = solveOll(lastLayerCube.cubeState(), lastLayerCube);
-        var pllResult = solvePll(lastLayerCube.cubeState(), lastLayerCube);
+        var ollResult = lastLayerSolver.solveOll(lastLayerCube.cubeState(), lastLayerCube);
+        var pllResult = lastLayerSolver.solvePll(lastLayerCube.cubeState(), lastLayerCube);
         return new Continuation(
                 f2lResult,
                 f2lTrace,

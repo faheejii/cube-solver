@@ -258,6 +258,16 @@ The app is available at `http://localhost:8080`. Compose uses a persistent Postg
 
 The checked-in Compose file uses `admin@admin.com` as a local development bootstrap email. Replace the app service's `ADMIN_EMAIL` value with the intended administrator address before sharing or deploying the stack. The server also accepts `ADMIN_EMAIL` from the environment when run outside this Compose configuration.
 
+For an automatic rebuild/restart loop during development, use Docker Compose Watch:
+
+```bash
+docker compose watch
+```
+
+The Compose file watches Java sources, frontend sources, dependency manifests, the Dockerfile, and Compose configuration. Changes rebuild and recreate only the `app` service while the PostgreSQL service remains running. Because the current app image is production-oriented, this is automatic rebuild/restart rather than browser HMR; use `npm run dev` for Vite HMR when working on the frontend.
+
+Compose Watch requires Docker Compose 2.22 or newer. Use `docker compose up -d --build` when you need an explicit production-like rebuild or after changing the image/toolchain setup.
+
 Compose exposes PostgreSQL on host port `5433` for host-run integration tests. With the database service running, execute the full database-backed suite with:
 
 ```bash
@@ -266,7 +276,9 @@ export TEST_DATABASE_URL='postgresql://cube_solver:cube_solver@localhost:5433/cu
 mvn -q -Dmaven.compiler.useIncrementalCompilation=false test
 ```
 
-The liveness endpoint is `GET /api/health/live`, readiness is `GET /api/health/ready`, and process metrics are available at `GET /api/metrics`. CI runs [`scripts/docker-smoke-test.sh`](scripts/docker-smoke-test.sh) against the built Compose stack.
+The liveness endpoint is `GET /api/health/live`, readiness is `GET /api/health/ready`, and process metrics are available at `GET /api/metrics`. CI runs [`scripts/docker-smoke-test.sh`](scripts/docker-smoke-test.sh) against the built Compose stack. The smoke script uses isolated host ports (`18080` for the app and `55433` for Postgres by default) so it can run while the normal development stack is using `8080` and `5433`; override them with `SMOKE_APP_PORT` and `SMOKE_POSTGRES_PORT` if needed.
+
+The smoke workflow also registers a normal user and the configured bootstrap admin, verifies anonymous/user/admin catalog access, creates and polls a solve job, and verifies authenticated history persistence. It cleans up only its isolated Compose project and volume.
 
 ## Frontend Development
 
@@ -429,8 +441,11 @@ Solvers:
 
 - [`src/main/java/solver/CrossSolver.java`](src/main/java/solver/CrossSolver.java)
 - [`src/main/java/solver/F2LSolver.java`](src/main/java/solver/F2LSolver.java)
+- [`src/main/java/solver/F2LOptimizedSearch.java`](src/main/java/solver/F2LOptimizedSearch.java)
+- [`src/main/java/solver/F2LStateCodec.java`](src/main/java/solver/F2LStateCodec.java)
 - [`src/main/java/solver/OLLSolver.java`](src/main/java/solver/OLLSolver.java)
 - [`src/main/java/solver/PLLSolver.java`](src/main/java/solver/PLLSolver.java)
+- [`src/main/java/solver/LastLayerSolver.java`](src/main/java/solver/LastLayerSolver.java)
 - [`src/main/java/solver/CfopSolveService.java`](src/main/java/solver/CfopSolveService.java)
 - [`src/main/java/solver/SolverMain.java`](src/main/java/solver/SolverMain.java)
 
@@ -438,4 +453,19 @@ API and server:
 
 - [`src/main/java/api/SolveApiRequest.java`](src/main/java/api/SolveApiRequest.java)
 - [`src/main/java/server/CubeHttpServer.java`](src/main/java/server/CubeHttpServer.java)
+- [`src/main/java/server/HttpServerSupport.java`](src/main/java/server/HttpServerSupport.java)
+- [`src/main/java/server/AlgorithmCatalogRouteHandler.java`](src/main/java/server/AlgorithmCatalogRouteHandler.java)
+- [`src/main/java/server/AuthRouteHandler.java`](src/main/java/server/AuthRouteHandler.java)
+- [`src/main/java/server/SolveJobRouteHandler.java`](src/main/java/server/SolveJobRouteHandler.java)
+- [`src/main/java/server/SolveRouteHandler.java`](src/main/java/server/SolveRouteHandler.java)
+- [`src/main/java/server/SolveHistoryRouteHandler.java`](src/main/java/server/SolveHistoryRouteHandler.java)
+- [`src/main/java/server/StatisticsRouteHandler.java`](src/main/java/server/StatisticsRouteHandler.java)
 - [`src/main/java/server/ApiServerMain.java`](src/main/java/server/ApiServerMain.java)
+
+The backend keeps public solver and server facades stable while moving shared responsibilities into focused package-private collaborators. `F2LSolver` owns F2L orchestration and trace flow, while `F2LOptimizedSearch` owns bounded optimized search and `F2LStateCodec` owns compact state encoding and frame execution. `LastLayerSolver` owns OLL/PLL stage execution and status handling. `CubeHttpServer` only wires lifecycle and routes; `HttpServerSupport` centralizes request policy, and each API route has its own handler without changing endpoint paths or response shapes.
+
+Frontend structure:
+
+- [`frontend/src/App.tsx`](frontend/src/App.tsx) is the authenticated dashboard composition root.
+- [`frontend/src/hooks/useTimer.ts`](frontend/src/hooks/useTimer.ts) owns timer and inspection state, [`frontend/src/hooks/useHistoryData.ts`](frontend/src/hooks/useHistoryData.ts) owns history/statistics data, and [`frontend/src/hooks/useSolveProcesses.ts`](frontend/src/hooks/useSolveProcesses.ts) owns background solve jobs.
+- [`frontend/src/styles/`](frontend/src/styles/) contains feature-oriented stylesheet modules imported by [`frontend/src/styles.css`](frontend/src/styles.css); the existing global class names and responsive behavior remain stable.

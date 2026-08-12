@@ -11,13 +11,9 @@ import StatisticsRail from "./StatisticsRail";
 import TimerWorkspace from "./TimerWorkspace";
 import {
     createSolveAttempt,
-    deleteSolve,
     cancelSolveJob,
-    fetchSolveHistory,
     fetchSolveHistoryDetail,
-    fetchSolveStatistics,
     saveSolveSolution,
-    startSolveJob,
 } from "./api";
 import {
     crossFaceLabel,
@@ -25,20 +21,20 @@ import {
     formatHistoryTime,
     formatSolveTime,
 } from "./format";
+import {useHistoryData} from "./hooks/useHistoryData";
+import {useSolveProcesses} from "./hooks/useSolveProcesses";
+import {useTimer, type CompletedAttemptSnapshot, type TimerPenalty, type TimerPhase} from "./hooks/useTimer";
+import {isTerminalProcess} from "./jobs";
 import type {
     AuthUser,
     SolutionProcess,
-    SolutionProcessSource,
-    SolveJob,
     SolveJobRequest,
     SaveSolutionRequest,
     SavedSolution,
     SolveHistoryDetail,
     SolveHistoryEntry,
     SolveResponse,
-    SolveStatistics,
 } from "./types";
-import {isTerminalProcess, SolveJobCancelledError, trimFinishedProcesses, waitForSolveJob} from "./jobs";
 
 setSearchDebug({prioritizeEsbuildWorkaroundForWorkerInstantiation: true});
 
@@ -57,22 +53,9 @@ const INSPECTION_DNF_MS = 17_000;
 
 type Theme = "light" | "dark";
 type SolutionStatus = "idle" | "loading" | "ready" | "error";
-type TimerPhase = "idle" | "armed" | "inspection" | "running" | "stopped";
-type ArmedSource = "idle" | "stopped" | "inspection" | null;
-type TimerPenalty = "none" | "+2" | "dnf";
 type F2LMode = "greedy" | "optimized";
-type HistoryStatus = "idle" | "loading" | "ready" | "error";
 type AttemptSaveStatus = "idle" | "saving" | "saved" | "error";
 type ModalStatus = "idle" | "loading" | "ready" | "error";
-type CompletedAttemptSnapshot = {
-    clientAttemptId: string;
-    scramble: string;
-    crossFace: string;
-    f2lMode: F2LMode;
-    elapsedMs: number;
-    penalty: TimerPenalty;
-    result: SolveResponse | null;
-};
 
 function initialTheme(): Theme {
     const savedTheme = window.localStorage.getItem("cube-solver-theme");
@@ -95,16 +78,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const [result, setResult] = useState<SolveResponse | null>(null);
     const [timerSolutionOpen, setTimerSolutionOpen] = useState(false);
     const [activeView, setActiveView] = useState<DashboardView>("timer");
-    const [processes, setProcesses] = useState<SolutionProcess[]>([]);
     const [processPreview, setProcessPreview] = useState<SolutionProcess | null>(null);
-    const [historyStatus, setHistoryStatus] = useState<HistoryStatus>("idle");
-    const [historyError, setHistoryError] = useState<string | null>(null);
-    const [historyEntries, setHistoryEntries] = useState<SolveHistoryEntry[]>([]);
-    const [historyCursor, setHistoryCursor] = useState<string | null>(null);
-    const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
-    const [deletingSolveId, setDeletingSolveId] = useState<number | null>(null);
-    const [statistics, setStatistics] = useState<SolveStatistics | null>(null);
-    const [statisticsLoading, setStatisticsLoading] = useState(true);
     const [attemptSaveStatus, setAttemptSaveStatus] = useState<AttemptSaveStatus>("idle");
     const [attemptSaveError, setAttemptSaveError] = useState<string | null>(null);
     const [saveNotice, setSaveNotice] = useState<string | null>(null);
@@ -126,24 +100,63 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const [modalBestTotalMoves, setModalBestTotalMoves] = useState(-1);
     const [modalSaving, setModalSaving] = useState(false);
     const [theme, setTheme] = useState<Theme>(initialTheme);
-    const [timerPhase, setTimerPhase] = useState<TimerPhase>("idle");
-    const [armedSource, setArmedSource] = useState<ArmedSource>(null);
-    const [inspectionStartedAt, setInspectionStartedAt] = useState<number | null>(null);
-    const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
-    const [stoppedElapsedMs, setStoppedElapsedMs] = useState<number | null>(null);
-    const [finalPenalty, setFinalPenalty] = useState<TimerPenalty>("none");
-    const [clockMs, setClockMs] = useState(0);
     const requestIdRef = useRef(0);
     const attemptSavingRef = useRef<string | null>(null);
     const completedAttemptRef = useRef<CompletedAttemptSnapshot | null>(null);
     const modalJobRequestIdRef = useRef(0);
-    const historyLoadRequestedRef = useRef(false);
 
-    const inspectionElapsedMs =
-        inspectionStartedAt === null ? 0 : Math.max(0, clockMs - inspectionStartedAt);
-    const inspectionPenalty = penaltyForInspectionElapsed(inspectionElapsedMs);
-    const runningElapsedMs = runStartedAt === null ? 0 : Math.max(0, clockMs - runStartedAt);
-    const attemptLocked = attemptSaveStatus === "saving" && timerPhase === "stopped";
+    const {
+        processes,
+        runTrackedSolve,
+        terminateProcess,
+        retryProcess,
+        dismissProcess,
+        clearFinishedProcesses,
+    } = useSolveProcesses();
+    const {
+        historyStatus,
+        historyError,
+        historyEntries,
+        historyCursor,
+        historyLoadingMore,
+        deletingSolveId,
+        statistics,
+        statisticsLoading,
+        loadHistory,
+        loadMoreHistory,
+        loadStatistics,
+        handleDeleteSolve,
+        setHistoryEntries,
+        setHistoryStatus,
+        setHistoryError,
+    } = useHistoryData({activeView, onNotice: setSaveNotice});
+    const timer = useTimer({
+        activeView,
+        overlayOpen: modalStatus !== "idle" || processPreview !== null || timerSolutionOpen,
+        isEditingScramble,
+        attemptSaveStatus,
+        committedScramble,
+        crossFace,
+        f2lMode,
+        clientAttemptId,
+        solutionStatus,
+        result,
+        onStopped: (snapshot) => {
+            completedAttemptRef.current = snapshot;
+        },
+    });
+    const {
+        timerPhase,
+        stoppedElapsedMs,
+        finalPenalty,
+        inspectionPenalty,
+        inspectionElapsedMs,
+        runningElapsedMs,
+        attemptLocked,
+        resetTimer,
+        handleTimerPointerDown,
+        handleTimerPointerUp,
+    } = timer;
 
     useEffect(() => {
         document.documentElement.dataset.theme = theme;
@@ -163,31 +176,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     }, [activeView, modalStatus, processPreview, timerSolutionOpen]);
 
     useEffect(() => {
-        if (timerPhase !== "inspection" && timerPhase !== "running") {
-            return;
-        }
-
-        let frameId = 0;
-        const tick = (timestamp: number) => {
-            setClockMs(timestamp);
-            frameId = window.requestAnimationFrame(tick);
-        };
-
-        frameId = window.requestAnimationFrame(tick);
-        return () => window.cancelAnimationFrame(frameId);
-    }, [timerPhase]);
-
-    useEffect(() => {
         void initializeScramble();
-        void loadStatistics();
     }, []);
-
-    useEffect(() => {
-        if (activeView === "history" && !historyLoadRequestedRef.current) {
-            historyLoadRequestedRef.current = true;
-            void loadHistory();
-        }
-    }, [activeView]);
 
     useEffect(() => {
         if (!committedScramble) {
@@ -291,102 +281,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         return () => window.removeEventListener("keydown", closeTimerSolution);
     }, [timerSolutionOpen]);
 
-    useEffect(() => {
-        const handleKeyDown = (event: KeyboardEvent) => {
-            const overlayOpen = modalStatus !== "idle" || processPreview !== null || timerSolutionOpen;
-            if (overlayOpen) {
-                if (event.code === "Space") {
-                    event.preventDefault();
-                }
-                return;
-            }
-            if (
-                activeView !== "timer"
-                || isEditingScramble
-            ) {
-                return;
-            }
-            if (attemptSaveStatus === "saving" || attemptSaveStatus === "error") {
-                return;
-            }
-            if (isTextEntryTarget(event.target)) {
-                return;
-            }
-
-            if (event.code === "Space") {
-                if (event.repeat) {
-                    return;
-                }
-
-                event.preventDefault();
-                blurFocusedButton();
-                if (timerPhase === "idle" || timerPhase === "stopped") {
-                    armTimer(timerPhase);
-                    return;
-                }
-                if (timerPhase === "inspection") {
-                    armTimer("inspection");
-                    return;
-                }
-                if (timerPhase === "running") {
-                    stopTimer();
-                }
-                return;
-            }
-
-        };
-
-        const handleKeyUp = (event: KeyboardEvent) => {
-            const overlayOpen = modalStatus !== "idle" || processPreview !== null || timerSolutionOpen;
-            if (overlayOpen) {
-                if (event.code === "Space") {
-                    event.preventDefault();
-                }
-                return;
-            }
-            if (
-                activeView !== "timer"
-                || isEditingScramble
-            ) {
-                return;
-            }
-            if (event.code !== "Space" || isTextEntryTarget(event.target)) {
-                return;
-            }
-
-            event.preventDefault();
-            blurFocusedButton();
-            if (timerPhase === "armed") {
-                releaseArmedTimer();
-            }
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-        window.addEventListener("keyup", handleKeyUp);
-        return () => {
-            window.removeEventListener("keydown", handleKeyDown);
-            window.removeEventListener("keyup", handleKeyUp);
-        };
-    }, [
-        timerPhase,
-        armedSource,
-        inspectionStartedAt,
-        runStartedAt,
-        generatingScramble,
-        isEditingScramble,
-        activeView,
-        modalStatus,
-        processPreview,
-        timerSolutionOpen,
-        attemptSaveStatus,
-        committedScramble,
-        crossFace,
-        f2lMode,
-        solutionStatus,
-        result,
-        clientAttemptId,
-        finalPenalty,
-    ]);
 
     async function initializeScramble() {
         setGeneratingScramble(true);
@@ -400,52 +294,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
             commitScramble(DEFAULT_SCRAMBLE);
         } finally {
             setGeneratingScramble(false);
-        }
-    }
-
-    async function loadHistory() {
-        setHistoryStatus("loading");
-        setHistoryError(null);
-        try {
-            const page = await fetchSolveHistory(25);
-            setHistoryEntries(page.items);
-            setHistoryCursor(page.nextCursor);
-            setHistoryStatus("ready");
-        } catch (loadError) {
-            const message = loadError instanceof Error ? loadError.message : "History request failed";
-            setHistoryError(message);
-            setHistoryStatus("error");
-        }
-    }
-
-    async function loadMoreHistory() {
-        if (!historyCursor || historyLoadingMore) {
-            return;
-        }
-        setHistoryLoadingMore(true);
-        try {
-            const page = await fetchSolveHistory(25, historyCursor);
-            setHistoryEntries((current) => [
-                ...current,
-                ...page.items.filter((entry) => current.every((existing) => existing.id !== entry.id)),
-            ]);
-            setHistoryCursor(page.nextCursor);
-        } catch (loadError) {
-            const message = loadError instanceof Error ? loadError.message : "History request failed";
-            setHistoryError(message);
-        } finally {
-            setHistoryLoadingMore(false);
-        }
-    }
-
-    async function loadStatistics() {
-        setStatisticsLoading(true);
-        try {
-            setStatistics(await fetchSolveStatistics());
-        } catch {
-            setStatistics(null);
-        } finally {
-            setStatisticsLoading(false);
         }
     }
 
@@ -473,32 +321,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
             const message = openError instanceof Error ? openError.message : "Solve detail request failed";
             setModalError(message);
             setModalStatus("error");
-        }
-    }
-
-    async function handleDeleteSolve(entry: SolveHistoryEntry) {
-        if (deletingSolveId !== null) {
-            return;
-        }
-        const displayedTime = formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf);
-        if (!window.confirm(
-            `Delete the ${displayedTime} solve permanently?\n\nThis also deletes all saved Fast and Optimized solutions.`
-        )) {
-            return;
-        }
-
-        setDeletingSolveId(entry.id);
-        setHistoryError(null);
-        try {
-            await deleteSolve(entry.id);
-            setHistoryEntries((current) => current.filter((solve) => solve.id !== entry.id));
-            setSaveNotice("Solve deleted");
-            await Promise.all([loadHistory(), loadStatistics()]);
-        } catch (deleteError) {
-            const message = deleteError instanceof Error ? deleteError.message : "Solve deletion failed";
-            setHistoryError(message);
-        } finally {
-            setDeletingSolveId(null);
         }
     }
 
@@ -673,16 +495,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         setModalBestTotalMoves(-1);
     }
 
-    function resetTimer() {
-        setTimerPhase("idle");
-        setArmedSource(null);
-        setInspectionStartedAt(null);
-        setRunStartedAt(null);
-        setStoppedElapsedMs(null);
-        setFinalPenalty("none");
-        setClockMs(window.performance.now());
-    }
-
     function commitScramble(nextScramble: string) {
         const normalized = nextScramble.trim();
         setCommittedScramble(normalized);
@@ -693,63 +505,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         setAttemptSaveStatus("idle");
         setAttemptSaveError(null);
         resetTimer();
-    }
-
-    function armTimer(source: Exclude<ArmedSource, null>) {
-        setTimerPhase("armed");
-        setArmedSource(source);
-        setClockMs(window.performance.now());
-    }
-
-    function beginInspection() {
-        const now = window.performance.now();
-        setTimerPhase("inspection");
-        setArmedSource(null);
-        setInspectionStartedAt(now);
-        setRunStartedAt(null);
-        setStoppedElapsedMs(null);
-        setFinalPenalty("none");
-        setClockMs(now);
-    }
-
-    function beginRunning() {
-        const now = window.performance.now();
-        const nextPenalty = penaltyForInspectionElapsed(now - (inspectionStartedAt ?? now));
-        setTimerPhase("running");
-        setArmedSource(null);
-        setRunStartedAt(now);
-        setStoppedElapsedMs(null);
-        setFinalPenalty(nextPenalty);
-        setClockMs(now);
-    }
-
-    function releaseArmedTimer() {
-        if (armedSource === "inspection") {
-            beginRunning();
-            return;
-        }
-        beginInspection();
-    }
-
-    function stopTimer() {
-        if (runStartedAt === null) {
-            return;
-        }
-        const now = window.performance.now();
-        const elapsedMs = now - runStartedAt;
-        completedAttemptRef.current = {
-            clientAttemptId,
-            scramble: committedScramble,
-            crossFace,
-            f2lMode,
-            elapsedMs,
-            penalty: finalPenalty,
-            result: solutionStatus === "ready" && result?.scramble === committedScramble ? result : null,
-        };
-        setTimerPhase("stopped");
-        setStoppedElapsedMs(elapsedMs);
-        setRunStartedAt(null);
-        setClockMs(now);
     }
 
     async function persistCompletedAttempt() {
@@ -868,158 +623,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         resetTimer();
     }
 
-    function handleTimerPointerDown() {
-        if (
-            isEditingScramble
-            || attemptSaveStatus === "saving"
-            || attemptSaveStatus === "error"
-        ) {
-            return;
-        }
-        if (timerPhase === "idle" || timerPhase === "stopped") {
-            armTimer(timerPhase);
-            return;
-        }
-        if (timerPhase === "inspection") {
-            armTimer("inspection");
-            return;
-        }
-        if (timerPhase === "running") {
-            stopTimer();
-        }
-    }
-
-    function handleTimerPointerUp() {
-        if (timerPhase === "armed") {
-            releaseArmedTimer();
-        }
-    }
-
     function toggleTheme() {
         setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
-    }
-
-    function runTrackedSolve(
-        request: SolveJobRequest,
-        source: SolutionProcessSource,
-        onProgress?: (job: SolveJob) => void,
-        onJobCreated?: (job: SolveJob) => void,
-    ): Promise<SolveResponse> {
-        const processId = crypto.randomUUID();
-        const now = Date.now();
-        const initial: SolutionProcess = {
-            id: processId,
-            jobId: null,
-            source,
-            request,
-            status: "queued",
-            statesExplored: 0,
-            statesPruned: 0,
-            duplicateStates: 0,
-            bestMoves: -1,
-            completedCandidates: 0,
-            candidatesEvaluated: 0,
-            bestTotalMoves: -1,
-            phase: "QUEUED",
-            currentCrossFace: "",
-            completedCrosses: 0,
-            totalCrosses: 0,
-            optimizationCandidate: 0,
-            totalOptimizationCandidates: 0,
-            optimizationBudgetExpired: false,
-            createdAt: now,
-            updatedAt: now,
-            result: null,
-            error: null,
-            cancelling: false,
-        };
-        setProcesses((current) => [initial, ...current]);
-
-        return startSolveJob(request)
-            .then((job) => {
-                onJobCreated?.(job);
-                updateProcessFromJob(processId, job);
-                return waitForSolveJob(job, (progress) => {
-                    updateProcessFromJob(processId, progress);
-                    onProgress?.(progress);
-                });
-            })
-            .catch((solveError) => {
-                const message = solveError instanceof Error ? solveError.message : "Solve request failed";
-                setProcesses((current) => trimFinishedProcesses(current.map((process) =>
-                    process.id === processId && !isTerminalProcess(process)
-                        ? {
-                            ...process,
-                            status: solveError instanceof SolveJobCancelledError ? "cancelled" : "failed",
-                            error: message,
-                            cancelling: false,
-                            updatedAt: Date.now(),
-                        }
-                        : process
-                )));
-                throw solveError;
-            });
-    }
-
-    function updateProcessFromJob(processId: string, job: SolveJob) {
-        setProcesses((current) => trimFinishedProcesses(current.map((process) =>
-            process.id === processId
-                ? {
-                    ...process,
-                    jobId: job.id,
-                    status: job.status,
-                    statesExplored: job.statesExplored,
-                    statesPruned: job.statesPruned,
-                    duplicateStates: job.duplicateStates,
-                    bestMoves: job.bestMoves,
-                    completedCandidates: job.completedCandidates,
-                    candidatesEvaluated: job.candidatesEvaluated,
-                    bestTotalMoves: job.bestTotalMoves,
-                    phase: job.phase,
-                    currentCrossFace: job.currentCrossFace,
-                    completedCrosses: job.completedCrosses,
-                    totalCrosses: job.totalCrosses,
-                    optimizationCandidate: job.optimizationCandidate,
-                    totalOptimizationCandidates: job.totalOptimizationCandidates,
-                    optimizationBudgetExpired: job.optimizationBudgetExpired,
-                    result: job.result,
-                    error: job.error,
-                    cancelling: isTerminalProcess({...process, status: job.status})
-                        ? false
-                        : process.cancelling,
-                    updatedAt: Date.now(),
-                }
-                : process
-        )));
-    }
-
-    async function terminateProcess(process: SolutionProcess) {
-        if (!process.jobId || isTerminalProcess(process)) {
-            return;
-        }
-        setProcesses((current) => current.map((entry) =>
-            entry.id === process.id ? {...entry, cancelling: true} : entry
-        ));
-        try {
-            updateProcessFromJob(process.id, await cancelSolveJob(process.jobId));
-        } catch (cancelError) {
-            const message = cancelError instanceof Error ? cancelError.message : "Cancellation failed";
-            setProcesses((current) => current.map((entry) =>
-                entry.id === process.id ? {...entry, cancelling: false, error: message} : entry
-            ));
-        }
-    }
-
-    function retryProcess(process: SolutionProcess) {
-        void runTrackedSolve(process.request, process.source);
-    }
-
-    function dismissProcess(processId: string) {
-        setProcesses((current) => current.filter((process) => process.id !== processId));
-    }
-
-    function clearFinishedProcesses() {
-        setProcesses((current) => current.filter((process) => !isTerminalProcess(process)));
     }
 
     return (
@@ -1487,27 +1092,4 @@ function formatStoppedTime(elapsedMs: number, penalty: TimerPenalty): string {
         return `${formatSolveTime(elapsedMs + 2_000)}+`;
     }
     return formatSolveTime(elapsedMs);
-}
-
-function penaltyForInspectionElapsed(inspectionElapsedMs: number): TimerPenalty {
-    if (inspectionElapsedMs > INSPECTION_DNF_MS) {
-        return "dnf";
-    }
-    if (inspectionElapsedMs > INSPECTION_PLUS_TWO_MS) {
-        return "+2";
-    }
-    return "none";
-}
-
-function isTextEntryTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof HTMLElement)) {
-        return false;
-    }
-    return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
-}
-
-function blurFocusedButton() {
-    if (document.activeElement instanceof HTMLButtonElement) {
-        document.activeElement.blur();
-    }
 }
