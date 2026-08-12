@@ -1,5 +1,6 @@
 package test;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import database.CreateSolveAttemptCommand;
 import database.DatabaseManager;
 import database.SaveSolutionCommand;
@@ -15,6 +16,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SolveHistoryHardeningIntegrationTest {
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     @Test
     @EnabledIfEnvironmentVariable(named = "TEST_DATABASE_URL", matches = ".+")
     void history_shouldEnforceOwnershipAndReloadTraceComparisonAndLegacyFallback() throws Exception {
@@ -41,13 +44,13 @@ class SolveHistoryHardeningIntegrationTest {
                     comparison
             ));
 
-            assertEquals(trace, saved.f2lTraceJson());
-            assertEquals(comparison, saved.comparisonJson());
+            assertEquals(JSON.readTree(trace), JSON.readTree(saved.f2lTraceJson()));
+            assertEquals(JSON.readTree(comparison), JSON.readTree(saved.comparisonJson()));
 
             var ownerDetail = repository.findDetail(owner, ownerAttempt.id());
             assertEquals(1, ownerDetail.solutions().size());
-            assertEquals(trace, ownerDetail.solutions().get(0).f2lTraceJson());
-            assertEquals(comparison, ownerDetail.solutions().get(0).comparisonJson());
+            assertEquals(JSON.readTree(trace), JSON.readTree(ownerDetail.solutions().get(0).f2lTraceJson()));
+            assertEquals(JSON.readTree(comparison), JSON.readTree(ownerDetail.solutions().get(0).comparisonJson()));
             var ownerPage = repository.listPage(owner, 20, null);
             assertEquals(2, ownerPage.items().size());
             assertTrue(ownerPage.items().stream().anyMatch(entry -> entry.id() == ownerAttempt.id()));
