@@ -1,0 +1,415 @@
+.solution-modal-backdrop {
+    position: fixed;
+    z-index: 100;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    background: rgba(3, 6, 10, 0.78);
+    backdrop-filter: blur(10px);
+}
+
+.solution-modal {
+    width: min(1150px, 100%);
+    max-height: calc(100vh - 36px);
+    overflow: auto;
+    border: 1px solid var(--border-strong);
+    border-radius: 24px;
+    background: var(--bg-elevated);
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5);
+    padding: 20px;
+}
+
+.solution-modal-header,
+.solution-modal-controls {
+    display: flex;
+    align-items: center;
+}
+
+.solution-modal-header {
+    justify-content: space-between;
+}
+
+.solution-modal-header h2 {
+    margin: 4px 0 0;
+    font-family: "Space Mono", monospace;
+}
+
+.solution-modal-context {
+    display: block;
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 0.76rem;
+}
+
+.solution-modal-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 14px;
+}
+
+.modal-scramble {
+    color: var(--text-soft);
+    font-family: "Space Mono", monospace;
+    line-height: 1.5;
+}
+
+.modal-warning,
+.modal-message {
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.8rem;
+}
+
+.modal-warning {
+    border: 1px solid color-mix(in srgb, var(--amber) 35%, var(--border));
+    color: var(--amber);
+}
+
+.modal-message {
+    color: var(--muted);
+}
+
+.modal-message:has(button) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.error-text {
+    color: var(--red);
+}
+
+.solution-summary-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    margin-top: 14px;
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    background: var(--panel);
+    overflow: hidden;
+}
+
+.solution-summary-strip > div {
+    display: grid;
+    gap: 3px;
+    min-width: 130px;
+    border-right: 1px solid var(--border);
+    padding: 10px 14px;
+}
+
+.solution-summary-strip > div:last-child {
+    border-right: 0;
+}
+
+.solution-summary-strip span,
+.solution-stage-rail-heading small,
+.solution-stage-row button small,
+.solution-stage-detail > span,
+.solution-stage-f2l-meta {
+    color: var(--muted);
+    font-size: 0.69rem;
+}
+
+.solution-summary-strip strong {
+    color: var(--text);
+    font-family: "Space Mono", monospace;
+    font-size: 0.86rem;
+}
+
+.solution-result-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(290px, 1fr);
+    gap: 14px;
+    margin-top: 14px;
+}
+
+.solution-result-layout > .visualizer-section {
+    min-height: 620px;
+}
+
+.solution-stage-rail {
+    display: grid;
+    align-content: start;
+    min-width: 0;
+    border: 1px solid var(--border);
+    border-radius: 15px;
+    background: var(--panel);
+    overflow: hidden;
+}
+
+.solution-stage-rail-heading {
+    display: grid;
+    gap: 3px;
+    border-bottom: 1px solid var(--border);
+    padding: 15px 16px;
+}
+
+.solution-stage-rail-heading > span {
+    color: var(--text-soft);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.solution-stage-list {
+    display: grid;
+}
+
+.solution-stage-row {
+    border-bottom: 1px solid var(--border);
+}
+
+.solution-stage-row:last-child {
+    border-bottom: 0;
+}
+
+.solution-stage-row > button {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 60px;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    padding: 10px 14px;
+    text-align: left;
+}
+
+.solution-stage-row > button:hover,
+.solution-stage-row.expanded > button {
+    background: var(--panel-hover);
+}
+
+.solution-stage-row > button > span {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.solution-stage-row > button > span:last-child {
+    flex-shrink: 0;
+}
+
+.solution-stage-row > button strong {
+    font-size: 0.78rem;
+    letter-spacing: 0.1em;
+}
+
+.solution-stage-row > button i {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--amber);
+    font-size: 0.65rem;
+    font-style: normal;
+}
+
+.solution-stage-row > button svg {
+    transition: transform 150ms ease;
+}
+
+.solution-stage-row.expanded > button > span:last-child svg {
+    transform: rotate(180deg);
+}
+
+.solution-stage-detail {
+    display: grid;
+    gap: 10px;
+    border-top: 1px solid var(--border);
+    background: color-mix(in srgb, var(--panel-muted) 70%, transparent);
+    padding: 13px 14px 15px;
+}
+
+.solution-stage-detail p {
+    margin: 0;
+    color: var(--text);
+    font-family: "Space Mono", monospace;
+    font-size: 0.78rem;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+}
+
+.solution-stage-detail > span {
+    color: var(--amber);
+}
+
+.solution-stage-f2l-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.solution-stage-f2l-meta span {
+    border-radius: 999px;
+    background: var(--panel);
+    padding: 5px 7px;
+}
+
+.solution-f2l-details {
+    display: grid;
+    gap: 10px;
+}
+
+.solution-f2l-empty {
+    margin: 0;
+    color: var(--muted);
+    font-size: 0.75rem;
+}
+
+.solution-pair-list {
+    display: grid;
+    gap: 8px;
+}
+
+.solution-pair-card {
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+}
+
+.solution-pair-card.selected {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.solution-pair-select {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: var(--text);
+    cursor: pointer;
+    padding: 9px 10px;
+    text-align: left;
+}
+
+.solution-pair-select:hover,
+.solution-pair-card.selected .solution-pair-select {
+    background: var(--panel-hover);
+}
+
+.solution-pair-select > span:first-child {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+
+.solution-pair-select strong {
+    font-size: 0.75rem;
+}
+
+.solution-pair-select small,
+.solution-pair-range,
+.solution-pair-facts,
+.solution-comparison small {
+    color: var(--muted);
+    font-size: 0.65rem;
+}
+
+.solution-pair-moves {
+    flex-shrink: 0;
+    color: var(--text-soft);
+    font-family: "Space Mono", monospace;
+    font-size: 0.68rem;
+}
+
+.solution-pair-body {
+    display: grid;
+    gap: 7px;
+    border-top: 1px solid var(--border);
+    padding: 9px 10px 10px;
+}
+
+.solution-pair-body code {
+    color: var(--text);
+    font-family: "Space Mono", monospace;
+    font-size: 0.7rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.solution-pair-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.solution-pair-tags span {
+    border-radius: 999px;
+    background: var(--panel-muted);
+    color: var(--text-soft);
+    font-size: 0.61rem;
+    line-height: 1.2;
+    padding: 4px 6px;
+}
+
+.solution-pair-facts {
+    display: grid;
+    gap: 3px;
+    line-height: 1.35;
+}
+
+.solution-comparison {
+    display: grid;
+    gap: 9px;
+    border-top: 1px solid var(--border);
+    padding: 13px 14px 14px;
+}
+
+.solution-comparison-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.solution-comparison-heading strong {
+    color: var(--text-soft);
+    font-size: 0.73rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.solution-comparison-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.solution-comparison-grid > div {
+    display: grid;
+    gap: 2px;
+    border-radius: 7px;
+    background: var(--panel-muted);
+    padding: 6px 7px;
+}
+
+.solution-comparison-grid span {
+    color: var(--muted);
+    font-size: 0.61rem;
+}
+
+.solution-comparison-grid strong {
+    color: var(--text);
+    font-family: "Space Mono", monospace;
+    font-size: 0.73rem;
+}
+
+.solution-comparison-note {
+    color: var(--text-soft);
+    font-size: 0.66rem;
+}
+
+

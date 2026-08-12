@@ -22,9 +22,7 @@ import cube.OrientationFrames;
 import cube.OrientedCube;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +43,6 @@ import static cfop.F2LGeometry.targetSlotsForOrientation;
 import static cfop.F2LGeometry.visibleSlotForTarget;
 
 public class F2LSolver {
-    private static final int MAX_PATHS_PER_STATE = 3;
     private static final boolean DEBUG_DB = Boolean.getBoolean("f2l.debug");
     private static final boolean DEBUG_VERBOSE = Boolean.getBoolean("f2l.debug.verbose");
     private static final Comparator<Algorithm> ALGORITHM_COMPARATOR = Comparator
@@ -217,7 +214,7 @@ public class F2LSolver {
                     System.out.println("[F2L STAGE] insert DB selected targetSlot=" + candidate.targetSlot()
                             + " algorithm=" + candidate.algorithm());
                 }
-                currentOrientation = executeAndReturnOrientation(workingCube, currentOrientation, candidate.algorithm().getMoves());
+                currentOrientation = F2LStateCodec.executeAndReturnOrientation(workingCube, currentOrientation, candidate.algorithm().getMoves());
                 ensureTargetSlotSolved(workingCube, candidate.targetSlot(), "insert database");
                 pendingSteps.add(pendingStep.withAfter(workingCube, currentOrientation));
                 if (!protectedSlots.contains(candidate.targetSlot())) {
@@ -247,7 +244,7 @@ public class F2LSolver {
                     System.out.println("[F2L STAGE] setup+insert DB selected targetSlot=" + candidate.targetSlot()
                             + " algorithm=" + candidate.algorithm());
                 }
-                currentOrientation = executeAndReturnOrientation(workingCube, currentOrientation, candidate.algorithm().getMoves());
+                currentOrientation = F2LStateCodec.executeAndReturnOrientation(workingCube, currentOrientation, candidate.algorithm().getMoves());
                 ensureTargetSlotSolved(workingCube, candidate.targetSlot(), "setup+insert database");
                 pendingSteps.add(pendingStep.withAfter(workingCube, currentOrientation));
                 if (!protectedSlots.contains(candidate.targetSlot())) {
@@ -264,7 +261,7 @@ public class F2LSolver {
             );
             if (recovery.isPresent()) {
                 var transition = recovery.get();
-                currentOrientation = executeAndReturnOrientation(
+                currentOrientation = F2LStateCodec.executeAndReturnOrientation(
                         workingCube, currentOrientation, transition.algorithm().getMoves()
                 );
                 recoveryMoves.addAll(transition.algorithm().getMoves());
@@ -289,7 +286,7 @@ public class F2LSolver {
                     workingCube, currentOrientation,
                     targetSlot, slotSolution, protectedSlots, false, recoveryMoves
             );
-            currentOrientation = executeAndReturnOrientation(workingCube, currentOrientation, slotSolution.getMoves());
+            currentOrientation = F2LStateCodec.executeAndReturnOrientation(workingCube, currentOrientation, slotSolution.getMoves());
             ensureTargetSlotSolved(workingCube, targetSlot, "fallback search");
             pendingSteps.add(pendingStep.withAfter(workingCube, currentOrientation));
             if (!protectedSlots.contains(targetSlot)) {
@@ -393,7 +390,7 @@ public class F2LSolver {
         );
     }
 
-    private static List<F2LPairStep> buildPairSteps(List<PendingPairStep> pendingSteps) {
+    static List<F2LPairStep> buildPairSteps(List<PendingPairStep> pendingSteps) {
         var totalMoves = pendingSteps.stream()
                 .mapToInt(step -> Algorithm.fromMoves(step.completeMoves()).getMoveCount())
                 .sum();
@@ -504,12 +501,76 @@ public class F2LSolver {
         var effectiveGreedyUpperBound = greedyUpperBound == null
                 ? solveForTargets(initialCube.copy(), initialOrientation.copy())
                 : greedyUpperBound.copy();
-        var search = new OptimizedSearch(
+        var search = new F2LOptimizedSearch(
                 targetSlots,
                 progressListener == null ? ignored -> {
                 } : progressListener,
                 effectiveGreedyUpperBound,
-                shouldStop == null ? () -> false : shouldStop
+                shouldStop == null ? () -> false : shouldStop,
+                new F2LOptimizedSearch.Host() {
+                    @Override
+                    public List<PhaseSlotSolution> findInsertDatabaseSlotSolutions(
+                            CubeState cube,
+                            CubeOrientation orientation,
+                            TargetSlot[] targetSlots,
+                            List<TargetSlot> protectedSlots,
+                            SearchCheckpoint checkpoint
+                    ) {
+                        return F2LSolver.this.findInsertDatabaseSlotSolutions(
+                                cube, orientation, targetSlots, protectedSlots, checkpoint
+                        );
+                    }
+
+                    @Override
+                    public List<PhaseSlotSolution> findSetupThenInsertDatabaseSlotSolutions(
+                            CubeState cube,
+                            CubeOrientation orientation,
+                            TargetSlot[] targetSlots,
+                            List<TargetSlot> protectedSlots,
+                            SearchCheckpoint checkpoint
+                    ) {
+                        return F2LSolver.this.findSetupThenInsertDatabaseSlotSolutions(
+                                cube, orientation, targetSlots, protectedSlots, checkpoint
+                        );
+                    }
+
+                    @Override
+                    public List<PhaseSlotSolution> findRecoveryThenDatabaseSolutions(
+                            OptimizedState state,
+                            SearchCheckpoint checkpoint
+                    ) {
+                        return F2LSolver.this.findRecoveryThenDatabaseSolutions(state, checkpoint);
+                    }
+
+                    @Override
+                    public PendingPairStep pendingPairStep(
+                            OptimizedState state,
+                            PhaseSlotSolution candidate,
+                            CubeState trialCube,
+                            CubeOrientation trialOrientation
+                    ) {
+                        var pendingStep = F2LSolver.pendingPairStep(
+                                state.cube(),
+                                state.orientation(),
+                                candidate.caseCube() == null ? state.cube() : candidate.caseCube(),
+                                candidate.caseOrientation() == null
+                                        ? state.orientation()
+                                        : candidate.caseOrientation(),
+                                candidate.targetSlot(),
+                                candidate.algorithm(),
+                                state.protectedSlots(),
+                                false,
+                                List.of(),
+                                candidate.recoveryUsed()
+                        );
+                        return pendingStep.withAfter(trialCube, trialOrientation);
+                    }
+
+                    @Override
+                    public List<F2LPairStep> buildPairSteps(List<PendingPairStep> pendingSteps) {
+                        return F2LSolver.buildPairSteps(pendingSteps);
+                    }
+                }
         );
         search.search(new OptimizedState(
                 initialCube,
@@ -582,7 +643,7 @@ public class F2LSolver {
         return candidates.stream().findFirst();
     }
 
-    private List<PhaseSlotSolution> findInsertDatabaseSlotSolutions(
+    List<PhaseSlotSolution> findInsertDatabaseSlotSolutions(
             CubeState cube,
             CubeOrientation orientation,
             TargetSlot[] targetSlots,
@@ -627,7 +688,7 @@ public class F2LSolver {
         return candidates.stream().findFirst();
     }
 
-    private List<PhaseSlotSolution> findSetupThenInsertDatabaseSlotSolutions(
+    List<PhaseSlotSolution> findSetupThenInsertDatabaseSlotSolutions(
             CubeState cube,
             CubeOrientation orientation,
             TargetSlot[] targetSlots,
@@ -666,7 +727,7 @@ public class F2LSolver {
         for (var setup : findPrefixedSetupDatabaseSolutions(cube, orientation, targetSlot, protectedSlots)) {
             SolveCancellation.throwIfCancelled();
             var setupCube = cube.copy();
-            var setupOrientation = executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
+            var setupOrientation = F2LStateCodec.executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
             findPrefixedInsertDatabaseSolution(setupCube, setupOrientation, targetSlot, protectedSlots, false)
                     .ifPresent(insert -> {
                         candidates.add(Algorithm.normalize(setup.concat(insert)));
@@ -676,7 +737,7 @@ public class F2LSolver {
         for (var setup : findPrefixedValidatedSetupAlgorithms(cube, orientation, targetSlot, protectedSlots)) {
             SolveCancellation.throwIfCancelled();
             var setupCube = cube.copy();
-            var setupOrientation = executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
+            var setupOrientation = F2LStateCodec.executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
             findPrefixedInsertDatabaseSolution(setupCube, setupOrientation, targetSlot, protectedSlots, false)
                     .ifPresent(insert -> {
                         if (DEBUG_DB) {
@@ -707,7 +768,7 @@ public class F2LSolver {
                 break;
             }
             var setupCube = cube.copy();
-            var setupOrientation = executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
+            var setupOrientation = F2LStateCodec.executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
             for (var insert : findPrefixedInsertDatabaseSolutions(
                     setupCube, setupOrientation, targetSlot, protectedSlots, false, checkpoint
             )) {
@@ -746,7 +807,7 @@ public class F2LSolver {
 
         var setup = solveSetupPhase(cube, orientation, targetCross, targetPair, targetSlot, protectedSlots);
         var setupCube = cube.copy();
-        var setupOrientation = executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
+            var setupOrientation = F2LStateCodec.executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
 
         var insert = solveInsertPhase(
                 setupCube,
@@ -773,7 +834,7 @@ public class F2LSolver {
             }
             var recovery = RECOVERY_UNPAIR_ALGORITHMS.get(slot);
             var trialCube = cube.copy();
-            var trialOrientation = executeAndReturnOrientation(trialCube, orientation, recovery.getMoves());
+            var trialOrientation = F2LStateCodec.executeAndReturnOrientation(trialCube, orientation, recovery.getMoves());
             if (!areProtectedTargetsSolved(
                     trialCube, targetCrossForOrientation(trialOrientation), protectedSlots
             )) {
@@ -800,7 +861,7 @@ public class F2LSolver {
                 || findBestSetupThenInsertDatabaseSlotSolution(cube, orientation, targetSlots, protectedSlots).isPresent();
     }
 
-    private List<PhaseSlotSolution> findRecoveryThenDatabaseSolutions(
+    List<PhaseSlotSolution> findRecoveryThenDatabaseSolutions(
             OptimizedState state,
             SearchCheckpoint checkpoint
     ) {
@@ -817,7 +878,7 @@ public class F2LSolver {
                 continue;
             }
             var trialCube = state.cube().copy();
-            var trialOrientation = executeAndReturnOrientation(
+            var trialOrientation = F2LStateCodec.executeAndReturnOrientation(
                     trialCube, state.orientation(), recovery.getMoves()
             );
             if (!areProtectedTargetsSolved(
@@ -944,7 +1005,7 @@ public class F2LSolver {
                 break;
             }
             var prefixedCube = cube.copy();
-            var prefixedOrientation = executeAndReturnOrientation(prefixedCube, orientation, prefix.getMoves());
+            var prefixedOrientation = F2LStateCodec.executeAndReturnOrientation(prefixedCube, orientation, prefix.getMoves());
             var match = findSetupDatabaseSolution(
                     prefixedCube,
                     prefixedOrientation,
@@ -972,8 +1033,8 @@ public class F2LSolver {
         for (var prefix : DB_PREFIX_TRIALS) {
             SolveCancellation.throwIfCancelled();
             var prefixedCube = cube.copy();
-            var prefixedOrientation = executeAndReturnOrientation(prefixedCube, orientation, prefix.getMoves());
-            var preservedMask = preservationMaskFor(protectedSlots, prefixedOrientation);
+            var prefixedOrientation = F2LStateCodec.executeAndReturnOrientation(prefixedCube, orientation, prefix.getMoves());
+            var preservedMask = F2LStateCodec.preservationMaskFor(protectedSlots, prefixedOrientation);
 
             for (var setupCase : setupCaseDatabase.allCases()) {
                 SolveCancellation.throwIfCancelled();
@@ -983,7 +1044,7 @@ public class F2LSolver {
 
                 var setup = Algorithm.normalize(prefix.concat(setupCase.algorithm()));
                 var trialCube = cube.copy();
-                var resultingOrientation = executeAndReturnOrientation(trialCube, orientation, setup.getMoves());
+                var resultingOrientation = F2LStateCodec.executeAndReturnOrientation(trialCube, orientation, setup.getMoves());
                 if (areProtectedTargetsSolved(
                         trialCube,
                         targetCrossForOrientation(resultingOrientation),
@@ -1022,7 +1083,7 @@ public class F2LSolver {
         for (var prefix : DB_PREFIX_TRIALS) {
             SolveCancellation.throwIfCancelled();
             var prefixedCube = cube.copy();
-            var prefixedOrientation = executeAndReturnOrientation(prefixedCube, orientation, prefix.getMoves());
+            var prefixedOrientation = F2LStateCodec.executeAndReturnOrientation(prefixedCube, orientation, prefix.getMoves());
             var match = findInsertDatabaseSolution(
                     prefixedCube,
                     prefixedOrientation,
@@ -1068,7 +1129,7 @@ public class F2LSolver {
                 break;
             }
             var prefixedCube = cube.copy();
-            var prefixedOrientation = executeAndReturnOrientation(prefixedCube, orientation, prefix.getMoves());
+            var prefixedOrientation = F2LStateCodec.executeAndReturnOrientation(prefixedCube, orientation, prefix.getMoves());
             var match = findInsertDatabaseSolution(
                     prefixedCube,
                     prefixedOrientation,
@@ -1094,12 +1155,12 @@ public class F2LSolver {
         }
 
         var insertSlot = visibleSlotForTarget(targetSlot, orientation);
-        var preservedMask = preservationMaskFor(protectedSlots, orientation);
+        var preservedMask = F2LStateCodec.preservationMaskFor(protectedSlots, orientation);
         var signature = F2LCaseSignatureExtractor.extract(cube, insertSlot, orientation);
         for (var setupCase : setupCaseDatabase.findCompatible(insertSlot, preservedMask, signature)) {
             SolveCancellation.throwIfCancelled();
             var trialCube = cube.copy();
-            var resultingOrientation = executeAndReturnOrientation(trialCube, orientation, setupCase.algorithm().getMoves());
+            var resultingOrientation = F2LStateCodec.executeAndReturnOrientation(trialCube, orientation, setupCase.algorithm().getMoves());
             if (areProtectedTargetsSolved(
                     trialCube,
                     targetCrossForOrientation(resultingOrientation),
@@ -1146,13 +1207,13 @@ public class F2LSolver {
         }
 
         var insertSlot = visibleSlotForTarget(targetSlot, orientation);
-        var preservedMask = preservationMaskFor(protectedSlots, orientation);
+        var preservedMask = F2LStateCodec.preservationMaskFor(protectedSlots, orientation);
         var signature = F2LCaseSignatureExtractor.extract(cube, insertSlot, orientation);
 
         for (var insertCase : insertCaseDatabase.findCompatible(insertSlot, preservedMask, signature)) {
             SolveCancellation.throwIfCancelled();
             var trialCube = cube.copy();
-            var resultingOrientation = executeAndReturnOrientation(trialCube, orientation, insertCase.algorithm().getMoves());
+            var resultingOrientation = F2LStateCodec.executeAndReturnOrientation(trialCube, orientation, insertCase.algorithm().getMoves());
             if (areGoalsSolved(
                     trialCube,
                     targetCrossForOrientation(resultingOrientation),
@@ -1190,7 +1251,7 @@ public class F2LSolver {
         return new F2LDatabaseMissContext(
                 phase,
                 insertSlot,
-                preservationMaskFor(protectedSlots, orientation),
+                F2LStateCodec.preservationMaskFor(protectedSlots, orientation),
                 F2LCaseSignatureExtractor.extract(cube, insertSlot, orientation),
                 setupCaseDatabase.size(),
                 insertCaseDatabase.size()
@@ -1296,7 +1357,7 @@ public class F2LSolver {
                 unsolvedParts++;
             }
         }
-        for (var slot : relevantSlots(targetSlot, protectedSlots)) {
+        for (var slot : F2LStateCodec.relevantSlots(targetSlot, protectedSlots)) {
             if (cube.cornerPerm[slot.corner().ordinal()] != slot.corner().ordinal() || cube.cornerOri[slot.corner().ordinal()] != 0) {
                 unsolvedParts++;
             }
@@ -1305,68 +1366,6 @@ public class F2LSolver {
             }
         }
         return (unsolvedParts + 3) / 4;
-    }
-
-    private static long encodeState(CubeState cube, Edge[] targetCross, TargetSlot targetSlot, List<TargetSlot> protectedSlots) {
-        long key = 0L;
-        int shift = 0;
-
-        for (var edge : targetCross) {
-            key |= ((long) encodeEdge(cube, edge)) << shift;
-            shift += 5;
-        }
-
-        for (var slot : relevantSlots(targetSlot, protectedSlots)) {
-            key |= ((long) encodeCorner(cube, slot.corner())) << shift;
-            shift += 5;
-            key |= ((long) encodeEdge(cube, slot.edge())) << shift;
-            shift += 5;
-        }
-
-        return key;
-    }
-
-    private static List<TargetSlot> relevantSlots(TargetSlot targetSlot, List<TargetSlot> protectedSlots) {
-        var slots = new ArrayList<TargetSlot>(protectedSlots.size() + 1);
-        slots.add(targetSlot);
-        for (var slot : protectedSlots) {
-            if (slot != targetSlot) {
-                slots.add(slot);
-            }
-        }
-        return slots;
-    }
-
-    private static F2LPreservationMask preservationMaskFor(List<TargetSlot> protectedSlots, CubeOrientation orientation) {
-        var slots = new ArrayList<F2LSlot>();
-        for (var protectedSlot : protectedSlots) {
-            slots.add(visibleSlotForTarget(protectedSlot, orientation));
-        }
-        return F2LPreservationMask.of(slots);
-    }
-
-    private static int encodeCorner(CubeState cube, Corner targetCorner) {
-        for (var position : Corner.values()) {
-            if (cube.cornerPerm[position.ordinal()] == targetCorner.ordinal()) {
-                return position.ordinal() | (cube.cornerOri[position.ordinal()] << 3);
-            }
-        }
-        throw new IllegalStateException("Missing F2L corner: " + targetCorner);
-    }
-
-    private static int encodeEdge(CubeState cube, Edge targetEdge) {
-        for (var position : Edge.values()) {
-            if (cube.edgePerm[position.ordinal()] == targetEdge.ordinal()) {
-                return position.ordinal() | (cube.edgeOri[position.ordinal()] << 4);
-            }
-        }
-        throw new IllegalStateException("Missing F2L edge: " + targetEdge);
-    }
-
-    private static CubeOrientation executeAndReturnOrientation(CubeState cube, CubeOrientation orientation, List<Move> moves) {
-        var orientedCube = new OrientedCube(cube, orientation);
-        orientedCube.applyMoves(moves);
-        return orientedCube.orientation();
     }
 
     private static List<Algorithm> distinctAlgorithms(List<Algorithm> algorithms) {
@@ -1394,283 +1393,7 @@ public class F2LSolver {
         return true;
     }
 
-    private final class OptimizedSearch {
-        private final TargetSlot[] targetSlots;
-        private final Consumer<F2LSearchProgress> progressListener;
-        private final BooleanSupplier shouldStop;
-        private final Map<String, List<Algorithm>> pathsByState = new HashMap<>();
-        private final Map<String, List<F2LCandidate>> completedByState = new LinkedHashMap<>();
-        private Algorithm bestAlgorithm;
-        private long visitedStates;
-        private long prunedStates;
-        private long duplicateStates;
-        private long lastProgressNanos;
-
-        private OptimizedSearch(
-                TargetSlot[] targetSlots,
-                Consumer<F2LSearchProgress> progressListener,
-                Algorithm initialBest,
-                BooleanSupplier shouldStop
-        ) {
-            this.targetSlots = targetSlots;
-            this.progressListener = progressListener;
-            this.bestAlgorithm = initialBest.copy();
-            this.shouldStop = shouldStop;
-        }
-
-        private void search(OptimizedState state) {
-            SolveCancellation.throwIfCancelled();
-            if (shouldStop.getAsBoolean()) {
-                publishProgress();
-                return;
-            }
-            visitedStates++;
-            publishProgress();
-
-            if (areAllTargetsSolved(state.cube(), targetSlots)) {
-                var completed = state.solution().copy();
-                registerCompletedCandidate(state, completed);
-                if (ALGORITHM_COMPARATOR.compare(completed, bestAlgorithm) < 0) {
-                    bestAlgorithm = completed.copy();
-                } else {
-                    prunedStates++;
-                }
-                publishProgress();
-                return;
-            }
-
-            var stateKey = optimizedStateKey(state);
-            if (!registerStatePath(stateKey, state.solution())) {
-                duplicateStates++;
-                publishProgress();
-                return;
-            }
-
-            var candidates = optimizedCandidates(state);
-            if (candidates.isEmpty()) {
-                prunedStates++;
-                publishProgress();
-                return;
-            }
-
-            for (var candidate : candidates) {
-                var nextSolution = state.solution().concat(candidate.algorithm());
-                search(new OptimizedState(
-                        candidate.cube(),
-                        candidate.orientation(),
-                        candidate.protectedSlots(),
-                        nextSolution,
-                        candidate.pendingSteps()
-                ));
-            }
-            publishProgress();
-        }
-
-        private boolean registerStatePath(String stateKey, Algorithm path) {
-            var paths = new ArrayList<>(pathsByState.getOrDefault(stateKey, List.of()));
-            if (paths.stream().anyMatch(existing -> existing.toString().equals(path.toString()))) {
-                return false;
-            }
-            paths.add(path);
-            paths.sort(ALGORITHM_COMPARATOR);
-            if (paths.size() > MAX_PATHS_PER_STATE) {
-                var removed = paths.remove(paths.size() - 1);
-                if (removed == path) {
-                    return false;
-                }
-            }
-            pathsByState.put(stateKey, List.copyOf(paths));
-            return true;
-        }
-
-        private void registerCompletedCandidate(OptimizedState state, Algorithm algorithm) {
-            var key = optimizedResultStateKey(state.cube(), state.orientation(), state.protectedSlots());
-            var candidates = new ArrayList<>(completedByState.getOrDefault(key, List.of()));
-            if (candidates.stream().anyMatch(existing -> existing.algorithm().toString().equals(algorithm.toString()))) {
-                duplicateStates++;
-                return;
-            }
-            candidates.add(new F2LCandidate(
-                    algorithm,
-                    state.cube().copy(),
-                    state.orientation().copy(),
-                    new F2LSolveTrace(
-                            algorithm.getMoves(),
-                            buildPairSteps(state.pendingSteps()),
-                            areAllTargetsSolved(state.cube(), targetSlots)
-                    )
-            ));
-            candidates.sort(Comparator.comparing(F2LCandidate::algorithm, ALGORITHM_COMPARATOR));
-            if (candidates.size() > MAX_PATHS_PER_STATE) {
-                candidates.remove(candidates.size() - 1);
-            }
-            completedByState.put(key, List.copyOf(candidates));
-        }
-
-        private List<OptimizedTransition> optimizedCandidates(OptimizedState state) {
-            var candidates = new ArrayList<PhaseSlotSolution>();
-            candidates.addAll(findInsertDatabaseSlotSolutions(
-                    state.cube(),
-                    state.orientation(),
-                    targetSlots,
-                    state.protectedSlots(),
-                    this::checkpoint
-            ));
-            if (shouldStop.getAsBoolean()) {
-                return List.of();
-            }
-            candidates.addAll(findSetupThenInsertDatabaseSlotSolutions(
-                    state.cube(),
-                    state.orientation(),
-                    targetSlots,
-                    state.protectedSlots(),
-                    this::checkpoint
-            ));
-            candidates.sort(PHASE_SOLUTION_COMPARATOR);
-            var completing = slotCompletingTransitions(state, distinctPhaseSolutions(candidates));
-            if (!completing.isEmpty() || shouldStop.getAsBoolean()) {
-                return completing;
-            }
-            return slotCompletingTransitions(state, findRecoveryThenDatabaseSolutions(state, this::checkpoint));
-        }
-
-        private List<OptimizedTransition> slotCompletingTransitions(
-                OptimizedState state,
-                List<PhaseSlotSolution> candidates
-        ) {
-            var completingByState = new LinkedHashMap<String, OptimizedTransition>();
-            for (var candidate : candidates) {
-                if (shouldStop.getAsBoolean()) {
-                    break;
-                }
-                var trialCube = state.cube().copy();
-                var trialOrientation = executeAndReturnOrientation(
-                        trialCube,
-                        state.orientation(),
-                        candidate.algorithm().getMoves()
-                );
-                if (isTargetSlotSolved(trialCube, candidate.targetSlot())
-                        && areProtectedTargetsSolved(
-                        trialCube,
-                        targetCrossForOrientation(trialOrientation),
-                        state.protectedSlots()
-                )) {
-                    var nextProtectedSlots = updateProtectedSlots(
-                            trialCube,
-                            targetSlots,
-                            state.protectedSlots()
-                    );
-                    if (nextProtectedSlots.size() <= state.protectedSlots().size()) {
-                        continue;
-                    }
-                    var pendingStep = pendingPairStep(
-                            state.cube(),
-                            state.orientation(),
-                            candidate.caseCube() == null ? state.cube() : candidate.caseCube(),
-                            candidate.caseOrientation() == null ? state.orientation() : candidate.caseOrientation(),
-                            candidate.targetSlot(),
-                            candidate.algorithm(),
-                            state.protectedSlots(),
-                            false,
-                            List.of(),
-                            candidate.recoveryUsed()
-                    ).withAfter(trialCube, trialOrientation);
-                    var nextPendingSteps = new ArrayList<>(state.pendingSteps());
-                    nextPendingSteps.add(pendingStep);
-                    var transition = new OptimizedTransition(
-                            candidate.algorithm(),
-                            trialCube,
-                            trialOrientation,
-                            nextProtectedSlots,
-                            List.copyOf(nextPendingSteps)
-                    );
-                    var key = optimizedResultStateKey(trialCube, trialOrientation, nextProtectedSlots);
-                    var existing = completingByState.get(key);
-                    if (existing == null
-                            || ALGORITHM_COMPARATOR.compare(transition.algorithm(), existing.algorithm()) < 0) {
-                        if (existing != null) {
-                            duplicateStates++;
-                        }
-                        completingByState.put(key, transition);
-                    } else {
-                        duplicateStates++;
-                    }
-                }
-            }
-            var completing = new ArrayList<>(completingByState.values());
-            completing.sort(Comparator.comparing(OptimizedTransition::algorithm, ALGORITHM_COMPARATOR));
-            return List.copyOf(completing);
-        }
-
-        private String optimizedStateKey(OptimizedState state) {
-            return optimizedResultStateKey(state.cube(), state.orientation(), state.protectedSlots());
-        }
-
-        private String optimizedResultStateKey(
-                CubeState cube,
-                CubeOrientation orientation,
-                List<TargetSlot> protectedSlots
-        ) {
-            var protectedFlags = new StringBuilder();
-            for (var targetSlot : targetSlots) {
-                protectedFlags.append(protectedSlots.contains(targetSlot) ? '1' : '0');
-            }
-            return Arrays.toString(cube.cornerPerm)
-                    + Arrays.toString(cube.cornerOri)
-                    + Arrays.toString(cube.edgePerm)
-                    + Arrays.toString(cube.edgeOri)
-                    + "|U=" + orientation.faceAt(Face.U)
-                    + "|R=" + orientation.faceAt(Face.R)
-                    + "|F=" + orientation.faceAt(Face.F)
-                    + "|slots=" + protectedFlags;
-        }
-
-        private void publishProgress() {
-            var now = System.nanoTime();
-            if (lastProgressNanos != 0
-                    && now - lastProgressNanos < 100_000_000L
-                    && visitedStates % 1_024 != 0) {
-                return;
-            }
-            lastProgressNanos = now;
-            progressListener.accept(new F2LSearchProgress(
-                    visitedStates,
-                    prunedStates,
-                    duplicateStates,
-                    bestAlgorithm.getMoveCount(),
-                    completedByState.size(),
-                    0,
-                    -1
-            ));
-        }
-
-        private boolean checkpoint() {
-            SolveCancellation.throwIfCancelled();
-            publishProgress();
-            return shouldStop.getAsBoolean();
-        }
-
-        private List<F2LCandidate> completedCandidates() {
-            return completedByState.values().stream()
-                    .map(candidates -> candidates.get(0))
-                    .sorted(Comparator.comparing(F2LCandidate::algorithm, ALGORITHM_COMPARATOR))
-                    .toList();
-        }
-
-        private long visitedStates() {
-            return visitedStates;
-        }
-
-        private long prunedStates() {
-            return prunedStates;
-        }
-
-        private long duplicateStates() {
-            return duplicateStates;
-        }
-    }
-
-    private record PendingPairStep(
+    record PendingPairStep(
             Corner corner,
             Edge edge,
             F2LSlot targetSlot,
@@ -1711,7 +1434,7 @@ public class F2LSolver {
         }
     }
 
-    private record PhaseSlotSolution(
+    record PhaseSlotSolution(
             TargetSlot targetSlot,
             Algorithm algorithm,
             boolean recoveryUsed,
@@ -1723,7 +1446,7 @@ public class F2LSolver {
     private record RecoveryTransition(F2LSlot slot, Algorithm algorithm) {
     }
 
-    private record OptimizedState(
+    record OptimizedState(
             CubeState cube,
             CubeOrientation orientation,
             List<TargetSlot> protectedSlots,
@@ -1732,7 +1455,7 @@ public class F2LSolver {
     ) {
     }
 
-    private record OptimizedTransition(
+    record OptimizedTransition(
             Algorithm algorithm,
             CubeState cube,
             CubeOrientation orientation,
@@ -1742,7 +1465,7 @@ public class F2LSolver {
     }
 
     @FunctionalInterface
-    private interface SearchCheckpoint {
+    interface SearchCheckpoint {
         SearchCheckpoint NEVER = () -> false;
 
         boolean shouldStop();
