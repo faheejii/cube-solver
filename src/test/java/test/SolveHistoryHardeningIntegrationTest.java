@@ -67,7 +67,7 @@ class SolveHistoryHardeningIntegrationTest {
             assertEquals(ownerAttempt.id(), repository.findDetail(owner, ownerAttempt.id()).id());
 
             var legacy = repository.upsertSolution(solution(owner, legacyAttempt.id(), "greedy", null, null));
-            assertEquals("R U", legacy.f2l().algorithm());
+            assertEquals("R U R U'", legacy.f2l().algorithm());
             assertTrue(legacy.f2lTraceJson() == null);
             assertTrue(legacy.comparisonJson() == null);
             var legacyReloaded = repository.findDetail(owner, legacyAttempt.id());
