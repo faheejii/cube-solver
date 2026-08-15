@@ -50,6 +50,7 @@ class AuthorizationHardeningIntegrationTest {
                 assertEquals(200, get(anonymous, baseUri.resolve("/api/health/live")).statusCode());
                 assertEquals(200, get(anonymous, baseUri.resolve("/api/health/ready")).statusCode());
                 assertEquals(404, get(anonymous, baseUri.resolve("/api/health")).statusCode());
+                assertError(get(anonymous, baseUri.resolve("/api/unknown")), 404, "Not found");
 
                 assertError(get(anonymous, baseUri.resolve("/api/algorithms")), 401, "Authentication required");
 

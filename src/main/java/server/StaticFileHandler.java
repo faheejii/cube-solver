@@ -21,6 +21,11 @@ final class StaticFileHandler implements HttpHandler {
         if (ApiResponses.handleCors(exchange)) {
             return;
         }
+        var requestPath = exchange.getRequestURI().getPath();
+        if (requestPath.equals("/api") || requestPath.startsWith("/api/")) {
+            ApiResponses.writeError(exchange, ApiErrorCode.NOT_FOUND, "Not found");
+            return;
+        }
         if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
             ApiResponses.writeError(exchange, ApiErrorCode.METHOD_NOT_ALLOWED, "Method not allowed");
             return;
@@ -31,7 +36,6 @@ final class StaticFileHandler implements HttpHandler {
             return;
         }
 
-        var requestPath = exchange.getRequestURI().getPath();
         var relativePath = requestPath.equals("/") ? "index.html" : requestPath.substring(1);
         var target = frontendDistDir.resolve(relativePath).normalize();
         target = resolveGeneratedWorkerAlias(relativePath, target);
