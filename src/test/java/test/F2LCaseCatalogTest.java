@@ -15,7 +15,7 @@ class F2LCaseCatalogTest {
         var oll = AlgorithmCaseCatalog.ollDatabase();
         var pll = AlgorithmCaseCatalog.pllDatabase();
 
-        assertEquals(123, setup.size());
+        assertEquals(106, setup.size());
         assertEquals(14, insert.size());
         assertEquals(57, oll.size());
         assertEquals(21, pll.size());

@@ -44,7 +44,6 @@ public class CubeHttpServer implements AutoCloseable {
         var healthMetricsHandler = new HealthMetricsHandler(databaseManager, operationalMetrics);
         server.createContext("/api/health/live", healthMetricsHandler);
         server.createContext("/api/health/ready", healthMetricsHandler);
-        server.createContext("/api/health", healthMetricsHandler);
         server.createContext("/api/metrics", healthMetricsHandler);
         server.createContext("/api/auth", new AuthRouteHandler(
                 databaseManager, authService, solveJobManager, secureCookies));

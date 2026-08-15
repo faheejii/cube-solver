@@ -6,6 +6,7 @@ import cfop.F2LCaseSignatureExtractor;
 import cfop.F2LGeometry;
 import cfop.F2LPreservationMask;
 import cfop.F2LSlot;
+import cfop.F2LSetupSignature;
 import cube.Algorithm;
 import cube.CubeState;
 import cube.Face;
@@ -39,7 +40,7 @@ public class F2LPhaseCaseDatabaseTest {
         source.applyMoves(Algorithm.parse("R U' R'").inverse().getMoves());
         var signature = F2LCaseSignatureExtractor.extract(source.cubeState(), F2LSlot.FR, source.orientation());
 
-        var match = database.find(F2LSlot.FR, F2LPreservationMask.empty(), signature);
+        var match = database.findCompatible(F2LSlot.FR, F2LPreservationMask.empty(), signature).stream().findFirst();
 
         assertTrue(match.isPresent());
         assertEquals("fr-insert", match.get().name());
@@ -54,10 +55,10 @@ public class F2LPhaseCaseDatabaseTest {
         source.applyAlgorithm("R U R' U2 R U' R'");
         var signature = F2LCaseSignatureExtractor.extract(source.cubeState(), F2LSlot.FR, source.orientation());
 
-        var match = database.find(F2LSlot.FR, F2LPreservationMask.empty(), signature);
+        var match = database.findCompatible(F2LPreservationMask.empty(), F2LSetupSignature.from(signature)).stream().findFirst();
 
         assertTrue(match.isPresent());
-        assertEquals("fr-setup-FR", match.get().name());
+        assertEquals("fr-setup", match.get().name());
     }
 
     @Test
@@ -72,8 +73,8 @@ public class F2LPhaseCaseDatabaseTest {
         var preservesFlAndBl = F2LPreservationMask.of(List.of(F2LSlot.FL, F2LSlot.BL));
         var requiresFr = F2LPreservationMask.of(List.of(F2LSlot.FR));
 
-        assertTrue(database.find(F2LSlot.FR, preservesFlAndBl, signature).isPresent());
-        assertTrue(database.find(F2LSlot.FR, requiresFr, signature).isEmpty());
+        assertTrue(database.findCompatible(F2LSlot.FR, preservesFlAndBl, signature).stream().findAny().isPresent());
+        assertTrue(database.findCompatible(F2LSlot.FR, requiresFr, signature).stream().findAny().isEmpty());
     }
 
     @Test

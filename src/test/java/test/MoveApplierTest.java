@@ -87,14 +87,32 @@ public class MoveApplierTest {
     }
 
     @Test
+    void sliceQuarterTurns_shouldUseStandardDirections() {
+        assertEdgePermutation("M", 0, 3, 2, 7, 4, 1, 6, 5, 8, 9, 10, 11);
+        assertEdgePermutation("E", 0, 1, 2, 3, 4, 5, 6, 7, 9, 10, 11, 8);
+        assertEdgePermutation("S", 2, 1, 6, 3, 0, 5, 4, 7, 8, 9, 10, 11);
+    }
+
+    @Test
+    void cubeRotations_shouldMatchStandardFaceAndSliceEquivalences() {
+        assertEquivalentAlgorithms("x", "R M' L'");
+        assertEquivalentAlgorithms("y", "U E' D'");
+        assertEquivalentAlgorithms("z", "F S B'");
+    }
+
+    @Test
     void wideMoves_shouldMatchEquivalentFaceAndSliceAlgorithms() {
         assertEquivalentExecutedAlgorithms("r", "R M'");
         assertEquivalentExecutedAlgorithms("r'", "R' M");
         assertEquivalentExecutedAlgorithms("r2", "R2 M2");
-        assertEquivalentExecutedAlgorithms("u", "U E");
-        assertEquivalentExecutedAlgorithms("u'", "U' E'");
+        assertEquivalentExecutedAlgorithms("u", "U E'");
+        assertEquivalentExecutedAlgorithms("u'", "U' E");
+        assertEquivalentExecutedAlgorithms("d", "D E");
+        assertEquivalentExecutedAlgorithms("d'", "D' E'");
         assertEquivalentExecutedAlgorithms("f", "F S");
+        assertEquivalentExecutedAlgorithms("f'", "F' S'");
         assertEquivalentExecutedAlgorithms("l", "L M");
+        assertEquivalentExecutedAlgorithms("b", "B S'");
         assertEquivalentExecutedAlgorithms("b'", "B' S");
     }
 
@@ -108,7 +126,7 @@ public class MoveApplierTest {
     @Test
     void sliceMoves_shouldMatchEquivalentOuterTurnAndRotationAlgorithms() {
         assertEquivalentAlgorithms("M", "R L' x'");
-        assertEquivalentAlgorithms("E", "U' y D");
+        assertEquivalentAlgorithms("E", "U y' D'");
         assertEquivalentAlgorithms("S", "F' B z");
     }
 
@@ -140,6 +158,20 @@ public class MoveApplierTest {
         MoveApplier.executeAlgorithm(secondCube, second);
 
         assertSameState(firstCube, secondCube);
+    }
+
+    private static void assertEdgePermutation(String algorithm, int... expectedPermutation) {
+        CubeState cube = new CubeState();
+        MoveApplier.applyAlgorithm(cube, algorithm);
+        assertArrayEquals(expectedPermutation, toIntArray(cube.edgePerm), algorithm + " edge permutation mismatch");
+    }
+
+    private static int[] toIntArray(byte[] values) {
+        var result = new int[values.length];
+        for (int i = 0; i < values.length; i++) {
+            result[i] = values[i];
+        }
+        return result;
     }
 
     private static void assertSolved(CubeState cube) {

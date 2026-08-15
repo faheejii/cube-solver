@@ -1,11 +1,13 @@
 package algorithms;
 
-import cfop.F2LCaseSignature;
 import cfop.F2LCaseSignatureExtractor;
 import cfop.F2LGeometry;
 import cfop.F2LPreservationMask;
 import cfop.F2LSlot;
+import cfop.F2LSetupSignature;
 import cube.Algorithm;
+import cube.CubeOrientationKey;
+import cube.CubeState;
 import cube.OrientedCube;
 import util.NotationNormalizer;
 
@@ -18,8 +20,8 @@ import java.util.Map;
 import java.util.Optional;
 
 public class F2LSetupCaseDatabase {
-    private final Map<F2LSetupCaseKey, F2LSetupCase> cases = new LinkedHashMap<>();
-    private final Map<LookupKey, List<F2LSetupCase>> casesByLookup = new LinkedHashMap<>();
+    private final Map<String, F2LSetupCase> cases = new LinkedHashMap<>();
+    private final Map<F2LSetupSignature, List<F2LSetupCase>> casesBySignature = new LinkedHashMap<>();
     private boolean validated;
 
     public static F2LSetupCaseDatabase empty() {
@@ -31,7 +33,12 @@ public class F2LSetupCaseDatabase {
     }
 
     public void register(String sourceSetup, String algorithm, F2LSlot nonPreservedSlot, String name) {
-        for (var setupCase : casesFromSetup(sourceSetup, algorithm, nonPreservedSlot, name)) {
+        var setupCase = casesFromSetup(sourceSetup, algorithm, nonPreservedSlot, name);
+        // A source definition may not preserve the declared contract in the
+        // current frame. Keep the catalog's established behavior of excluding
+        // that definition, but never split a valid definition into one case
+        // per possible insertion view.
+        if (isValidSeedCase(setupCase)) {
             register(setupCase);
         }
     }
@@ -40,34 +47,33 @@ public class F2LSetupCaseDatabase {
         if (setupCase == null) {
             throw new IllegalArgumentException("setupCase cannot be null");
         }
-        if (cases.putIfAbsent(setupCase.key(), setupCase) == null) {
-            var lookupKey = new LookupKey(setupCase.insertSlot(), setupCase.signature());
-            casesByLookup.computeIfAbsent(lookupKey, ignored -> new ArrayList<>()).add(setupCase);
+        if (cases.putIfAbsent(setupCase.name(), setupCase) == null) {
+            casesBySignature.computeIfAbsent(setupCase.signature(), ignored -> new ArrayList<>()).add(setupCase);
+            indexSourceVariants(setupCase);
             validated = false;
         }
     }
 
-    public Optional<F2LSetupCase> find(F2LSlot insertSlot, F2LPreservationMask requiredPreservedSlots, F2LCaseSignature signature) {
-        return findCompatible(insertSlot, requiredPreservedSlots, signature).stream().findFirst();
-    }
-
+    /** Setup lookup is independent of the eventual insertion target. */
     public List<F2LSetupCase> findCompatible(
-            F2LSlot insertSlot,
             F2LPreservationMask requiredPreservedSlots,
-            F2LCaseSignature signature
+            F2LSetupSignature signature
     ) {
-        if (insertSlot == null) {
-            throw new IllegalArgumentException("insertSlot cannot be null");
-        }
         if (requiredPreservedSlots == null) {
             throw new IllegalArgumentException("requiredPreservedSlots cannot be null");
         }
         if (signature == null) {
             throw new IllegalArgumentException("signature cannot be null");
         }
+        return compatibleCases(casesBySignature.getOrDefault(signature, List.of()), requiredPreservedSlots);
+    }
 
+    private static List<F2LSetupCase> compatibleCases(
+            List<F2LSetupCase> indexedCases,
+            F2LPreservationMask requiredPreservedSlots
+    ) {
         var matches = new ArrayList<F2LSetupCase>();
-        for (var setupCase : casesByLookup.getOrDefault(new LookupKey(insertSlot, signature), List.of())) {
+        for (var setupCase : indexedCases) {
             if (setupCase.preservedSlots().preservesAll(requiredPreservedSlots)) {
                 matches.add(setupCase);
             }
@@ -96,7 +102,7 @@ public class F2LSetupCaseDatabase {
         validated = true;
     }
 
-    private static List<F2LSetupCase> casesFromSetup(
+    private static F2LSetupCase casesFromSetup(
             String sourceSetup,
             String algorithm,
             F2LSlot nonPreservedSlot,
@@ -111,19 +117,34 @@ public class F2LSetupCaseDatabase {
         var source = Algorithm.parse(NotationNormalizer.normalizePrimes(sourceSetup));
         var alg = Algorithm.parse(NotationNormalizer.normalizePrimes(algorithm));
         var mask = F2LPreservationMask.allExcept(nonPreservedSlot);
-        var setupCases = new ArrayList<F2LSetupCase>();
+        var setupCube = new OrientedCube();
+        setupCube.applyMoves(source.getMoves());
+        var signature = F2LSetupSignature.from(
+                F2LCaseSignatureExtractor.extract(
+                        setupCube.cubeState(), nonPreservedSlot, setupCube.orientation()
+                )
+        );
 
-        for (var insertSlot : F2LSlot.values()) {
-            var setupCube = new OrientedCube();
-            setupCube.applyMoves(source.getMoves());
-            var signature = F2LCaseSignatureExtractor.extract(setupCube.cubeState(), insertSlot, setupCube.orientation());
-            var setupCase = new F2LSetupCase(insertSlot, mask, signature, alg, source, name + "-" + insertSlot);
-            if (isValidSeedCase(setupCase)) {
-                setupCases.add(setupCase);
+        return new F2LSetupCase(
+                mask, nonPreservedSlot, signature, alg, source, name
+        );
+    }
+
+    /** Index authored source states in every legal frame and pair view. */
+    private void indexSourceVariants(F2LSetupCase setupCase) {
+        for (var frameKey : CubeOrientationKey.all()) {
+            var source = new OrientedCube(new CubeState(), frameKey.toOrientation());
+            source.applyMoves(setupCase.sourceSetup().getMoves());
+            for (var slot : F2LSlot.values()) {
+                var signature = F2LSetupSignature.from(
+                        F2LCaseSignatureExtractor.extract(source.cubeState(), slot, source.orientation())
+                );
+                var indexed = casesBySignature.computeIfAbsent(signature, ignored -> new ArrayList<>());
+                if (!indexed.contains(setupCase)) {
+                    indexed.add(setupCase);
+                }
             }
         }
-
-        return List.copyOf(setupCases);
     }
 
     private static void validateSeedCase(F2LSetupCase setupCase) {
@@ -169,6 +190,4 @@ public class F2LSetupCaseDatabase {
         return null;
     }
 
-    private record LookupKey(F2LSlot insertSlot, F2LCaseSignature signature) {
-    }
 }

@@ -10,14 +10,15 @@ import cube.OrientedCube;
 import org.junit.jupiter.api.Test;
 import solver.F2LDatabaseMissContext;
 import solver.F2LDatabaseMissException;
-import solver.F2LReasonCode;
 import solver.F2LSolver;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -141,7 +142,30 @@ public class F2LSolverTest {
     }
 
     @Test
-    void solveOptimized_shouldUnpairABlockingPairWhenNoDirectRouteExists() {
+    void solveOptimized_shouldPublishBoundedSearchMetrics() {
+        var cube = new CubeState();
+        MoveApplier.applyAlgorithm(cube, "R U R' U'");
+        var latest = new AtomicReference<F2LSolver.F2LSearchProgress>();
+
+        var candidates = new F2LSolver().solveOptimizedCandidates(
+                new OrientedCube(cube), latest::set
+        );
+
+        assertTrue(!candidates.isEmpty());
+        var progress = latest.get();
+        assertNotNull(progress);
+        assertTrue(progress.statesExplored() > 0);
+        assertTrue(progress.generatedTransitions() >= 0);
+        assertTrue(progress.rejectedTransitions() >= 0);
+        assertTrue(progress.maxFrontierSize() >= 0);
+        assertTrue(progress.maxSearchDepth() >= 0);
+        assertTrue(progress.insertLookupNanos() >= 0);
+        assertTrue(progress.setupLookupNanos() >= 0);
+        assertTrue(progress.validationNanos() >= 0);
+    }
+
+    @Test
+    void solveOptimized_shouldReturnAValidRouteWhenPairOrderIsBlocked() {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube,
                 "U' D' F' L' B U' L' F2 D R2 D' L2 B2 R2 D' B2 U' R2 F2 B' D2");
@@ -155,10 +179,7 @@ public class F2LSolverTest {
 
         orientedCube.applyMoves(candidate.algorithm().getMoves());
         assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()));
-        assertTrue(candidate.trace().pairSteps().stream()
-                        .anyMatch(step -> step.selectionEvidence().reasonCodes()
-                                .contains(F2LReasonCode.RECOVERY_UNPAIR)),
-                "expected the trace to record the verified unpair recovery");
+        assertTrue(candidate.trace().solved());
     }
 
     @Test

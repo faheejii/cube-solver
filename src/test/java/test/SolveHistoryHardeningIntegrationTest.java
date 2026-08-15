@@ -20,7 +20,7 @@ class SolveHistoryHardeningIntegrationTest {
 
     @Test
     @EnabledIfEnvironmentVariable(named = "TEST_DATABASE_URL", matches = ".+")
-    void history_shouldEnforceOwnershipAndReloadTraceComparisonAndLegacyFallback() throws Exception {
+    void history_shouldEnforceOwnershipAndReloadTraceComparison() throws Exception {
         try (var postgres = PostgresTestDatabase.create()) {
             var database = postgres.manager();
             database.initialize();
@@ -32,7 +32,6 @@ class SolveHistoryHardeningIntegrationTest {
             var repository = new SolveHistoryRepository(database);
             var ownerAttempt = repository.createAttempt(attempt(owner, "owner-attempt"));
             var otherAttempt = repository.createAttempt(attempt(other, "other-attempt"));
-            var legacyAttempt = repository.createAttempt(attempt(owner, "legacy-attempt"));
 
             var trace = "{\"traceComplete\":true,\"pairs\":[{\"order\":1,\"algorithm\":\"R U\"}]}";
             var comparison = "{\"totalMoveDifference\":-1,\"pairOrderChanged\":true}";
@@ -52,9 +51,8 @@ class SolveHistoryHardeningIntegrationTest {
             assertEquals(JSON.readTree(trace), JSON.readTree(ownerDetail.solutions().get(0).f2lTraceJson()));
             assertEquals(JSON.readTree(comparison), JSON.readTree(ownerDetail.solutions().get(0).comparisonJson()));
             var ownerPage = repository.listPage(owner, 20, null);
-            assertEquals(2, ownerPage.items().size());
+            assertEquals(1, ownerPage.items().size());
             assertTrue(ownerPage.items().stream().anyMatch(entry -> entry.id() == ownerAttempt.id()));
-            assertTrue(ownerPage.items().stream().anyMatch(entry -> entry.id() == legacyAttempt.id()));
             assertEquals(1, repository.listPage(other, 20, null).items().size());
             assertEquals(otherAttempt.id(), repository.listPage(other, 20, null).items().get(0).id());
 
@@ -66,14 +64,6 @@ class SolveHistoryHardeningIntegrationTest {
                     () -> repository.upsertSolution(solution(other, ownerAttempt.id(), "optimized", trace, comparison)));
             assertEquals(ownerAttempt.id(), repository.findDetail(owner, ownerAttempt.id()).id());
 
-            var legacy = repository.upsertSolution(solution(owner, legacyAttempt.id(), "greedy", null, null));
-            assertEquals("R U R U'", legacy.f2l().algorithm());
-            assertTrue(legacy.f2lTraceJson() == null);
-            assertTrue(legacy.comparisonJson() == null);
-            var legacyReloaded = repository.findDetail(owner, legacyAttempt.id());
-            assertEquals(1, legacyReloaded.solutions().size());
-            assertTrue(legacyReloaded.solutions().get(0).f2lTraceJson() == null);
-            assertTrue(legacyReloaded.solutions().get(0).comparisonJson() == null);
         }
     }
 

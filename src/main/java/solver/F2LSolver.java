@@ -8,6 +8,7 @@ import cfop.F2LGeometry.SlotPair;
 import cfop.F2LGeometry.TargetSlot;
 import cfop.F2LPreservationMask;
 import cfop.F2LSlot;
+import cfop.F2LSetupSignature;
 import cube.Algorithm;
 import cube.Corner;
 import cube.CubeOrientation;
@@ -17,7 +18,6 @@ import cube.CubeStateSnapshot;
 import cube.Edge;
 import cube.Face;
 import cube.Move;
-import cube.MoveApplier;
 import cube.OrientationFrames;
 import cube.OrientedCube;
 
@@ -27,7 +27,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.LongConsumer;
 import java.util.function.Consumer;
 import java.util.function.BooleanSupplier;
@@ -52,10 +51,10 @@ public class F2LSolver {
     private static final Comparator<Algorithm> RAW_ALGORITHM_COMPARATOR = Comparator
             .comparingInt((Algorithm algorithm) -> algorithm.getMoves().size());
     private static final Comparator<PhaseSlotSolution> PHASE_SOLUTION_COMPARATOR = Comparator
-            .comparing((PhaseSlotSolution solution) -> solution.algorithm(), ALGORITHM_COMPARATOR)
+            .comparing(PhaseSlotSolution::algorithm, ALGORITHM_COMPARATOR)
             .thenComparing(solution -> solution.targetSlot().toString());
     private static final Comparator<PhaseSlotSolution> RAW_PHASE_SOLUTION_COMPARATOR = Comparator
-            .comparing((PhaseSlotSolution solution) -> solution.algorithm(), RAW_ALGORITHM_COMPARATOR);
+            .comparing(PhaseSlotSolution::algorithm, RAW_ALGORITHM_COMPARATOR);
 
     private static final Algorithm[] DB_PREFIX_TRIALS = {
             new Algorithm(),
@@ -75,6 +74,9 @@ public class F2LSolver {
             Algorithm.fromMoves(List.of(Move.Y2, Move.U2)),
             Algorithm.fromMoves(List.of(Move.Y2, Move.U_PRIME))
     };
+    private static final int MAX_SETUP_MATCHES_PER_VIEW = Integer.getInteger(
+            "f2l.optimized.max-setup-matches", 64
+    );
     private static final Map<F2LSlot, Algorithm> RECOVERY_UNPAIR_ALGORITHMS = Map.of(
             F2LSlot.FR, Algorithm.fromMoves(List.of(Move.R, Move.U, Move.R_PRIME)),
             F2LSlot.FL, Algorithm.fromMoves(List.of(Move.L_PRIME, Move.U_PRIME, Move.L)),
@@ -110,8 +112,8 @@ public class F2LSolver {
     }
 
     public Algorithm solveAfterCross(CubeState cube, Face crossFace) {
-        return OrientationFrames.orientationToD(crossFace)
-                .concat(solveStage(cube.copy(), OrientationFrames.orientedFrameFor(crossFace)));
+        var orientation = OrientationFrames.orientedFrameFor(crossFace);
+        return Algorithm.materializeCubeRotations(solveStage(cube.copy(), orientation), orientation);
     }
 
     public Algorithm solve(OrientedCube cube) {
@@ -153,8 +155,8 @@ public class F2LSolver {
     }
 
     public Algorithm solve(CubeState cube, Face crossFace) {
-        return OrientationFrames.orientationToD(crossFace)
-                .concat(solveStage(cube.copy(), OrientationFrames.orientedFrameFor(crossFace)));
+        var orientation = OrientationFrames.orientedFrameFor(crossFace);
+        return Algorithm.materializeCubeRotations(solveStage(cube.copy(), orientation), orientation);
     }
 
     public Algorithm solveSlot(CubeState cube, F2LSlot slot) {
@@ -163,14 +165,15 @@ public class F2LSolver {
 
     public Algorithm solveSlot(CubeState cube, F2LSlot slot, Face crossFace) {
         var orientation = OrientationFrames.orientedFrameFor(crossFace);
-        return OrientationFrames.orientationToD(crossFace).concat(
+        return Algorithm.materializeCubeRotations(
                 solveSlotInternal(
                         cube.copy(),
                         orientation,
                         targetCrossForOrientation(orientation),
                         targetSlotFor(slot, orientation),
                         List.of()
-                )
+                ),
+                orientation
         );
     }
 
@@ -601,7 +604,7 @@ public class F2LSolver {
     }
 
     private static List<TargetSlot> updateProtectedSlots(CubeState cube, TargetSlot[] targetSlots, List<TargetSlot> current) {
-        var updated = new ArrayList<TargetSlot>(current);
+        var updated = new ArrayList<>(current);
         for (var targetSlot : targetSlots) {
             if (!updated.contains(targetSlot) && isTargetSlotSolved(cube, targetSlot)) {
                 updated.add(targetSlot);
@@ -674,18 +677,9 @@ public class F2LSolver {
             TargetSlot[] targetSlots,
             List<TargetSlot> protectedSlots
     ) {
-        var candidates = new ArrayList<PhaseSlotSolution>();
-        for (var targetSlot : targetSlots) {
-            SolveCancellation.throwIfCancelled();
-            if (protectedSlots.contains(targetSlot) || isTargetSlotSolved(cube, targetSlot)) {
-                continue;
-            }
-            findPrefixedSetupThenInsertDatabaseSolution(cube, orientation, targetSlot, protectedSlots)
-                    .map(algorithm -> new PhaseSlotSolution(targetSlot, algorithm, false, null, null))
-                    .ifPresent(candidates::add);
-        }
-        candidates.sort(Comparator.comparingInt(candidate -> candidate.algorithm().getMoves().size()));
-        return candidates.stream().findFirst();
+        return findSetupThenInsertDatabaseSlotSolutions(
+                cube, orientation, targetSlots, protectedSlots, SearchCheckpoint.NEVER
+        ).stream().findFirst();
     }
 
     List<PhaseSlotSolution> findSetupThenInsertDatabaseSlotSolutions(
@@ -696,21 +690,62 @@ public class F2LSolver {
             SearchCheckpoint checkpoint
     ) {
         var candidates = new ArrayList<PhaseSlotSolution>();
-        for (var targetSlot : targetSlots) {
+        for (var setup : findPrefixedSetupDatabaseSolutions(
+                cube, orientation, targetSlots, protectedSlots, checkpoint
+        )) {
             if (checkpoint.shouldStop()) {
                 break;
             }
-            if (protectedSlots.contains(targetSlot) || isTargetSlotSolved(cube, targetSlot)) {
+            var setupCube = cube.copy();
+            var setupOrientation = F2LStateCodec.executeAndReturnOrientation(
+                    setupCube, orientation, setup.getMoves()
+            );
+            if (!areProtectedTargetsSolved(
+                    setupCube, targetCrossForOrientation(setupOrientation), protectedSlots
+            )) {
                 continue;
             }
-            for (var algorithm : findPrefixedSetupThenInsertDatabaseSolutions(
-                    cube, orientation, targetSlot, protectedSlots, checkpoint
+
+            // A setup is slot-independent. It may prepare any unresolved pair,
+            // so the insertion target is selected only after the setup has
+            // been applied. A setup-only completion is valid only when it
+            // completes exactly one new pair.
+            var newlySolved = newlySolvedSlots(setupCube, targetSlots, protectedSlots, cube);
+            if (newlySolved.size() == 1) {
+                candidates.add(new PhaseSlotSolution(
+                        newlySolved.get(0), setup, false, null, null
+                ));
+            }
+            if (!newlySolved.isEmpty()) {
+                continue;
+            }
+
+            for (var insert : findInsertDatabaseSlotSolutions(
+                    setupCube, setupOrientation, targetSlots, protectedSlots, checkpoint
             )) {
-                candidates.add(new PhaseSlotSolution(targetSlot, algorithm, false, null, null));
+                var route = Algorithm.normalize(setup.concat(insert.algorithm()));
+                candidates.add(new PhaseSlotSolution(insert.targetSlot(), route, false, null, null));
             }
         }
         candidates.sort(RAW_PHASE_SOLUTION_COMPARATOR);
         return distinctPhaseSolutions(candidates);
+    }
+
+    private static List<TargetSlot> newlySolvedSlots(
+            CubeState after,
+            TargetSlot[] targetSlots,
+            List<TargetSlot> protectedSlots,
+            CubeState before
+    ) {
+        var newlySolved = new ArrayList<TargetSlot>();
+        for (var targetSlot : targetSlots) {
+            if (!protectedSlots.contains(targetSlot)
+                    && !isTargetSlotSolved(before, targetSlot)
+                    && isTargetSlotSolved(after, targetSlot)) {
+                newlySolved.add(targetSlot);
+            }
+        }
+        return List.copyOf(newlySolved);
     }
 
     private Optional<Algorithm> findPrefixedSetupThenInsertDatabaseSolution(
@@ -729,9 +764,7 @@ public class F2LSolver {
             var setupCube = cube.copy();
             var setupOrientation = F2LStateCodec.executeAndReturnOrientation(setupCube, orientation, setup.getMoves());
             findPrefixedInsertDatabaseSolution(setupCube, setupOrientation, targetSlot, protectedSlots, false)
-                    .ifPresent(insert -> {
-                        candidates.add(Algorithm.normalize(setup.concat(insert)));
-                    });
+                    .ifPresent(insert -> candidates.add(Algorithm.normalize(setup.concat(insert))));
         }
 
         for (var setup : findPrefixedValidatedSetupAlgorithms(cube, orientation, targetSlot, protectedSlots)) {
@@ -845,10 +878,8 @@ public class F2LSolver {
             }
             candidates.add(new RecoveryTransition(slot, recovery));
         }
-        return candidates.stream()
-                .sorted(Comparator.comparingInt((RecoveryTransition candidate) -> candidate.algorithm().getMoves().size())
-                        .thenComparing(candidate -> candidate.slot().name()))
-                .findFirst();
+        return candidates.stream().min(Comparator.comparingInt((RecoveryTransition candidate) -> candidate.algorithm().getMoves().size())
+                .thenComparing(candidate -> candidate.slot().name()));
     }
 
     private boolean hasDatabaseRoute(
@@ -994,6 +1025,22 @@ public class F2LSolver {
             List<TargetSlot> protectedSlots,
             SearchCheckpoint checkpoint
     ) {
+        return findPrefixedSetupDatabaseSolutions(
+                cube, orientation, new TargetSlot[]{targetSlot}, protectedSlots, checkpoint
+        );
+    }
+
+    /**
+     * Setup lookup is performed once for the whole unresolved-pair set. The
+     * target slots are only signature views; they are not insertion targets.
+     */
+    private List<Algorithm> findPrefixedSetupDatabaseSolutions(
+            CubeState cube,
+            CubeOrientation orientation,
+            TargetSlot[] targetSlots,
+            List<TargetSlot> protectedSlots,
+            SearchCheckpoint checkpoint
+    ) {
         var candidates = new ArrayList<Algorithm>();
         if (setupCaseDatabase.size() == 0) {
             return candidates;
@@ -1006,13 +1053,20 @@ public class F2LSolver {
             }
             var prefixedCube = cube.copy();
             var prefixedOrientation = F2LStateCodec.executeAndReturnOrientation(prefixedCube, orientation, prefix.getMoves());
-            var match = findSetupDatabaseSolution(
-                    prefixedCube,
-                    prefixedOrientation,
-                    targetSlot,
-                    protectedSlots
-            );
-            match.ifPresent(algorithm -> candidates.add(Algorithm.normalize(prefix.concat(algorithm))));
+            for (var targetSlot : targetSlots) {
+                if (protectedSlots.contains(targetSlot) || isTargetSlotSolved(prefixedCube, targetSlot)) {
+                    continue;
+                }
+                var matches = findSetupDatabaseSolutions(
+                        prefixedCube,
+                        prefixedOrientation,
+                        targetSlot,
+                        protectedSlots
+                );
+                for (var match : matches) {
+                    candidates.add(Algorithm.normalize(prefix.concat(match)));
+                }
+            }
         }
 
         candidates.sort(RAW_ALGORITHM_COMPARATOR);
@@ -1150,14 +1204,34 @@ public class F2LSolver {
             TargetSlot targetSlot,
             List<TargetSlot> protectedSlots
     ) {
+        return findSetupDatabaseSolutions(cube, orientation, targetSlot, protectedSlots).stream().findFirst();
+    }
+
+    /**
+     * A setup definition is selected by its source-state signature and by the
+     * slots it promises to preserve.  Its non-preserved slot is deliberately
+     * not used as an insertion-target filter: a setup can prepare any later
+     * unresolved pair.
+     */
+    private List<Algorithm> findSetupDatabaseSolutions(
+            CubeState cube,
+            CubeOrientation orientation,
+            TargetSlot targetSlot,
+            List<TargetSlot> protectedSlots
+    ) {
         if (setupCaseDatabase.size() == 0) {
-            return Optional.empty();
+            return List.of();
         }
 
         var insertSlot = visibleSlotForTarget(targetSlot, orientation);
         var preservedMask = F2LStateCodec.preservationMaskFor(protectedSlots, orientation);
-        var signature = F2LCaseSignatureExtractor.extract(cube, insertSlot, orientation);
-        for (var setupCase : setupCaseDatabase.findCompatible(insertSlot, preservedMask, signature)) {
+        var signature = F2LSetupSignature.from(
+                F2LCaseSignatureExtractor.extract(cube, insertSlot, orientation)
+        );
+        var candidates = new ArrayList<Algorithm>();
+        for (var setupCase : setupCaseDatabase.findCompatible(preservedMask, signature).stream()
+                .limit(MAX_SETUP_MATCHES_PER_VIEW)
+                .toList()) {
             SolveCancellation.throwIfCancelled();
             var trialCube = cube.copy();
             var resultingOrientation = F2LStateCodec.executeAndReturnOrientation(trialCube, orientation, setupCase.algorithm().getMoves());
@@ -1172,7 +1246,7 @@ public class F2LSolver {
                             + " case=" + setupCase.name()
                             + " algorithm=" + setupCase.algorithm());
                 }
-                return Optional.of(setupCase.algorithm());
+                candidates.add(setupCase.algorithm());
             }
 
             if (DEBUG_VERBOSE) {
@@ -1183,7 +1257,8 @@ public class F2LSolver {
             }
         }
 
-        return Optional.empty();
+        candidates.sort(RAW_ALGORITHM_COMPARATOR);
+        return distinctAlgorithms(candidates);
     }
 
     private Optional<Algorithm> findInsertDatabaseSolution(
@@ -1497,7 +1572,16 @@ public class F2LSolver {
             int totalCrosses,
             int optimizationCandidate,
             int totalOptimizationCandidates,
-            boolean optimizationBudgetExpired
+            boolean optimizationBudgetExpired,
+            long generatedTransitions,
+            long rejectedTransitions,
+            int frontierSize,
+            int maxFrontierSize,
+            int maxSearchDepth,
+            boolean searchLimitReached,
+            long insertLookupNanos,
+            long setupLookupNanos,
+            long validationNanos
     ) {
         public F2LSearchProgress(
                 long statesExplored,
@@ -1510,7 +1594,7 @@ public class F2LSolver {
         ) {
             this(statesExplored, statesPruned, duplicateStates, bestMoves, completedCandidates,
                     candidatesEvaluated, bestTotalMoves, SolvePhase.F2L_CANDIDATE_GENERATION,
-                    "", 0, 0, 0, 0, false);
+                    "", 0, 0, 0, 0, false, 0, 0, 0, 0, 0, false, 0, 0, 0);
         }
 
         public F2LSearchProgress withMetadata(
@@ -1525,7 +1609,10 @@ public class F2LSolver {
             return new F2LSearchProgress(
                     statesExplored, statesPruned, duplicateStates, bestMoves, completedCandidates,
                     candidatesEvaluated, bestTotalMoves, phase, currentCrossFace, completedCrosses,
-                    totalCrosses, optimizationCandidate, totalOptimizationCandidates, optimizationBudgetExpired
+                    totalCrosses, optimizationCandidate, totalOptimizationCandidates, optimizationBudgetExpired,
+                    generatedTransitions, rejectedTransitions, frontierSize, maxFrontierSize,
+                    maxSearchDepth, searchLimitReached,
+                    insertLookupNanos, setupLookupNanos, validationNanos
             );
         }
     }

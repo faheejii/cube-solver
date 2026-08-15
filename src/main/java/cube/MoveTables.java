@@ -130,14 +130,14 @@ public final class MoveTables {
                 Edge.UR, Edge.UB, Edge.UL, Edge.DB,
                 Edge.DR, Edge.UF, Edge.DL, Edge.DF,
                 Edge.FR, Edge.FL, Edge.BL, Edge.BR,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0
         );
         setEdgeMove(
                 Move.E,
                 Edge.UR, Edge.UF, Edge.UL, Edge.UB,
                 Edge.DR, Edge.DF, Edge.DL, Edge.DB,
-                Edge.BR, Edge.FR, Edge.FL, Edge.BL,
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+                Edge.FL, Edge.BL, Edge.BR, Edge.FR,
+                0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1
         );
         setEdgeMove(
                 Move.S,

@@ -23,6 +23,14 @@ public class F2LCaseSignatureExtractorTest {
             sticker(Face.D, 5), sticker(Face.D, 1), sticker(Face.D, 3), sticker(Face.D, 7),
             sticker(Face.F, 5), sticker(Face.F, 3), sticker(Face.B, 5), sticker(Face.B, 3)
     };
+    private static final StickerRef[][] EDGE_STICKERS = {
+            {sticker(Face.U, 5), sticker(Face.R, 1)}, {sticker(Face.U, 7), sticker(Face.F, 1)},
+            {sticker(Face.U, 3), sticker(Face.L, 1)}, {sticker(Face.U, 1), sticker(Face.B, 1)},
+            {sticker(Face.D, 5), sticker(Face.R, 7)}, {sticker(Face.D, 1), sticker(Face.F, 7)},
+            {sticker(Face.D, 3), sticker(Face.L, 7)}, {sticker(Face.D, 7), sticker(Face.B, 7)},
+            {sticker(Face.F, 5), sticker(Face.R, 3)}, {sticker(Face.F, 3), sticker(Face.L, 5)},
+            {sticker(Face.B, 5), sticker(Face.L, 3)}, {sticker(Face.B, 3), sticker(Face.R, 5)}
+    };
 
     @Test
     void directEdgeOrientation_shouldMatchFaceletReferenceInEveryFrame() {
@@ -54,13 +62,18 @@ public class F2LCaseSignatureExtractorTest {
         var targetEdge = F2LGeometry.targetSlotFor(slot, orientation).edge();
         var rawPosition = findEdgePosition(cube, targetEdge);
         FaceletState facelets = CubeConverter.toFaceletStateAllowingCenterParity(cube);
-        var sticker = FIRST_EDGE_STICKERS[rawPosition.ordinal()];
-        var logicalSticker = orientation.logicalFaceOf(facelets.getSticker(sticker.face(), sticker.index()));
-        var logicalTargetEdge = edgeForFaces(
-                orientation.logicalFaceOf(edgeFaces(targetEdge)[0]),
-                orientation.logicalFaceOf(edgeFaces(targetEdge)[1])
+        var logicalPositionEdge = edgeForFaces(
+                orientation.logicalFaceOf(edgeFaces(rawPosition)[0]),
+                orientation.logicalFaceOf(edgeFaces(rawPosition)[1])
         );
-        return logicalSticker == edgeFaces(logicalTargetEdge)[0] ? 0 : 1;
+        var logicalTargetFirstColor = orientation.logicalFaceOf(edgeFaces(targetEdge)[0]);
+        for (var sticker : EDGE_STICKERS[rawPosition.ordinal()]) {
+            var logicalColor = orientation.logicalFaceOf(facelets.getSticker(sticker.face(), sticker.index()));
+            if (logicalColor == logicalTargetFirstColor) {
+                return orientation.logicalFaceOf(sticker.face()) == edgeFaces(logicalPositionEdge)[0] ? 0 : 1;
+            }
+        }
+        throw new IllegalStateException("Missing target sticker");
     }
 
     private static Edge findEdgePosition(CubeState cube, Edge target) {

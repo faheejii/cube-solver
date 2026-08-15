@@ -116,7 +116,7 @@ function F2LDetails({
     selectedPair: number | null;
     onPairSelect: (order: number) => void;
 }) {
-    const pairs = result.f2l.pairs ?? [];
+    const pairs = result.f2l.pairs;
     return (
         <div className="solution-f2l-details">
             <div className="solution-stage-f2l-meta">
@@ -125,7 +125,7 @@ function F2LDetails({
                 <span>{result.solvedF2LSlots}</span>
             </div>
             {pairs.length === 0 ? (
-                <p className="solution-f2l-empty">Pair trace unavailable for this saved solution.</p>
+                <p className="solution-f2l-empty">No F2L pairs generated.</p>
             ) : (
                 <div className="solution-pair-list" aria-label="F2L pair solutions">
                     {pairs.map((pair) => (

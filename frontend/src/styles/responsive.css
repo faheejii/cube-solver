@@ -251,14 +251,12 @@
     }
 
     .timer-notices {
-        right: 10px;
-        bottom: 82px;
-        width: calc(100vw - 20px);
+        width: 100%;
     }
 
-    .global-toast {
+    .save-toast {
         right: 10px;
-        bottom: 82px;
+        top: 10px;
         width: calc(100vw - 20px);
     }
 
@@ -343,4 +341,3 @@
         border-right: 0;
     }
 }
-

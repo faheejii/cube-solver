@@ -114,4 +114,10 @@ public class AlgorithmTest {
         assertTrue(compiled.getMoves().stream().noneMatch(move -> move.ordinal() / 3 >= 12));
     }
 
+    @Test
+    void materializeWideAndSliceMoves_shouldPreserveStandardEDirection() {
+        assertEquals("U D'", Algorithm.materializeWideAndSliceMoves(Algorithm.parse("E")).toString());
+        assertEquals("D U'", Algorithm.materializeWideAndSliceMoves(Algorithm.parse("E'")).toString());
+    }
+
 }

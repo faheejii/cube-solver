@@ -6,6 +6,7 @@ import ActiveSolutionsView from "./ActiveSolutionsView";
 import AlgorithmsView from "./AlgorithmsView";
 import DashboardSidebar, {type DashboardView} from "./DashboardSidebar";
 import HistoryView from "./HistoryView";
+import SaveToast from "./SaveToast";
 import SolutionResultBody from "./SolutionResultBody";
 import StatisticsRail from "./StatisticsRail";
 import TimerWorkspace from "./TimerWorkspace";
@@ -682,7 +683,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                             onTimerPointerUp={handleTimerPointerUp}
                         />
 
-                        {error || attemptSaveStatus === "error" || saveNotice ? (
+                        {error || attemptSaveStatus === "error" ? (
                             <div className="timer-notices">
                                 {error ? <div className="dashboard-alert error"><strong>Request failed.</strong> {error}
                                 </div> : null}
@@ -694,12 +695,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                             Retry save
                                         </button>
                                     </div>
-                                ) : null}
-                                {saveNotice ? (
-                                    <button className="dashboard-toast" type="button"
-                                            onClick={() => setSaveNotice(null)}>
-                                        {saveNotice}
-                                    </button>
                                 ) : null}
                             </div>
                         ) : null}
@@ -739,11 +734,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 />
             ) : null}
 
-            {activeView !== "timer" && saveNotice ? (
-                <button className="dashboard-toast global-toast" type="button" onClick={() => setSaveNotice(null)}>
-                    {saveNotice}
-                </button>
-            ) : null}
+            <SaveToast message={saveNotice} onDismiss={() => setSaveNotice(null)}/>
 
             {modalStatus !== "idle" ? (
                 <div className="solution-modal-backdrop" role="presentation" onMouseDown={closeSolutionModal}>
@@ -949,13 +940,11 @@ function buildSaveSolutionRequest(
         pllMoves: result.pll.moveCount,
         pllSolved: result.pll.solved,
         pllStatus: result.pll.status,
-        f2lTraceJson: result.f2l.pairs
-            ? JSON.stringify({
-                traceComplete: result.f2l.traceComplete ?? false,
-                pairAlgorithmMatchesStage: result.f2l.pairAlgorithmMatchesStage ?? false,
-                pairs: result.f2l.pairs,
-            })
-            : null,
+        f2lTraceJson: JSON.stringify({
+            traceComplete: result.f2l.traceComplete,
+            pairAlgorithmMatchesStage: result.f2l.pairAlgorithmMatchesStage,
+            pairs: result.f2l.pairs,
+        }),
         comparisonJson: result.comparison ? JSON.stringify(result.comparison) : null,
     };
 }

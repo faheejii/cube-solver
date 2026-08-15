@@ -19,6 +19,7 @@ import io.ScrambleParser;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -29,7 +30,7 @@ public class CfopSolveService {
     private static final int COLOR_NEUTRAL_BASELINE_CANDIDATES = 3;
     private static final int COLOR_NEUTRAL_OPTIMIZED_CANDIDATES = 2;
     private static final long COLOR_NEUTRAL_BASELINE_BUDGET_NANOS = TimeUnit.SECONDS.toNanos(12);
-    private static final long COLOR_NEUTRAL_OPTIMIZATION_BUDGET_NANOS = TimeUnit.SECONDS.toNanos(15);
+    private static final long DEFAULT_OPTIMIZATION_BUDGET_NANOS = TimeUnit.SECONDS.toNanos(15);
     private final F2LSetupCaseDatabase f2lSetupDatabase;
     private final F2LInsertCaseDatabase f2lInsertDatabase;
     private final OLLCaseDatabase ollDatabase;
@@ -198,7 +199,7 @@ public class CfopSolveService {
         ));
 
         var best = baselines.get(0);
-        var deadlineNanos = System.nanoTime() + COLOR_NEUTRAL_OPTIMIZATION_BUDGET_NANOS;
+        var deadlineNanos = optimizationDeadlineNanos();
         int candidateCount = Math.min(COLOR_NEUTRAL_OPTIMIZED_CANDIDATES, baselines.size());
         boolean budgetExpired = false;
         for (int index = 0; index < candidateCount; index++) {
@@ -209,13 +210,17 @@ public class CfopSolveService {
             var baseline = baselines.get(index);
             int rank = index + 1;
             var face = baseline.crossFace();
+            var searchLimitReached = new AtomicBoolean();
             publishProgress(progressListener, F2LSolver.SolvePhase.F2L_OPTIMIZATION, face,
                     baselines.size(), shortlisted.size(), rank, candidateCount, false, null);
             var optimizedContinuation = optimizeContinuation(
                     baseline,
-                    progress -> publishProgress(progressListener, F2LSolver.SolvePhase.F2L_CANDIDATE_GENERATION,
-                            face, baselines.size(), shortlisted.size(),
-                            rank, candidateCount, false, progress),
+                    progress -> {
+                        searchLimitReached.compareAndSet(false, progress.searchLimitReached());
+                        publishProgress(progressListener, F2LSolver.SolvePhase.F2L_CANDIDATE_GENERATION,
+                                face, baselines.size(), shortlisted.size(),
+                                rank, candidateCount, false, progress);
+                    },
                     () -> System.nanoTime() >= deadlineNanos
             );
             var optimized = baseline.withContinuation(optimizedContinuation);
@@ -225,7 +230,7 @@ public class CfopSolveService {
             ) < 0) {
                 best = optimized;
             }
-            if (System.nanoTime() >= deadlineNanos) {
+            if (searchLimitReached.get() || System.nanoTime() >= deadlineNanos) {
                 budgetExpired = true;
                 break;
             }
@@ -253,11 +258,15 @@ public class CfopSolveService {
         var baseline = prepareFixedCross(request);
         var continuation = baseline.continuation();
         if (request.f2lMode() == F2LMode.OPTIMIZED) {
-            long deadlineNanos = System.nanoTime() + COLOR_NEUTRAL_OPTIMIZATION_BUDGET_NANOS;
+            long deadlineNanos = optimizationDeadlineNanos();
+            var searchLimitReached = new AtomicBoolean();
             var boundedStop = (BooleanSupplier) () -> shouldStop.getAsBoolean()
                     || System.nanoTime() >= deadlineNanos;
-            continuation = optimizeContinuation(baseline, optimizedProgressListener, boundedStop);
-            if (System.nanoTime() >= deadlineNanos) {
+            continuation = optimizeContinuation(baseline, progress -> {
+                searchLimitReached.compareAndSet(false, progress.searchLimitReached());
+                optimizedProgressListener.accept(progress);
+            }, boundedStop);
+            if (searchLimitReached.get() || System.nanoTime() >= deadlineNanos) {
                 publishProgress(optimizedProgressListener, F2LSolver.SolvePhase.OPTIMIZATION_BUDGET_REACHED,
                         baseline.crossFace(), 1, 1, 1, 1, true, null);
             }
@@ -270,6 +279,31 @@ public class CfopSolveService {
                 0,
                 Math.min(COLOR_NEUTRAL_BASELINE_CANDIDATES, candidates.size())
         ));
+    }
+
+    /**
+     * Production keeps a finite optimization budget. Developers may opt into
+     * a longer diagnostic run with -Df2l.optimization.budget-seconds=60. An
+     * unlimited run is accepted only when f2l.diagnostic is also enabled.
+     */
+    private static long optimizationDeadlineNanos() {
+        var configured = System.getProperty("f2l.optimization.budget-seconds");
+        if (configured == null || configured.isBlank()) {
+            return System.nanoTime() + DEFAULT_OPTIMIZATION_BUDGET_NANOS;
+        }
+        try {
+            var seconds = Long.parseLong(configured.trim());
+            if (seconds < 0) {
+                if (Boolean.getBoolean("f2l.diagnostic")) {
+                    return Long.MAX_VALUE;
+                }
+                return System.nanoTime() + DEFAULT_OPTIMIZATION_BUDGET_NANOS;
+            }
+            var nanos = TimeUnit.SECONDS.toNanos(seconds);
+            return System.nanoTime() + nanos;
+        } catch (NumberFormatException ignored) {
+            return System.nanoTime() + DEFAULT_OPTIMIZATION_BUDGET_NANOS;
+        }
     }
 
     private FixedCrossBaseline prepareFixedCross(CfopSolveRequest request) {
@@ -293,16 +327,18 @@ public class CfopSolveService {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, scramble);
 
-        var orientedCube = new OrientedCube(cube);
-
         var crossFace = crossCandidate.face();
         var crossSolution = crossCandidate.algorithm();
+        // Execute the public algorithm as one frame-aware sequence. This
+        // preserves its visible rotation prefix and makes the orientation
+        // consumed by F2L exactly the orientation the user sees.
+        var orientedCube = new OrientedCube(cube);
         orientedCube.applyMoves(crossSolution.getMoves());
         var crossResult = new CfopStageResult(
                 "cross",
                 crossSolution.toString(),
                 crossSolution.getMoveCount(),
-                CrossAnalyzer.isCrossSolved(cube, crossFace),
+                CrossAnalyzer.isCrossSolved(cube, orientedCube.orientation()),
                 "ok"
         );
 

@@ -6,6 +6,8 @@ import cfop.F2LGeometry;
 import cfop.F2LPreservationMask;
 import cfop.F2LSlot;
 import cube.Algorithm;
+import cube.CubeOrientationKey;
+import cube.CubeState;
 import cube.OrientedCube;
 import util.NotationNormalizer;
 
@@ -44,6 +46,7 @@ public class F2LInsertCaseDatabase {
         cases.put(insertCase.key(), insertCase);
         var lookupKey = new LookupKey(insertCase.insertSlot(), insertCase.signature());
         casesByLookup.computeIfAbsent(lookupKey, ignored -> new ArrayList<>()).add(insertCase);
+        indexSourceVariants(insertCase);
         validated = false;
     }
 
@@ -66,8 +69,18 @@ public class F2LInsertCaseDatabase {
             throw new IllegalArgumentException("signature cannot be null");
         }
 
+        return compatibleCases(
+                casesByLookup.getOrDefault(new LookupKey(insertSlot, signature), List.of()),
+                requiredPreservedSlots
+        );
+    }
+
+    private static List<F2LInsertCase> compatibleCases(
+            List<F2LInsertCase> indexedCases,
+            F2LPreservationMask requiredPreservedSlots
+    ) {
         var matches = new ArrayList<F2LInsertCase>();
-        for (var insertCase : casesByLookup.getOrDefault(new LookupKey(insertSlot, signature), List.of())) {
+        for (var insertCase : indexedCases) {
             if (insertCase.preservedSlots().preservesAll(requiredPreservedSlots)) {
                 matches.add(insertCase);
             }
@@ -96,6 +109,22 @@ public class F2LInsertCaseDatabase {
         validated = true;
     }
 
+    /** Insert cases are slot-specific, but their sticker coordinates are frame-relative. */
+    private void indexSourceVariants(F2LInsertCase insertCase) {
+        for (var frameKey : CubeOrientationKey.all()) {
+            var source = new OrientedCube(new CubeState(), frameKey.toOrientation());
+            source.applyMoves(insertCase.algorithm().inverse().getMoves());
+            var signature = F2LCaseSignatureExtractor.extract(
+                    source.cubeState(), insertCase.insertSlot(), source.orientation()
+            );
+            var key = new LookupKey(insertCase.insertSlot(), signature);
+            var indexed = casesByLookup.computeIfAbsent(key, ignored -> new ArrayList<>());
+            if (!indexed.contains(insertCase)) {
+                indexed.add(insertCase);
+            }
+        }
+    }
+
     private static F2LInsertCase caseFromAlgorithm(
             String algorithm,
             F2LSlot insertSlot,
@@ -108,7 +137,9 @@ public class F2LInsertCaseDatabase {
         var mask = F2LPreservationMask.allExcept(insertSlot);
         var setupCube = new OrientedCube();
         setupCube.applyMoves(alg.inverse().getMoves());
-        var signature = F2LCaseSignatureExtractor.extract(setupCube.cubeState(), insertSlot, setupCube.orientation());
+        var signature = F2LCaseSignatureExtractor.extract(
+                setupCube.cubeState(), insertSlot, setupCube.orientation()
+        );
         return new F2LInsertCase(insertSlot, mask, signature, alg, name);
     }
 
@@ -150,4 +181,5 @@ public class F2LInsertCaseDatabase {
 
     private record LookupKey(F2LSlot insertSlot, F2LCaseSignature signature) {
     }
+
 }

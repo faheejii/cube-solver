@@ -53,10 +53,21 @@ public class Algorithm {
      * when loading last-layer algorithms, where runtime recognition is AUF-only.
      */
     public static Algorithm materializeCubeRotations(Algorithm algorithm) {
+        return materializeCubeRotations(algorithm, new CubeOrientation());
+    }
+
+    /**
+     * Rewrites an algorithm expressed in {@code initialOrientation}'s logical
+     * frame into ordinary, physical Singmaster moves.  Cube rotations update
+     * the logical frame but are deliberately omitted from the result: callers
+     * can therefore replay the returned notation directly with cubing.js or
+     * {@link MoveApplier}.
+     */
+    public static Algorithm materializeCubeRotations(Algorithm algorithm, CubeOrientation initialOrientation) {
         if (algorithm == null || algorithm.isEmpty()) {
             return new Algorithm();
         }
-        var orientation = new CubeOrientation();
+        var orientation = initialOrientation == null ? new CubeOrientation() : initialOrientation.copy();
         var materialized = new ArrayList<Move>();
         for (var move : algorithm.moves) {
             if (move.isCubeRotation()) {
@@ -200,7 +211,7 @@ public class Algorithm {
             case 10 -> List.of(Move.X_PRIME, Move.R);          // l = x' R
             case 11 -> List.of(Move.Z_PRIME, Move.F);          // b = z' F
             case 12 -> List.of(Move.L_PRIME, Move.X_PRIME, Move.R); // M = L' x' R
-            case 13 -> List.of(Move.U_PRIME, Move.Y, Move.D);  // E = U' y D
+            case 13 -> List.of(Move.U, Move.Y_PRIME, Move.D_PRIME); // E = U y' D'
             case 14 -> List.of(Move.F_PRIME, Move.Z, Move.B);  // S = F' z B
             default -> null;
         };

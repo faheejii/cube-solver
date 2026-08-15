@@ -127,8 +127,7 @@
     margin: 20px auto 0;
 }
 
-.dashboard-alert,
-.dashboard-toast {
+.dashboard-alert {
     width: 100%;
     border: 1px solid var(--border);
     border-radius: 13px;
@@ -148,13 +147,6 @@
     gap: 12px;
 }
 
-.dashboard-toast {
-    border-color: color-mix(in srgb, var(--green) 40%, var(--border));
-    color: var(--green);
-    cursor: pointer;
-    text-align: left;
-}
-
 .section-label {
     margin: 0;
     color: var(--muted);
@@ -163,4 +155,3 @@
     letter-spacing: 0.12em;
     text-transform: uppercase;
 }
-
