@@ -258,7 +258,7 @@ function stageOption(stage: SolveStage, setupAlgorithm: string): StageOption {
 }
 
 function f2lPairOption(result: SolveResponse, order: number): StageOption | null {
-    const pairs = result.f2l.pairs;
+    const pairs = result.f2l.pairs ?? [];
     const pair = pairs.find((candidate) => candidate.order === order);
     if (!pair) {
         return null;
