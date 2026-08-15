@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
@@ -23,7 +24,10 @@ import static cfop.F2LGeometry.targetCrossForOrientation;
 
 /** Package-private optimized F2L search and its bounded-search bookkeeping. */
 final class F2LOptimizedSearch {
-    private static final int MAX_PATHS_PER_STATE = 3;
+    private static final int MAX_PATHS_PER_STATE = Integer.getInteger("f2l.optimized.max-paths", 2);
+    private static final int MAX_VISITED_STATES = Integer.getInteger("f2l.optimized.max-states", 1_000);
+    private static final int MAX_SEARCH_DEPTH = Integer.getInteger("f2l.optimized.max-depth", 8);
+    private static final int MAX_TRANSITIONS_PER_STATE = Integer.getInteger("f2l.optimized.max-transitions", 8);
     private static final Comparator<Algorithm> ALGORITHM_COMPARATOR = Comparator
             .comparingInt(Algorithm::getMoveCount)
             .thenComparingInt(algorithm -> algorithm.getMoves().size())
@@ -73,10 +77,22 @@ final class F2LOptimizedSearch {
     private final Host host;
     private final Map<String, List<Algorithm>> pathsByState = new HashMap<>();
     private final Map<String, List<F2LSolver.F2LCandidate>> completedByState = new LinkedHashMap<>();
+    private final PriorityQueue<SearchNode> frontier = new PriorityQueue<>(
+            Comparator.comparingInt(SearchNode::estimatedCost)
+                    .thenComparing(node -> node.state().solution(), ALGORITHM_COMPARATOR)
+    );
     private Algorithm bestAlgorithm;
     private long visitedStates;
     private long prunedStates;
     private long duplicateStates;
+    private long generatedTransitions;
+    private long rejectedTransitions;
+    private int maxFrontierSize;
+    private int maxSearchDepth;
+    private boolean searchLimitReached;
+    private long insertLookupNanos;
+    private long setupLookupNanos;
+    private long validationNanos;
     private long lastProgressNanos;
 
     F2LOptimizedSearch(
@@ -94,51 +110,70 @@ final class F2LOptimizedSearch {
     }
 
     void search(F2LSolver.OptimizedState state) {
-        SolveCancellation.throwIfCancelled();
-        if (shouldStop.getAsBoolean()) {
-            publishProgress();
-            return;
-        }
-        visitedStates++;
-        publishProgress();
-
-        if (areAllTargetsSolved(state.cube())) {
-            var completed = state.solution().copy();
-            registerCompletedCandidate(state, completed);
-            if (ALGORITHM_COMPARATOR.compare(completed, bestAlgorithm) < 0) {
-                bestAlgorithm = completed.copy();
-            } else {
-                prunedStates++;
+        frontier.clear();
+        frontier.add(new SearchNode(state, estimate(state)));
+        while (!frontier.isEmpty()) {
+            SolveCancellation.throwIfCancelled();
+            if (shouldStop.getAsBoolean()) {
+                publishProgress();
+                return;
             }
-            publishProgress();
-            return;
-        }
+            if (visitedStates >= MAX_VISITED_STATES) {
+                searchLimitReached = true;
+                publishProgress();
+                return;
+            }
 
-        var stateKey = optimizedStateKey(state);
-        if (!registerStatePath(stateKey, state.solution())) {
-            duplicateStates++;
+            var node = frontier.remove();
+            var current = node.state();
+            visitedStates++;
+            maxFrontierSize = Math.max(maxFrontierSize, frontier.size());
+            maxSearchDepth = Math.max(maxSearchDepth, current.pendingSteps().size());
             publishProgress();
-            return;
-        }
 
-        var candidates = optimizedCandidates(state);
-        if (candidates.isEmpty()) {
-            prunedStates++;
+            if (areAllTargetsSolved(current.cube())) {
+                var completed = current.solution().copy();
+                registerCompletedCandidate(current, completed);
+                if (ALGORITHM_COMPARATOR.compare(completed, bestAlgorithm) < 0) {
+                    bestAlgorithm = completed.copy();
+                } else {
+                    prunedStates++;
+                }
+                continue;
+            }
+
+            var stateKey = optimizedStateKey(current);
+            if (!registerStatePath(stateKey, current.solution())) {
+                duplicateStates++;
+                continue;
+            }
+
+            var candidates = optimizedCandidates(current);
+            generatedTransitions += candidates.size();
+            if (candidates.isEmpty()) {
+                prunedStates++;
+                continue;
+            }
+
+            for (var candidate : candidates) {
+                var nextSolution = current.solution().concat(candidate.algorithm());
+                var nextState = new F2LSolver.OptimizedState(
+                        candidate.cube(),
+                        candidate.orientation(),
+                        candidate.protectedSlots(),
+                        nextSolution,
+                        candidate.pendingSteps()
+                );
+                if (nextState.pendingSteps().size() > MAX_SEARCH_DEPTH
+                        || estimate(nextState) > bestAlgorithm.getMoveCount()) {
+                    rejectedTransitions++;
+                    continue;
+                }
+                frontier.add(new SearchNode(nextState, estimate(nextState)));
+            }
+            maxFrontierSize = Math.max(maxFrontierSize, frontier.size());
             publishProgress();
-            return;
         }
-
-        for (var candidate : candidates) {
-            var nextSolution = state.solution().concat(candidate.algorithm());
-            search(new F2LSolver.OptimizedState(
-                    candidate.cube(),
-                    candidate.orientation(),
-                    candidate.protectedSlots(),
-                    nextSolution,
-                    candidate.pendingSteps()
-            ));
-        }
-        publishProgress();
     }
 
     private boolean registerStatePath(String stateKey, Algorithm path) {
@@ -184,6 +219,7 @@ final class F2LOptimizedSearch {
 
     private List<F2LSolver.OptimizedTransition> optimizedCandidates(F2LSolver.OptimizedState state) {
         var candidates = new ArrayList<F2LSolver.PhaseSlotSolution>();
+        var started = System.nanoTime();
         candidates.addAll(host.findInsertDatabaseSlotSolutions(
                 state.cube(),
                 state.orientation(),
@@ -191,9 +227,11 @@ final class F2LOptimizedSearch {
                 state.protectedSlots(),
                 this::checkpoint
         ));
+        insertLookupNanos += System.nanoTime() - started;
         if (shouldStop.getAsBoolean()) {
             return List.of();
         }
+        started = System.nanoTime();
         candidates.addAll(host.findSetupThenInsertDatabaseSlotSolutions(
                 state.cube(),
                 state.orientation(),
@@ -201,15 +239,22 @@ final class F2LOptimizedSearch {
                 state.protectedSlots(),
                 this::checkpoint
         ));
+        setupLookupNanos += System.nanoTime() - started;
         candidates.sort(PHASE_SOLUTION_COMPARATOR);
+        started = System.nanoTime();
         var completing = slotCompletingTransitions(state, distinctPhaseSolutions(candidates));
+        validationNanos += System.nanoTime() - started;
         if (!completing.isEmpty() || shouldStop.getAsBoolean()) {
             return completing;
         }
-        return slotCompletingTransitions(
+        var recovery = slotCompletingTransitions(
                 state,
                 host.findRecoveryThenDatabaseSolutions(state, this::checkpoint)
         );
+        var all = new ArrayList<F2LSolver.OptimizedTransition>(completing);
+        all.addAll(recovery);
+        all.sort(Comparator.comparing(F2LSolver.OptimizedTransition::algorithm, ALGORITHM_COMPARATOR));
+        return all.stream().limit(MAX_TRANSITIONS_PER_STATE).toList();
     }
 
     private List<F2LSolver.OptimizedTransition> slotCompletingTransitions(
@@ -266,7 +311,7 @@ final class F2LOptimizedSearch {
         }
         var completing = new ArrayList<>(completingByState.values());
         completing.sort(Comparator.comparing(F2LSolver.OptimizedTransition::algorithm, ALGORITHM_COMPARATOR));
-        return List.copyOf(completing);
+        return completing.stream().limit(MAX_TRANSITIONS_PER_STATE).toList();
     }
 
     private String optimizedStateKey(F2LSolver.OptimizedState state) {
@@ -307,7 +352,25 @@ final class F2LOptimizedSearch {
                 bestAlgorithm.getMoveCount(),
                 completedByState.size(),
                 0,
-                -1
+                -1,
+                searchLimitReached
+                        ? F2LSolver.SolvePhase.OPTIMIZATION_BUDGET_REACHED
+                        : F2LSolver.SolvePhase.F2L_CANDIDATE_GENERATION,
+                "",
+                0,
+                0,
+                0,
+                0,
+                searchLimitReached,
+                generatedTransitions,
+                rejectedTransitions,
+                frontier.size(),
+                maxFrontierSize,
+                maxSearchDepth,
+                searchLimitReached,
+                insertLookupNanos,
+                setupLookupNanos,
+                validationNanos
         ));
     }
 
@@ -315,6 +378,19 @@ final class F2LOptimizedSearch {
         SolveCancellation.throwIfCancelled();
         publishProgress();
         return shouldStop.getAsBoolean();
+    }
+
+    private int estimate(F2LSolver.OptimizedState state) {
+        int unresolved = 0;
+        for (var targetSlot : targetSlots) {
+            if (!isTargetSlotSolved(state.cube(), targetSlot)) {
+                unresolved++;
+            }
+        }
+        return state.solution().getMoveCount() + unresolved;
+    }
+
+    private record SearchNode(F2LSolver.OptimizedState state, int estimatedCost) {
     }
 
     List<F2LSolver.F2LCandidate> completedCandidates() {
@@ -334,6 +410,26 @@ final class F2LOptimizedSearch {
 
     long duplicateStates() {
         return duplicateStates;
+    }
+
+    long generatedTransitions() {
+        return generatedTransitions;
+    }
+
+    long rejectedTransitions() {
+        return rejectedTransitions;
+    }
+
+    int maxFrontierSize() {
+        return maxFrontierSize;
+    }
+
+    int maxSearchDepth() {
+        return maxSearchDepth;
+    }
+
+    boolean searchLimitReached() {
+        return searchLimitReached;
     }
 
     private boolean areAllTargetsSolved(CubeState cube) {

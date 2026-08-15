@@ -1,7 +1,7 @@
 import {Clipboard, LoaderCircle, Search} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
-import "cubing/twisty";
 import {fetchAlgorithms} from "./api";
+import CubePreview from "./CubePreview";
 import type {AlgorithmCatalogEntry} from "./types";
 
 const PHASES = ["", "setup", "insert", "oll", "pll"];
@@ -90,7 +90,7 @@ export default function AlgorithmsView() {
                                 <span className="algorithm-phase">{entry.phase}</span>
                                 <h2>{entry.name}</h2>
                             </div>
-                            <span className="algorithm-slot">{entry.slot ?? entry.phase.toUpperCase()}</span>
+                            <span className="algorithm-slot">{entry.slot ?? entry.nonPreservedSlot ?? entry.phase.toUpperCase()}</span>
                         </div>
                         <code className="algorithm-moves">{entry.algorithm}</code>
                         <div className="algorithm-row-meta">
@@ -123,15 +123,9 @@ export default function AlgorithmsView() {
                             <button className="dashboard-secondary-button compact" type="button" onClick={() => setPreview(null)}>Close</button>
                         </div>
                         <div className="cube-player-shell algorithm-preview-player">
-                            <twisty-player
-                                puzzle="3x3x3"
-                                experimental-setup-alg={preview.previewSetup ?? ""}
-                                alg={preview.algorithm}
-                                background="none"
-                                control-panel="bottom-row"
-                                hint-facelets="none"
-                                camera-latitude="28"
-                                camera-longitude="34"
+                            <CubePreview
+                                setupAlgorithm={preview.previewSetup ?? ""}
+                                algorithm={preview.algorithm}
                             />
                         </div>
                         <p className="algorithm-preview-context">
@@ -148,7 +142,7 @@ export default function AlgorithmsView() {
 }
 
 function signatureSummary(entry: AlgorithmCatalogEntry): string {
-    if (entry.signature.kind === "f2l") {
+    if (entry.signature.kind === "f2l" || entry.signature.kind === "f2l-setup") {
         return `${entry.signature.cornerPosition}/${entry.signature.cornerOrientation} · ${entry.signature.edgePosition}/${entry.signature.edgeOrientation}`;
     }
     if (entry.signature.kind === "pll") {

@@ -33,41 +33,6 @@ public record SaveSolutionApiRequest(
 ) {
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    public SaveSolutionApiRequest(
-            String crossFaceRequested,
-            String crossFaceChosen,
-            String f2lMode,
-            Integer f2lSetupCaseCount,
-            Integer f2lInsertCaseCount,
-            String solvedF2LSlots,
-            Integer totalMoves,
-            boolean fullySolved,
-            Double solveElapsedMs,
-            String crossAlgorithm,
-            Integer crossMoves,
-            boolean crossSolved,
-            String crossStatus,
-            String f2lAlgorithm,
-            Integer f2lMoves,
-            boolean f2lSolved,
-            String f2lStatus,
-            String ollAlgorithm,
-            Integer ollMoves,
-            boolean ollSolved,
-            String ollStatus,
-            String pllAlgorithm,
-            Integer pllMoves,
-            boolean pllSolved,
-            String pllStatus
-    ) {
-        this(
-                crossFaceRequested, crossFaceChosen, f2lMode, f2lSetupCaseCount, f2lInsertCaseCount,
-                solvedF2LSlots, totalMoves, fullySolved, solveElapsedMs, crossAlgorithm, crossMoves,
-                crossSolved, crossStatus, f2lAlgorithm, f2lMoves, f2lSolved, f2lStatus, ollAlgorithm,
-                ollMoves, ollSolved, ollStatus, pllAlgorithm, pllMoves, pllSolved, pllStatus, null, null
-        );
-    }
-
     public SaveSolutionApiRequest {
         requireText(crossFaceRequested, "crossFaceRequested");
         requireText(crossFaceChosen, "crossFaceChosen");
@@ -90,7 +55,7 @@ public record SaveSolutionApiRequest(
                 || !Double.isFinite(solveElapsedMs) || solveElapsedMs < 0) {
             throw new IllegalArgumentException("solution metrics must be non-negative and finite");
         }
-        validateMetadata(f2lTraceJson, "f2lTraceJson");
+        requireMetadata(f2lTraceJson, "f2lTraceJson");
         validateMetadata(comparisonJson, "comparisonJson");
     }
 
@@ -114,5 +79,12 @@ public record SaveSolutionApiRequest(
                 throw new IllegalArgumentException(field + " must be valid JSON", exception);
             }
         }
+    }
+
+    private static void requireMetadata(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " cannot be null or blank");
+        }
+        validateMetadata(value, field);
     }
 }

@@ -69,7 +69,7 @@ public class MoveApplier {
             case X -> applyMoves(cube, List.of(Move.R, Move.M_PRIME, Move.L_PRIME));
             case X2 -> applyMoves(cube, List.of(Move.X, Move.X));
             case X_PRIME -> applyMoves(cube, List.of(Move.R_PRIME, Move.M, Move.L));
-            case Y -> applyMoves(cube, List.of(Move.U, Move.E, Move.D_PRIME));
+            case Y -> applyMoves(cube, List.of(Move.U, Move.E_PRIME, Move.D_PRIME));
             case Y2 -> applyMoves(cube, List.of(Move.Y, Move.Y));
             case Y_PRIME -> applyMoves(cube, List.of(Move.Y, Move.Y, Move.Y));
             case Z -> applyMoves(cube, List.of(Move.F, Move.S, Move.B_PRIME));

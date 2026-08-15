@@ -20,6 +20,7 @@ const result: SolveResponse = {
     f2l: {
         ...stage("f2l", "U R U' R'"),
         traceComplete: true,
+        pairAlgorithmMatchesStage: true,
         pairs: [pair(1, "FR", "SHORTEST_AVAILABLE_PAIR"), pair(2, "FL", "PRESERVES_SOLVED_SLOTS")],
     },
     oll: stage("oll", "R U R'"),
@@ -60,6 +61,18 @@ describe("SolutionResultBody F2L explanation", () => {
         fireEvent.click(screen.getByRole("button", {name: /Pair 2/i}));
 
         expect(screen.getByTestId("cube-animator")).toHaveTextContent("Pair playback: 2");
+    });
+
+    it("describes an empty current trace without legacy saved-solution wording", () => {
+        render(<SolutionResultBody result={{
+            ...result,
+            f2l: {...result.f2l, pairs: []},
+        }} requestedCross="D"/>);
+
+        fireEvent.click(screen.getByRole("button", {name: /F2L/i}));
+
+        expect(screen.getByText("No F2L pairs generated.")).toBeInTheDocument();
+        expect(screen.queryByText(/Pair trace unavailable/i)).not.toBeInTheDocument();
     });
 });
 

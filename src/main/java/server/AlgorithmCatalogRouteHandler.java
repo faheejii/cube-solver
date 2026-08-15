@@ -12,7 +12,7 @@ import static server.HttpServerSupport.parseQuery;
 import static server.HttpServerSupport.requireAdmin;
 import static server.HttpServerSupport.writeJson;
 
-/** Serves the admin-only canonical algorithm catalog and its F2L compatibility view. */
+/** Serves the admin-only canonical algorithm catalog. */
 final class AlgorithmCatalogRouteHandler implements HttpHandler {
     private final DatabaseManager databaseManager;
     private final AuthService authService;
@@ -37,9 +37,7 @@ final class AlgorithmCatalogRouteHandler implements HttpHandler {
         }
         try {
             requireAdmin(exchange, authService);
-            var path = exchange.getRequestURI().getPath();
-            var f2lOnly = path.endsWith("/f2l");
-            if (!f2lOnly && !path.equals("/api/algorithms")) {
+            if (!exchange.getRequestURI().getPath().equals("/api/algorithms")) {
                 writeJson(exchange, 404, JsonSupport.errorJson("Not found"));
                 return;
             }
@@ -50,9 +48,10 @@ final class AlgorithmCatalogRouteHandler implements HttpHandler {
             var status = query.get("status");
             var search = query.getOrDefault("q", "").toLowerCase(java.util.Locale.ROOT);
             var entries = AlgorithmCaseCatalog.entries(includeNonCanonical).stream()
-                    .filter(entry -> !f2lOnly || "setup".equals(entry.phase()) || "insert".equals(entry.phase()))
                     .filter(entry -> phase == null || phase.isBlank() || entry.phase().equalsIgnoreCase(phase))
-                    .filter(entry -> slot == null || slot.isBlank() || entry.slot().name().equalsIgnoreCase(slot))
+                    .filter(entry -> slot == null || slot.isBlank()
+                            || (entry.slot() != null && entry.slot().name().equalsIgnoreCase(slot))
+                            || (entry.nonPreservedSlot() != null && entry.nonPreservedSlot().name().equalsIgnoreCase(slot)))
                     .filter(entry -> status == null || status.isBlank() || "all".equalsIgnoreCase(status) || entry.status().equalsIgnoreCase(status))
                     .filter(entry -> search.isBlank()
                             || entry.name().toLowerCase(java.util.Locale.ROOT).contains(search)

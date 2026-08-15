@@ -175,7 +175,7 @@
     }
 
     .solution-result-layout > .visualizer-section {
-        min-height: 560px;
+        min-height: 380px;
     }
 }
 
@@ -251,14 +251,12 @@
     }
 
     .timer-notices {
-        right: 10px;
-        bottom: 82px;
-        width: calc(100vw - 20px);
+        width: 100%;
     }
 
-    .global-toast {
+    .save-toast {
         right: 10px;
-        bottom: 82px;
+        top: 10px;
         width: calc(100vw - 20px);
     }
 
@@ -325,7 +323,7 @@
     }
 
     .solution-result-layout > .visualizer-section {
-        min-height: 500px;
+        min-height: 340px;
     }
 
     .solution-summary-strip {
@@ -343,4 +341,3 @@
         border-right: 0;
     }
 }
-
