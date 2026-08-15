@@ -1,24 +1,24 @@
 package algorithms;
 
-import cfop.F2LCaseSignature;
+import cfop.F2LSetupSignature;
 import cfop.F2LPreservationMask;
 import cfop.F2LSlot;
 import cube.Algorithm;
 
 public record F2LSetupCase(
-        F2LSlot insertSlot,
         F2LPreservationMask preservedSlots,
-        F2LCaseSignature signature,
+        F2LSlot nonPreservedSlot,
+        F2LSetupSignature signature,
         Algorithm algorithm,
         Algorithm sourceSetup,
         String name
 ) {
     public F2LSetupCase {
-        if (insertSlot == null) {
-            throw new IllegalArgumentException("insertSlot cannot be null");
-        }
         if (preservedSlots == null) {
             throw new IllegalArgumentException("preservedSlots cannot be null");
+        }
+        if (nonPreservedSlot == null) {
+            throw new IllegalArgumentException("nonPreservedSlot cannot be null");
         }
         if (signature == null) {
             throw new IllegalArgumentException("signature cannot be null");
@@ -35,6 +35,6 @@ public record F2LSetupCase(
     }
 
     public F2LSetupCaseKey key() {
-        return new F2LSetupCaseKey(insertSlot, preservedSlots, signature);
+        return new F2LSetupCaseKey(preservedSlots, signature);
     }
 }

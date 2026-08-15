@@ -49,11 +49,11 @@ Implemented:
 - validation-by-execution after database lookup in F2L, OLL, and PLL
 - immutable internal F2L pair traces for greedy solves, including state/orientation snapshots, preserved-slot metadata, case descriptions, and factual selection evidence
 - Fast-versus-Optimized route comparison in the Java result model, including stage move differences, continuation rotations, pair-order changes, and deterministic factual explanation codes
-- backward-compatible solve API fields exposing F2L pair traces, move ranges, snapshots, orientations, case facts, selection evidence, and route comparisons
+- solve API fields exposing F2L pair traces, move ranges, snapshots, orientations, case facts, selection evidence, and route comparisons
 - frontend F2L pair cards with deterministic explanation tags and individual pair-level cube playback
-- nullable JSONB persistence for F2L traces and route comparisons in saved Fast/Optimized solutions
+- required F2L trace JSONB persistence and nullable Fast-versus-Optimized comparison metadata in saved solutions
 - versioned canonical F2L, OLL, and PLL JSON corpora under `src/main/resources/algorithms/` shared by solver loading and the left-panel Algorithms tab
-- read-only admin `/api/algorithms` catalog with phase, slot, status, and text filters, derived signatures, copy actions, expandable details, and cube previews; `/api/algorithms/f2l` remains a compatibility route
+- read-only admin `/api/algorithms` catalog with phase, slot, status, and text filters, derived signatures, copy actions, expandable details, and cube previews
 - admin-only Algorithms tab with a compact responsive row list for F2L setup/insert, OLL, and PLL cases
 - AUF-only OLL and PLL lookup; all 24 frame variants are indexed at startup
 - bounded Fast and Optimized solve queues with cancellation support
@@ -63,7 +63,8 @@ Implemented:
 - versioned PostgreSQL schema migrations through Flyway
 - pooled PostgreSQL connections and aggregate-based solve statistics
 - Java HTTP API and Vite/React frontend
-- 3D cube playback in the frontend through `cubing.js`
+- application-owned Three.js cube previews and playback driven by one authoritative cubie/sticker model, with WCA/cubing.js-compatible face, wide, slice, and rotation notation, fixed-camera rendering, setup-state reconstruction, sequential animation, and a WebGL fallback
+- a development-only, lazy-loaded cubing.js 2D reference with deterministic prefix stepping for comparing setup and stage playback; production renders only the custom Three.js player
 
 Known limitations:
 
@@ -71,10 +72,8 @@ Known limitations:
 - F2L is database-only in production and fails fast with a diagnostic context when a case is missing.
 - Temporary regression-only F2L seed cases from the pre-database-fallback transition have been removed; uncovered real-world cases now surface as deliberate diagnostics for corpus review.
 - Color-neutral Fast/Optimized evaluation can still fail if every shortlisted cross baseline reaches an uncovered F2L route after recovery; the diagnostic includes the phase, target slot, preserved slots, and signature.
-- Existing saved rows without metadata continue to use the flattened stage display; new rows persist trace and comparison metadata.
 - Production-like Docker/browser verification should be rerun after changes to persisted pair playback, worker assets, static serving, or the Algorithms tab.
 - Optimized F2L can be slower than fast mode on some scrambles because it evaluates more candidate lines before choosing a result.
-- Legacy anonymous history is preserved during migration but is not automatically claimed by newly registered accounts.
 
 ## Requirements
 
@@ -146,15 +145,13 @@ The server exposes:
 - `PUT /api/solves/{id}/solutions/{mode}`
 - `GET /api/stats`
 - `GET /api/algorithms`
-- `GET /api/algorithms/f2l` (backward-compatible F2L-only catalog)
-- `GET /api/health`
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
 - static frontend files from `frontend/dist` when a frontend build exists
 
-Postgres remains optional for anonymous solver API calls. Accounts, authenticated job ownership, history, and statistics require `DATABASE_URL`. When configured, Flyway applies versioned schema migrations during startup and the server fails clearly if migration cannot complete.
+Postgres remains optional for anonymous solver API calls. Accounts, authenticated job ownership, history, and statistics require `DATABASE_URL`. When configured, Flyway applies the initial schema during startup and the server fails clearly if initialization cannot complete. This pre-deployment schema is a fresh-start baseline: reset any prior local database before upgrading to it.
 
 Set `ADMIN_EMAIL` to bootstrap an administrator. The matching account is promoted to `admin` during startup and newly registered accounts with that exact email are also assigned the admin role. All other registrations default to `user`; the role is never accepted from the registration request.
 
@@ -217,7 +214,7 @@ The default port is `8080`. To change it:
 mvn -q compile exec:java -Dexec.mainClass=server.ApiServerMain -Dserver.port=9090
 ```
 
-`GET /api/health/live` reports process liveness. `GET /api/health/ready` and the compatibility endpoint `GET /api/health` report database readiness and return `503` when a configured database is unavailable.
+`GET /api/health/live` reports process liveness. `GET /api/health/ready` reports database readiness and returns `503` when a configured database is unavailable.
 
 Useful server tuning properties:
 
@@ -296,7 +293,9 @@ npm run dev
 ```
 
 The Vite app proxies `/api` to `http://localhost:8080`, so run the Java API server at the same time.
-The cube visualization uses `cubing.js` and can animate the full solution or individual CFOP stages.
+The cube visualization uses an application-owned Three.js renderer backed by one logical cubie/sticker model. Setup algorithms are applied from solved state before meshes are built, completed moves snap back to the logical model, and facelets are derived from that same state. Backend and frontend notation follows the WCA/cubing.js convention for face, prime, double, wide, `M/E/S`, and `x/y/z` moves. The fixed camera, sequential animation, responsive sizing, and graceful WebGL fallback remain application-owned.
+
+In development builds, solution playback also exposes a lazy-loaded cubing.js 2D reference. Reset/Previous/Next compare an identical setup plus algorithm prefix without autoplay ambiguity, while **Play custom** exercises the normal animation path. The reference panel is excluded from production; cubing.js remains a production dependency only for scramble generation and worker-safe scramble support.
 
 Run the deterministic browser authentication tests with:
 
@@ -304,7 +303,7 @@ Run the deterministic browser authentication tests with:
 npm run test:e2e
 ```
 
-The Playwright tests mock the API and cover registration, login errors, session restoration, logout, protected history, and session expiry.
+The Playwright tests mock the API and cover registration, login errors, session restoration, logout, protected history, session expiry, catalog previews, and solution/stage playback setup.
 
 Current frontend behavior:
 
@@ -383,6 +382,8 @@ mvn -q -Df2l.debug=true -Df2l.debug.verbose=true compile exec:java -Dexec.mainCl
 ```
 
 Missing F2L database cases fail immediately with the missing phase, slot, frame, and signature context so they can be seeded and reviewed deliberately. Before reporting a miss, F2L tries each slot-specific verified recovery trigger (`R U R'`, `L' U' L`, `R' U' R`, or `L U L'`) and accepts it only when it preserves the cross/protected pairs and exposes another database route.
+
+Optimized F2L search is bounded by both a production time budget and an internal state limit. For diagnostics, use `-Df2l.optimized.budget-seconds=60`; use a negative value only with `-Df2l.diagnostic=true` for an isolated unlimited-budget run. Search progress reports visited states, duplicate/pruned routes, frontier depth, and lookup/validation timings.
 
 ## Notation Support
 

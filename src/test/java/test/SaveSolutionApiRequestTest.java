@@ -31,6 +31,15 @@ public class SaveSolutionApiRequestTest {
         ));
     }
 
+    @Test
+    void constructor_shouldRequireF2LTraceMetadata() {
+        assertThrows(IllegalArgumentException.class, () -> new SaveSolutionApiRequest(
+                "CN", "U", "optimized", 121, 14, "[FR]", 52, true, 42.5,
+                "z2 R", 1, true, "ok", "R U", 3, true, "ok", "R U", 3, true, "ok",
+                "U", 1, true, "ok", null, null
+        ));
+    }
+
     private static SaveSolutionApiRequest validRequest(String mode) {
         return validRequestWithTotalMoves(52, mode);
     }
@@ -65,7 +74,9 @@ public class SaveSolutionApiRequestTest {
                 "U",
                 1,
                 true,
-                "ok"
+                "ok",
+                "{\"traceComplete\":true,\"pairs\":[]}",
+                null
         );
     }
 }

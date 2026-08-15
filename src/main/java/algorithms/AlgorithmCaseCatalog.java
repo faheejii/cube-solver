@@ -100,13 +100,12 @@ public final class AlgorithmCaseCatalog {
 
         var entries = new ArrayList<CatalogEntry>();
         for (var setupCase : setupDatabase.allCases()) {
-            var baseName = baseName(setupCase.name());
-            var definition = sourceByKey.get(baseName + "|" + setupCase.sourceSetup());
+            var definition = sourceByKey.get(setupCase.name() + "|" + setupCase.sourceSetup());
             if (definition == null) {
                 throw new IllegalStateException("Missing catalog definition for setup case " + setupCase.name());
             }
             entries.add(new CatalogEntry(
-                    "setup", setupCase.name(), setupCase.insertSlot(), setupCase.preservedSlots(),
+                    "setup", setupCase.name(), null, setupCase.nonPreservedSlot(), setupCase.preservedSlots(),
                     setupCase.signature(), setupCase.algorithm().toString(),
                     setupCase.sourceSetup().toString(), setupCase.sourceSetup().toString(),
                     definition.status(), definition.notes()
@@ -122,7 +121,7 @@ public final class AlgorithmCaseCatalog {
             insertDatabase.validate();
             for (var insertCase : insertDatabase.allCases()) {
                 entries.add(new CatalogEntry(
-                        "insert", insertCase.name(), insertCase.insertSlot(), insertCase.preservedSlots(),
+                        "insert", insertCase.name(), insertCase.insertSlot(), null, insertCase.preservedSlots(),
                         insertCase.signature(), insertCase.algorithm().toString(),
                         null, null, definition.status(), definition.notes()
                 ));
@@ -137,7 +136,7 @@ public final class AlgorithmCaseCatalog {
             database.validate();
             var ollCase = database.allCases().iterator().next();
             entries.add(new CatalogEntry(
-                    "oll", ollCase.name(), null, null, ollCase.signature(),
+                    "oll", ollCase.name(), null, null, null, ollCase.signature(),
                     ollCase.algorithm().toString(), null, ollCase.algorithm().inverse().toString(),
                     definition.status(), definition.notes()
             ));
@@ -150,7 +149,7 @@ public final class AlgorithmCaseCatalog {
             database.register(definition.algorithm(), definition.name());
             var pllCase = database.allCases().iterator().next();
             entries.add(new CatalogEntry(
-                    "pll", pllCase.name(), null, null, pllCase.signature(),
+                    "pll", pllCase.name(), null, null, null, pllCase.signature(),
                     pllCase.algorithm().toString(), null, pllCase.algorithm().inverse().toString(),
                     definition.status(), definition.notes()
             ));
@@ -302,6 +301,7 @@ public final class AlgorithmCaseCatalog {
             String phase,
             String name,
             F2LSlot slot,
+            F2LSlot nonPreservedSlot,
             cfop.F2LPreservationMask preservedSlots,
             Object signature,
             String algorithm,

@@ -48,13 +48,13 @@ public class OrientedCubeTest {
     }
 
     @Test
-    void sliceTurnsShouldPreserveEMoveTableDirectionWhenMappedFromM() {
+    void sliceTurnsShouldMapMToStandardEPrimeDirection() {
         var orientation = new CubeOrientationKey(Face.B, Face.D, Face.R).toOrientation();
         var orientedCube = new OrientedCube(new CubeState(), orientation);
         var expected = new CubeState();
 
         orientedCube.applyMove(Move.M);
-        MoveApplier.applyMove(expected, Move.E);
+        MoveApplier.applyMove(expected, Move.E_PRIME);
 
         assertSameState(expected, orientedCube.cubeState());
     }

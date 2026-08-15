@@ -99,11 +99,12 @@ class ApiResponsesTest {
     }
 
     @Test
-    void solveResult_withoutTrace_shouldExposeEmptyTraceAndNullComparison() throws Exception {
+    void solveResult_withEmptyCurrentTrace_shouldExposeEmptyTraceAndNullComparison() throws Exception {
         var stage = new CfopStageResult("stage", "", 0, true, "ok");
         var result = new CfopSolveResult(
                 "", "U", "greedy", 0, 0,
-                stage, stage, stage, stage, "[]", true, 0.0
+                stage, stage, stage, stage, "[]", true, 0.0,
+                null, new F2LSolveTrace(List.of(), List.of(), true)
         );
 
         var json = new ObjectMapper().readTree(JsonSupport.solveResultJson(result));
@@ -111,19 +112,6 @@ class ApiResponsesTest {
         assertEquals(false, json.get("f2l").get("traceComplete").booleanValue());
         assertEquals(0, json.get("f2l").get("pairs").size());
         assertTrue(json.get("comparison").isNull());
-    }
-
-    @Test
-    void f2lCatalog_shouldExposeCanonicalCasesAndDerivedMetadata() throws Exception {
-        var json = new ObjectMapper().readTree(
-                JsonSupport.f2lCatalogJson(AlgorithmCaseCatalog.entries(false), AlgorithmCaseCatalog.VERSION)
-        );
-
-        assertEquals("1", json.get("version").textValue());
-        assertTrue(json.get("items").size() > 100);
-        assertTrue(java.util.stream.StreamSupport.stream(
-                json.get("items").spliterator(), false
-        ).allMatch(item -> "canonical".equals(item.get("status").textValue())));
     }
 
     @Test

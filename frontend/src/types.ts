@@ -95,9 +95,9 @@ export type SolveResponse = {
     f2lInsertCaseCount: number;
     cross: SolveStage;
     f2l: SolveStage & {
-        traceComplete?: boolean;
-        pairAlgorithmMatchesStage?: boolean;
-        pairs?: F2LPair[];
+        traceComplete: boolean;
+        pairAlgorithmMatchesStage: boolean;
+        pairs: F2LPair[];
     };
     oll: SolveStage;
     pll: SolveStage;
@@ -117,10 +117,11 @@ export type SolveRequest = {
 export type F2LAlgorithmCatalogEntry = {
     phase: "setup" | "insert";
     name: string;
-    slot: string;
+    slot: string | null;
+    nonPreservedSlot: string | null;
     preservedSlots: string[];
     signature: {
-        kind: "f2l";
+        kind: "f2l" | "f2l-setup";
         cornerPosition: string;
         cornerOrientation: number;
         edgePosition: string;
@@ -137,6 +138,7 @@ export type LastLayerAlgorithmCatalogEntry = {
     phase: "oll" | "pll";
     name: string;
     slot: null;
+    nonPreservedSlot: null;
     preservedSlots: string[];
     signature: {
         kind: "oll" | "pll";
@@ -319,6 +321,6 @@ export type SaveSolutionRequest = {
     pllMoves: number;
     pllSolved: boolean;
     pllStatus: string;
-    f2lTraceJson?: string | null;
+    f2lTraceJson: string;
     comparisonJson?: string | null;
 };

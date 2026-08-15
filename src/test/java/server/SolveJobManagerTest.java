@@ -8,6 +8,7 @@ import solver.CfopSolveRequest;
 import solver.CfopSolveResult;
 import solver.CfopSolveService;
 import solver.CfopStageResult;
+import solver.F2LSolveTrace;
 import solver.SolveCancellation;
 import solver.SolveDeadlineExceededException;
 
@@ -15,6 +16,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -359,7 +361,9 @@ class SolveJobManagerTest {
                     solved,
                     "[FR, FL, BL, BR]",
                     true,
-                    1.0
+                    1.0,
+                    null,
+                    new F2LSolveTrace(List.of(), List.of(), true)
             );
         }
     }

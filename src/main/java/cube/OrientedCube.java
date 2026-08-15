@@ -61,8 +61,8 @@ public class OrientedCube {
         switch (move) {
             case RW, RW2, RW_PRIME -> applyLogicalWideComponents(move, Move.R, Move.M, true);
             case LW, LW2, LW_PRIME -> applyLogicalWideComponents(move, Move.L, Move.M, false);
-            case UW, UW2, UW_PRIME -> applyLogicalWideComponents(move, Move.U, Move.E, false);
-            case DW, DW2, DW_PRIME -> applyLogicalWideComponents(move, Move.D, Move.E, true);
+            case UW, UW2, UW_PRIME -> applyLogicalWideComponents(move, Move.U, Move.E, true);
+            case DW, DW2, DW_PRIME -> applyLogicalWideComponents(move, Move.D, Move.E, false);
             case FW, FW2, FW_PRIME -> applyLogicalWideComponents(move, Move.F, Move.S, false);
             case BW, BW2, BW_PRIME -> applyLogicalWideComponents(move, Move.B, Move.S, true);
             default -> throw new IllegalArgumentException("Not a wide move: " + move);
