@@ -5,8 +5,34 @@ import cube.CubeOrientation;
 import cube.CubeState;
 import cube.Edge;
 import cube.Face;
+import io.CubeConverter;
+import io.FaceletState;
 
 public final class F2LCaseSignatureExtractor {
+    private static final StickerRef[][] CORNER_FACELETS = {
+            {sticker(Face.U, 8), sticker(Face.R, 0), sticker(Face.F, 2)},
+            {sticker(Face.U, 6), sticker(Face.F, 0), sticker(Face.L, 2)},
+            {sticker(Face.U, 0), sticker(Face.L, 0), sticker(Face.B, 2)},
+            {sticker(Face.U, 2), sticker(Face.B, 0), sticker(Face.R, 2)},
+            {sticker(Face.D, 2), sticker(Face.F, 8), sticker(Face.R, 6)},
+            {sticker(Face.D, 0), sticker(Face.L, 8), sticker(Face.F, 6)},
+            {sticker(Face.D, 6), sticker(Face.B, 8), sticker(Face.L, 6)},
+            {sticker(Face.D, 8), sticker(Face.R, 8), sticker(Face.B, 6)}
+    };
+    private static final StickerRef[][] EDGE_FACELETS = {
+            {sticker(Face.U, 5), sticker(Face.R, 1)},
+            {sticker(Face.U, 7), sticker(Face.F, 1)},
+            {sticker(Face.U, 3), sticker(Face.L, 1)},
+            {sticker(Face.U, 1), sticker(Face.B, 1)},
+            {sticker(Face.D, 5), sticker(Face.R, 7)},
+            {sticker(Face.D, 1), sticker(Face.F, 7)},
+            {sticker(Face.D, 3), sticker(Face.L, 7)},
+            {sticker(Face.D, 7), sticker(Face.B, 7)},
+            {sticker(Face.F, 5), sticker(Face.R, 3)},
+            {sticker(Face.F, 3), sticker(Face.L, 5)},
+            {sticker(Face.B, 5), sticker(Face.L, 3)},
+            {sticker(Face.B, 3), sticker(Face.R, 5)}
+    };
     private F2LCaseSignatureExtractor() {
     }
 
@@ -30,7 +56,7 @@ public final class F2LCaseSignatureExtractor {
 
         return new F2LCaseSignature(
                 mapCornerPosition(rawCornerPosition, orientation),
-                cube.cornerOri[rawCornerPosition.ordinal()],
+                cornerOrientation(cube, rawCornerPosition, targetCorner, orientation),
                 mapEdgePosition(rawEdgePosition, orientation),
                 edgeOrientation(cube, rawEdgePosition, targetEdge, orientation)
         );
@@ -76,13 +102,42 @@ public final class F2LCaseSignatureExtractor {
     }
 
     private static int edgeOrientation(CubeState cube, Edge rawPosition, Edge targetEdge, CubeOrientation orientation) {
-        var logicalTargetFaces = edgeFaces(mapEdgePosition(targetEdge, orientation));
-        var edgePiece = Edge.values()[cube.edgePerm[rawPosition.ordinal()]];
-        var physicalPieceFaces = edgeFaces(edgePiece);
-        int pieceFaceIndex = Math.floorMod(-cube.edgeOri[rawPosition.ordinal()], 2);
-        var logicalStickerOnFirstPositionFace = orientation.logicalFaceOf(physicalPieceFaces[pieceFaceIndex]);
+        FaceletState facelets = CubeConverter.toFaceletStateAllowingCenterParity(cube);
+        var logicalPositionFaces = edgeFaces(mapEdgePosition(rawPosition, orientation));
+        var logicalTargetFirstColor = orientation.logicalFaceOf(edgeFaces(targetEdge)[0]);
+        var refs = EDGE_FACELETS[rawPosition.ordinal()];
+        for (var ref : refs) {
+            var logicalColor = orientation.logicalFaceOf(facelets.getSticker(ref.face(), ref.index()));
+            if (logicalColor == logicalTargetFirstColor) {
+                return orientation.logicalFaceOf(ref.face()) == logicalPositionFaces[0] ? 0 : 1;
+            }
+        }
+        throw new IllegalStateException("Edge is missing its target sticker: " + rawPosition);
+    }
 
-        return logicalStickerOnFirstPositionFace == logicalTargetFaces[0] ? 0 : 1;
+    /** Corner orientation must be expressed in the current logical frame. */
+    private static int cornerOrientation(
+            CubeState cube,
+            Corner rawPosition,
+            Corner targetCorner,
+            CubeOrientation orientation
+    ) {
+        FaceletState facelets = CubeConverter.toFaceletStateAllowingCenterParity(cube);
+        var refs = CORNER_FACELETS[rawPosition.ordinal()];
+        var logicalPositionFaces = cornerFaces(mapCornerPosition(rawPosition, orientation));
+        var logicalTargetUpDownColor = orientation.logicalFaceOf(cornerFaces(targetCorner)[0]);
+        for (int index = 0; index < refs.length; index++) {
+            var ref = refs[index];
+            var color = facelets.getSticker(ref.face(), ref.index());
+            var logicalColor = orientation.logicalFaceOf(color);
+            if (logicalColor == logicalTargetUpDownColor) {
+                var logicalPositionFace = orientation.logicalFaceOf(ref.face());
+                for (int orientationIndex = 0; orientationIndex < logicalPositionFaces.length; orientationIndex++) {
+                    if (logicalPositionFaces[orientationIndex] == logicalPositionFace) return orientationIndex;
+                }
+            }
+        }
+        throw new IllegalStateException("Corner is missing a logical U/D sticker: " + rawPosition);
     }
 
     private static Edge mapEdgePosition(Edge rawPosition, CubeOrientation orientation) {
@@ -173,6 +228,13 @@ public final class F2LCaseSignatureExtractor {
     }
 
     private record TargetPair(Corner corner, Edge edge) {
+    }
+
+    private record StickerRef(Face face, int index) {
+    }
+
+    private static StickerRef sticker(Face face, int index) {
+        return new StickerRef(face, index);
     }
 
 }

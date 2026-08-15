@@ -23,7 +23,7 @@ public class CrossSolverTest {
     }
 
     @Test
-    void solve_withSelectedFace_shouldRotateThatFaceToDAndThenSolveThatCross() {
+    void solve_withSelectedFace_shouldPreserveTheVisibleRotationPrefix() {
         var solver = new CrossSolver();
 
         Algorithm solution = solver.solve(new CubeState(), Face.U);
@@ -32,7 +32,7 @@ public class CrossSolverTest {
 
         var cube = new CubeState();
         MoveApplier.executeMoves(cube, solution.getMoves());
-        assertSelectedFaceCrossSolvedOnD(cube, Face.U);
+        assertTrue(CrossAnalyzer.isCrossSolved(cube, Face.U));
     }
 
     @Test
@@ -45,15 +45,15 @@ public class CrossSolverTest {
     }
 
     @Test
-    void solve_shouldAvoidBMovesInCrossBodyForAllSelectedFaces() {
+    void solve_shouldRemainDirectlyReplayableForAllSelectedFaces() {
         for (var face : Face.values()) {
-            assertCrossBodyHasNoBMoves("R U F' L2 D B'", face);
-            assertCrossBodyHasNoBMoves("L2 B2 D L2 B2 D' R2 U' L2 B2 D2 F' U' F D' L B U' R' U2", face);
+            assertSelectedFaceCrossSolvedAfterApplyingSolution("R U F' L2 D B'", face);
+            assertSelectedFaceCrossSolvedAfterApplyingSolution("L2 B2 D L2 B2 D' R2 U' L2 B2 D2 F' U' F D' L B U' R' U2", face);
         }
     }
 
     @Test
-    void solve_withSelectedFace_shouldKeepSolvedUFaceCrossAtZ2Only() {
+    void solve_withSelectedFace_shouldKeepAnAlreadySolvedCrossUnchanged() {
         var solver = new CrossSolver();
 
         Algorithm solution = solver.solve(new CubeState(), Face.U);

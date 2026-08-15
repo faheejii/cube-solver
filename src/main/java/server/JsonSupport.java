@@ -75,6 +75,7 @@ final class JsonSupport {
                     .append("\"phase\":\"").append(escape(entry.phase())).append("\",")
                     .append("\"name\":\"").append(escape(entry.name())).append("\",")
                     .append("\"slot\":").append(entry.slot() == null ? "null" : "\"" + entry.slot().name() + "\"").append(',')
+                    .append("\"nonPreservedSlot\":").append(entry.nonPreservedSlot() == null ? "null" : "\"" + entry.nonPreservedSlot().name() + "\"").append(',')
                     .append("\"preservedSlots\":[");
             var preservedSlots = entry.preservedSlots() == null ? java.util.List.<cfop.F2LSlot>of() : entry.preservedSlots().slots();
             for (int slotIndex = 0; slotIndex < preservedSlots.size(); slotIndex++) {
@@ -93,11 +94,13 @@ final class JsonSupport {
         return builder.append("]}").toString();
     }
 
-    static String f2lCatalogJson(java.util.List<AlgorithmCaseCatalog.CatalogEntry> entries, String version) {
-        return algorithmCatalogJson(entries.stream().filter(entry -> "setup".equals(entry.phase()) || "insert".equals(entry.phase())).toList(), version);
-    }
-
     private static String catalogSignatureJson(Object signature) {
+        if (signature instanceof cfop.F2LSetupSignature setup) {
+            return "{\"kind\":\"f2l-setup\",\"cornerPosition\":\"" + setup.cornerPosition()
+                    + "\",\"cornerOrientation\":" + setup.cornerOrientation()
+                    + ",\"edgePosition\":\"" + setup.edgePosition()
+                    + "\",\"edgeOrientation\":" + setup.edgeOrientation() + "}";
+        }
         if (signature instanceof cfop.F2LCaseSignature f2l) {
             return "{\"kind\":\"f2l\",\"cornerPosition\":\"" + f2l.cornerPosition()
                     + "\",\"cornerOrientation\":" + f2l.cornerOrientation()
@@ -321,10 +324,10 @@ final class JsonSupport {
     }
 
     static String f2lStageJson(CfopStageResult stage, String metadataJson) {
-        var metadata = isJsonObject(metadataJson)
-                ? metadataJson
-                : "{\"traceComplete\":false,\"pairs\":[]}";
-        return appendMetadata(stageJson(stage), metadata);
+        if (!isJsonObject(metadataJson)) {
+            throw new IllegalArgumentException("f2l trace metadata must be a JSON object");
+        }
+        return appendMetadata(stageJson(stage), metadataJson);
     }
 
     private static String f2lStageJson(CfopStageResult stage, F2LSolveTrace trace) {
@@ -332,9 +335,7 @@ final class JsonSupport {
     }
 
     static String f2lTraceJson(CfopStageResult stage, F2LSolveTrace trace) {
-        if (trace == null) {
-            return "{\"traceComplete\":false,\"pairs\":[]}";
-        }
+        java.util.Objects.requireNonNull(trace, "trace");
         var builder = new StringBuilder("{");
         builder.append("\"traceComplete\":").append(trace.hasCompletePairTrace())
                 .append(",\"pairAlgorithmMatchesStage\":")

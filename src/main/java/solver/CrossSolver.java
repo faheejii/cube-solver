@@ -41,6 +41,9 @@ public class CrossSolver {
 
     public Algorithm solve(CubeState cube, Face crossFace) {
         var orientation = OrientationFrames.orientedFrameFor(crossFace);
+        // The search runs in the selected cross frame. Keep that frame change
+        // in the public algorithm: subsequent moves are interpreted from the
+        // rotated user view by cubing.js and by OrientedCube alike.
         return OrientationFrames.orientationToD(crossFace)
                 .concat(solveForTargetCross(cube.copy(), orientation, targetCrossForOrientation(orientation)));
     }
