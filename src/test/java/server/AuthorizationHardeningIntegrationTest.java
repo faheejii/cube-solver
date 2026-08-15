@@ -47,6 +47,10 @@ class AuthorizationHardeningIntegrationTest {
                 var user = new TestClient();
                 var admin = new TestClient();
 
+                assertEquals(200, get(anonymous, baseUri.resolve("/api/health/live")).statusCode());
+                assertEquals(200, get(anonymous, baseUri.resolve("/api/health/ready")).statusCode());
+                assertEquals(404, get(anonymous, baseUri.resolve("/api/health")).statusCode());
+
                 assertError(get(anonymous, baseUri.resolve("/api/algorithms")), 401, "Authentication required");
 
                 var userRegistration = register(user, baseUri, userEmail, "admin");
@@ -64,9 +68,7 @@ class AuthorizationHardeningIntegrationTest {
                 assertEquals(200, catalog.statusCode(), catalog.body());
                 assertTrue(JSON.readTree(catalog.body()).get("items").size() > 0);
 
-                var f2lCatalog = get(admin, baseUri.resolve("/api/algorithms/f2l"));
-                assertEquals(200, f2lCatalog.statusCode(), f2lCatalog.body());
-                assertTrue(JSON.readTree(f2lCatalog.body()).get("items").size() > 0);
+                assertEquals(404, get(admin, baseUri.resolve("/api/algorithms/f2l")).statusCode());
             } finally {
                 server.stop(0);
                 cubeServer.close();
