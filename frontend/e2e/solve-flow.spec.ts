@@ -27,7 +27,7 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await expect(dialog.getByRole("region", {name: "Cube animation"})).toBeVisible();
 
         await dialog.locator('[aria-label="Animation stage"]').getByRole("button", {name: "OLL"}).click();
-        await expect(dialog.locator("twisty-player")).toHaveAttribute("data-playback-alg", "F R U R' U' F'");
+        await expect(dialog.locator("[data-playback-alg]")).toHaveAttribute("data-playback-alg", "F R U R' U' F'");
         await dialog.getByRole("button", {name: "Close solution"}).click();
         await expect(dialog).toHaveCount(0);
     });

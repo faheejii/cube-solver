@@ -30,7 +30,7 @@ test.describe("Algorithms access and catalog flow", () => {
         const preview = page.getByRole("dialog", {name: "OLL Sune preview"});
         await expect(preview).toBeVisible();
         await expect(preview.getByText("Setup state:")).toBeVisible();
-        await expect(preview.locator("twisty-player")).toHaveAttribute("experimental-setup-alg", "R U R' U R U2 R'");
+        await expect(preview.locator("[data-preview-setup]")).toHaveAttribute("data-preview-setup", "R U R' U R U2 R'");
         await preview.getByRole("button", {name: "Close"}).click();
         await expect(preview).toHaveCount(0);
 
