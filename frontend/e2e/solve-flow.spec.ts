@@ -42,15 +42,15 @@ test.describe("timer, solve, history, and playback production flows", () => {
 
         const dialog = page.getByRole("dialog", {name: "Solve solution"});
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByText(historyEntry.scramble)).toBeVisible();
+        await expect(dialog.locator(".modal-scramble")).toHaveText(historyEntry.scramble);
         await expect(dialog.getByText("Playback")).toBeVisible();
         expect(api.requests.some((request) => request.pathname === "/api/solves/1" && request.method === "GET")).toBe(true);
 
         await dialog.locator(".solution-stage-row").filter({hasText: "F2L"}).getByRole("button").click();
         await expect(dialog.locator(".solution-stage-row").filter({hasText: "F2L"}).getByRole("button")).toHaveAttribute("aria-expanded", "true");
         await dialog.locator('[aria-label="Animation stage"]').getByRole("button", {name: "F2L"}).click();
-        await expect(dialog.locator("twisty-player")).toHaveAttribute("experimental-setup-alg", "R U R' U' R");
-        await expect(dialog.locator("twisty-player")).toHaveAttribute("data-playback-alg", "U R U'");
+        await expect(dialog.locator("[data-preview-setup]")).toHaveAttribute("data-preview-setup", "R U R' U' R");
+        await expect(dialog.locator("[data-playback-alg]")).toHaveAttribute("data-playback-alg", "U R U'");
         await dialog.getByRole("button", {name: "Close solution"}).click();
     });
 });

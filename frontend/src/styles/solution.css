@@ -127,7 +127,7 @@
 }
 
 .solution-result-layout > .visualizer-section {
-    min-height: 620px;
+    min-height: 420px;
 }
 
 .solution-stage-rail {
@@ -411,5 +411,4 @@
     color: var(--text-soft);
     font-size: 0.66rem;
 }
-
 

@@ -1,0 +1,108 @@
+.custom-cube-preview {
+    display: grid;
+    place-items: center;
+    width: 100%;
+    height: 100%;
+    min-height: 220px;
+    background: transparent;
+    position: relative;
+    overflow: hidden;
+}
+
+.custom-cube-preview canvas {
+    display: block;
+    width: min(100%, 220px);
+    height: auto;
+    aspect-ratio: 1;
+}
+
+/* Only the solution player opts into orbiting. Keep catalog and scramble previews passive. */
+.custom-cube-preview[data-interactive-view="true"] {
+    cursor: grab;
+}
+
+.custom-cube-preview[data-interactive-view="true"] canvas {
+    cursor: grab;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.custom-cube-preview[data-interactive-view="true"] canvas:active {
+    cursor: grabbing;
+}
+
+.custom-cube-preview[data-interactive-view="true"]:focus-visible {
+    outline: 2px solid var(--blue-bright);
+    outline-offset: 3px;
+}
+
+.cube-preview-fallback { color: var(--muted); font-size: .75rem; text-align: center; padding: 16px; }
+
+.custom-cube-preview.compact {
+    min-height: 160px;
+}
+
+.reference-cube-player {
+    border: 1px dashed rgba(145, 165, 195, 0.45);
+    border-radius: 15px;
+    padding: 12px;
+    background: rgba(15, 22, 34, 0.72);
+}
+
+.reference-cube-heading,
+.reference-cube-metadata {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: var(--muted);
+    font-family: "Space Mono", monospace;
+    font-size: 0.67rem;
+}
+
+.reference-cube-heading strong {
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.reference-cube-metadata {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+}
+
+.reference-cube-status {
+    min-height: 220px;
+    display: grid;
+    place-items: center;
+    margin: 12px 0;
+    color: var(--muted);
+    text-align: center;
+}
+
+.reference-cube-status.error {
+    color: var(--danger, #ef7777);
+}
+
+.reference-cube-loading {
+    border: 1px dashed rgba(145, 165, 195, 0.45);
+    border-radius: 15px;
+    padding: 24px;
+    color: var(--muted);
+    text-align: center;
+}
+
+@media (max-width: 640px) {
+    .reference-cube-heading,
+    .reference-cube-metadata {
+        display: block;
+    }
+
+    .reference-cube-heading span,
+    .reference-cube-metadata span {
+        display: block;
+        margin-top: 6px;
+    }
+}

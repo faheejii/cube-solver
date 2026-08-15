@@ -1,7 +1,7 @@
 import {Clipboard, LoaderCircle, Search} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
-import "cubing/twisty";
 import {fetchAlgorithms} from "./api";
+import CubePreview from "./CubePreview";
 import type {AlgorithmCatalogEntry} from "./types";
 
 const PHASES = ["", "setup", "insert", "oll", "pll"];
@@ -123,15 +123,9 @@ export default function AlgorithmsView() {
                             <button className="dashboard-secondary-button compact" type="button" onClick={() => setPreview(null)}>Close</button>
                         </div>
                         <div className="cube-player-shell algorithm-preview-player">
-                            <twisty-player
-                                puzzle="3x3x3"
-                                experimental-setup-alg={preview.previewSetup ?? ""}
-                                alg={preview.algorithm}
-                                background="none"
-                                control-panel="bottom-row"
-                                hint-facelets="none"
-                                camera-latitude="28"
-                                camera-longitude="34"
+                            <CubePreview
+                                setupAlgorithm={preview.previewSetup ?? ""}
+                                algorithm={preview.algorithm}
                             />
                         </div>
                         <p className="algorithm-preview-context">
