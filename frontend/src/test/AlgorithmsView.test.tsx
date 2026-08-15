@@ -61,6 +61,9 @@ describe("AlgorithmsView", () => {
         const preview = await screen.findByRole("dialog", {name: "case-26.1-FR preview"});
         expect(preview).toBeInTheDocument();
         expect(preview).toHaveTextContent("Setup state: R U R' F R' F' R U");
+        const previewSurface = preview.querySelector("[data-preview-setup]");
+        expect(previewSurface).toHaveAttribute("data-preview-setup", "R U R' F R' F' R U");
+        expect(previewSurface).toHaveAttribute("data-preview-alg", "R U' R'");
 
         fireEvent.change(screen.getByRole("combobox", {name: "Algorithm phase"}), {
             target: {value: "insert"},

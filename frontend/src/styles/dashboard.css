@@ -440,7 +440,7 @@
     transform: translateX(-50%);
 }
 
-.scramble-cube twisty-player {
+.scramble-cube .custom-cube-preview {
     position: relative;
     display: block;
     width: 100%;
