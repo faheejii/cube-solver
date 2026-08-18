@@ -7,6 +7,7 @@ import AlgorithmsView from "./AlgorithmsView";
 import DashboardSidebar, {type DashboardView} from "./DashboardSidebar";
 import HistoryView from "./HistoryView";
 import SaveToast from "./SaveToast";
+import SettingsView from "./SettingsView";
 import SolutionResultBody from "./SolutionResultBody";
 import StatisticsRail from "./StatisticsRail";
 import TimerWorkspace from "./TimerWorkspace";
@@ -24,7 +25,8 @@ import {
 } from "./format";
 import {useHistoryData} from "./hooks/useHistoryData";
 import {useSolveProcesses} from "./hooks/useSolveProcesses";
-import {useTimer, type CompletedAttemptSnapshot, type TimerPenalty, type TimerPhase} from "./hooks/useTimer";
+import {useSettings} from "./hooks/useSettings";
+import {INSPECTION_DNF_MS, INSPECTION_PLUS_TWO_MS, useTimer, type CompletedAttemptSnapshot, type TimerPenalty, type TimerPhase} from "./hooks/useTimer";
 import {isTerminalProcess} from "./jobs";
 import type {
     AuthUser,
@@ -49,22 +51,10 @@ const FACE_OPTIONS = [
     {value: "R", label: "R"},
     {value: "CN", label: "Color Neutral"},
 ] as const;
-const INSPECTION_PLUS_TWO_MS = 15_000;
-const INSPECTION_DNF_MS = 17_000;
-
-type Theme = "light" | "dark";
 type SolutionStatus = "idle" | "loading" | "ready" | "error";
 type F2LMode = "greedy" | "optimized";
 type AttemptSaveStatus = "idle" | "saving" | "saved" | "error";
 type ModalStatus = "idle" | "loading" | "ready" | "error";
-
-function initialTheme(): Theme {
-    const savedTheme = window.localStorage.getItem("cube-solver-theme");
-    if (savedTheme === "light" || savedTheme === "dark") {
-        return savedTheme;
-    }
-    return "dark";
-}
 
 export default function App({user, onLogout}: {user: AuthUser; onLogout: () => void}) {
     const [committedScramble, setCommittedScramble] = useState("");
@@ -100,7 +90,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const [modalCandidatesEvaluated, setModalCandidatesEvaluated] = useState(0);
     const [modalBestTotalMoves, setModalBestTotalMoves] = useState(-1);
     const [modalSaving, setModalSaving] = useState(false);
-    const [theme, setTheme] = useState<Theme>(initialTheme);
+    const {settings, updateSettings} = useSettings();
     const requestIdRef = useRef(0);
     const attemptSavingRef = useRef<string | null>(null);
     const completedAttemptRef = useRef<CompletedAttemptSnapshot | null>(null);
@@ -139,6 +129,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         committedScramble,
         crossFace,
         f2lMode,
+        inspectionEnabled: settings.inspectionEnabled,
         clientAttemptId,
         solutionStatus,
         result,
@@ -158,12 +149,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         handleTimerPointerDown,
         handleTimerPointerUp,
     } = timer;
-
-    useEffect(() => {
-        document.documentElement.dataset.theme = theme;
-        document.documentElement.style.colorScheme = theme;
-        window.localStorage.setItem("cube-solver-theme", theme);
-    }, [theme]);
 
     useEffect(() => {
         const overlayOpen = modalStatus !== "idle" || processPreview !== null || timerSolutionOpen;
@@ -198,6 +183,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
             scramble: committedScramble,
             crossFace,
             f2lMode,
+            deadlineSeconds: settings.solveDeadlineSeconds,
         };
 
         void runTrackedSolve(solveRequest, "timer", undefined, (job) => {
@@ -231,7 +217,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 void cancelSolveJob(jobId);
             }
         };
-    }, [committedScramble, crossFace, f2lMode]);
+    }, [committedScramble, crossFace, f2lMode, settings.solveDeadlineSeconds]);
 
     useEffect(() => {
         if (timerPhase !== "stopped" || stoppedElapsedMs === null) {
@@ -349,6 +335,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 scramble: detail.scramble,
                 crossFace: requestedCross,
                 f2lMode: mode,
+                deadlineSeconds: settings.solveDeadlineSeconds,
                 solveId: autoSave ? detail.id : undefined,
                 saveOnComplete: autoSave,
             }, "history", (progress) => {
@@ -553,6 +540,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                     scramble: snapshot.scramble,
                     crossFace: snapshot.crossFace,
                     f2lMode: snapshot.f2lMode,
+                    deadlineSeconds: settings.solveDeadlineSeconds,
                     solveId: savedAttempt.id,
                     saveOnComplete: true,
                 }, "background");
@@ -624,19 +612,13 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         resetTimer();
     }
 
-    function toggleTheme() {
-        setTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
-    }
-
     return (
         <main className={`dashboard-shell view-${activeView}`}>
             <DashboardSidebar
                 activeView={activeView}
-                theme={theme}
                 activeProcessCount={processes.filter((process) => !isTerminalProcess(process)).length}
                 user={user}
                 onViewChange={(view) => setActiveView(view === "algorithms" && user.role !== "admin" ? "timer" : view)}
-                onToggleTheme={toggleTheme}
                 onLogout={onLogout}
             />
 
@@ -713,6 +695,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                         onOpenSolve={(entry) => void openHistorySolution(entry)}
                         onDeleteSolve={(entry) => void handleDeleteSolve(entry)}
                     />
+                ) : activeView === "settings" ? (
+                    <SettingsView settings={settings} onChange={updateSettings}/>
                 ) : (
                     activeView === "algorithms" && user.role === "admin" ? <AlgorithmsView/> : <ActiveSolutionsView
                         processes={processes}

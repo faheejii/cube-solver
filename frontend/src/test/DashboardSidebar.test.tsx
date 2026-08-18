@@ -14,11 +14,9 @@ function renderSidebar(user: AuthUser) {
     return render(
         <DashboardSidebar
             activeView="timer"
-            theme="dark"
             activeProcessCount={0}
             user={user}
             onViewChange={vi.fn()}
-            onToggleTheme={vi.fn()}
             onLogout={vi.fn()}
         />
     );
@@ -33,5 +31,10 @@ describe("DashboardSidebar roles", () => {
     it("shows Algorithms to admins", () => {
         renderSidebar({...baseUser, role: "admin"});
         expect(screen.getByRole("button", {name: "Algorithms"})).toBeInTheDocument();
+    });
+
+    it("shows Settings to every signed-in user", () => {
+        renderSidebar(baseUser);
+        expect(screen.getByRole("button", {name: "Settings"})).toBeInTheDocument();
     });
 });

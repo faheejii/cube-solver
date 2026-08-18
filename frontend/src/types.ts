@@ -161,6 +161,7 @@ export type AlgorithmCatalogResponse = {
 export type F2LAlgorithmCatalogResponse = AlgorithmCatalogResponse;
 
 export type SolveJobRequest = SolveRequest & {
+    deadlineSeconds?: number;
     solveId?: number;
     saveOnComplete?: boolean;
 };

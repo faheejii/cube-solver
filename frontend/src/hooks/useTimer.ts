@@ -28,6 +28,7 @@ type Options = {
     committedScramble: string;
     crossFace: string;
     f2lMode: TimerF2LMode;
+    inspectionEnabled: boolean;
     clientAttemptId: string;
     solutionStatus: TimerSolutionStatus;
     result: SolveResponse | null;
@@ -42,6 +43,7 @@ export function useTimer({
     committedScramble,
     crossFace,
     f2lMode,
+    inspectionEnabled,
     clientAttemptId,
     solutionStatus,
     result,
@@ -121,7 +123,11 @@ export function useTimer({
             beginRunning();
             return;
         }
-        beginInspection();
+        if (inspectionEnabled) {
+            beginInspection();
+        } else {
+            beginRunning();
+        }
     }
 
     function stopTimer() {
@@ -246,6 +252,7 @@ export function useTimer({
         committedScramble,
         crossFace,
         f2lMode,
+        inspectionEnabled,
         finalPenalty,
         inspectionStartedAt,
         isEditingScramble,

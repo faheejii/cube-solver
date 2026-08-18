@@ -4,6 +4,7 @@ import {
     fetchSolveHistory,
     login,
     SESSION_EXPIRED_EVENT,
+    startSolveJob,
 } from "../api";
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -50,5 +51,18 @@ describe("API session handling", () => {
 
         expect(listener).toHaveBeenCalledOnce();
         window.removeEventListener(SESSION_EXPIRED_EVENT, listener);
+    });
+
+    it("sends the configured solve deadline with solve jobs", async () => {
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({id: "job-1"}), {
+            status: 200,
+            headers: {"Content-Type": "application/json"},
+        }));
+
+        await startSolveJob({scramble: "R", crossFace: "U", f2lMode: "greedy", deadlineSeconds: 45});
+
+        expect(fetchMock).toHaveBeenCalledWith("/api/solve-jobs", expect.objectContaining({
+            body: JSON.stringify({scramble: "R", crossFace: "U", f2lMode: "greedy", deadlineSeconds: 45}),
+        }));
     });
 });
