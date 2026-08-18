@@ -1,11 +1,13 @@
 package test;
 
+import api.CreateSolveJobRequest;
 import api.SolveApiRequest;
 import cube.Face;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SolveApiRequestTest {
@@ -28,6 +30,36 @@ public class SolveApiRequestTest {
         var request = new SolveApiRequest("R U R'", "U").toSolveRequest();
 
         assertEquals(solver.F2LMode.GREEDY, request.f2lMode());
+    }
+
+    @Test
+    void deadline_shouldDefaultTo15SecondsWhenOmitted() {
+        var request = new SolveApiRequest("R U R'", "U");
+
+        assertEquals(15L, request.deadlineSecondsOrDefault());
+    }
+
+    @Test
+    void deadline_shouldAcceptConfiguredRange() {
+        assertEquals(5L, new SolveApiRequest("R", "U", null, 5L).deadlineSeconds());
+        assertEquals(120L, new SolveApiRequest("R", "U", null, 120L).deadlineSeconds());
+    }
+
+    @Test
+    void solveJobRequest_shouldCarryDeadlineIntoSolveRequest() {
+        var request = new CreateSolveJobRequest("R", "U", "optimized", null, false, 45L);
+
+        assertEquals(45L, request.solveRequest().deadlineSeconds());
+    }
+
+    @Test
+    void deadline_shouldRejectValuesOutsideSafeRange() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new SolveApiRequest("R", "U", null, 4L));
+        assertThrows(IllegalArgumentException.class,
+                () -> new SolveApiRequest("R", "U", null, 121L));
+        assertThrows(IllegalArgumentException.class,
+                () -> new CreateSolveJobRequest("R", "U", null, null, false, 121L));
     }
 
     @Test
