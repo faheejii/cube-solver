@@ -63,6 +63,7 @@ Implemented:
 - versioned PostgreSQL schema migrations through Flyway
 - pooled PostgreSQL connections and aggregate-based solve statistics
 - Java HTTP API and Vite/React frontend
+- browser-local Settings for the solver processing deadline, 15-second inspection behavior, and theme
 - application-owned Three.js cube previews and playback driven by one authoritative cubie/sticker model, with WCA/cubing.js-compatible face, wide, slice, and rotation notation, fixed-camera rendering, setup-state reconstruction, sequential animation, and a WebGL fallback
 - a development-only, lazy-loaded cubing.js 2D reference with deterministic prefix stepping for comparing setup and stage playback; production renders only the custom Three.js player
 
@@ -316,6 +317,7 @@ Current frontend behavior:
 - supports fixed-face cross solving or color-neutral cross selection
 - supports fast greedy F2L or optimized F2L branch search
 - includes a timer with inspection behavior similar to common cube timers
+- includes a Settings view where the processing deadline can be set from 5 to 120 seconds and inspection can be enabled or disabled; settings apply to new solve requests and are stored in the current browser
 - displays the current scramble on a 3D cube
 - calculates best time, average of 5, average of 12, solve count, and DNF count from saved attempts
 - saves completed attempts to Postgres and advances to the next scramble automatically
@@ -334,6 +336,7 @@ Timer controls:
 - `Space`: arm, start inspection, start the solve, or stop the solve
 - inspection over 15 seconds applies `+2`
 - inspection over 17 seconds applies `DNF`
+- when inspection is disabled, the first timer start begins the solve immediately without inspection penalties
 
 Build the frontend:
 
