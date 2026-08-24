@@ -116,6 +116,7 @@ function ProcessCard({
 }) {
     const active = process.status === "queued" || process.status === "running";
     const optimized = process.request.f2lMode === "optimized";
+    const deepColorNeutral = process.request.deepColorNeutral === true;
 
     return (
         <article className={`process-card status-${process.status}`}>
@@ -145,6 +146,7 @@ function ProcessCard({
                 <span>{f2lModeLabel(process.request.f2lMode)}</span>
                 <span>Cross {crossFaceLabel(process.request.crossFace)}</span>
                 <span>{formatElapsed(process.createdAt, process.updatedAt, active)}</span>
+                {deepColorNeutral ? <span title="Deep color-neutral optimization has a fixed two-minute budget">Deep CN · up to 2m</span> : null}
             </div>
 
             {active ? (
@@ -196,18 +198,27 @@ function ProcessCard({
 }
 
 function progressLabel(process: SolutionProcess, optimized: boolean): string {
+    const deepColorNeutral = process.request.deepColorNeutral === true;
     if (process.status === "queued") {
-        return optimized ? "Waiting for an optimized worker" : "Waiting for a fast worker";
+        return deepColorNeutral
+            ? "Waiting for deep color-neutral worker · up to 2 minutes"
+            : optimized ? "Waiting for an optimized worker" : "Waiting for a fast worker";
     }
     if (process.optimizationBudgetExpired) {
-        return "Optimization budget reached; using best solution found";
+        return deepColorNeutral
+            ? "Deep color-neutral budget reached; using best valid solution"
+            : "Optimization budget reached; using best solution found";
     }
     if (process.phase === "CROSS_EVALUATION" && process.totalCrosses > 0) {
-        return `Screening cross colors ${process.completedCrosses} of ${process.totalCrosses}`;
+        return deepColorNeutral
+            ? `Evaluating cross colors ${process.completedCrosses} of 6`
+            : `Screening cross colors ${process.completedCrosses} of ${process.totalCrosses}`;
     }
     if (process.phase === "BASELINE_COMPARISON" && process.totalCrosses > 0) {
         const face = process.currentCrossFace ? ` (${process.currentCrossFace} cross)` : "";
-        return `Comparing shortlisted colors ${process.completedCrosses} of ${process.totalCrosses}${face}`;
+        return deepColorNeutral
+            ? `Evaluating cross colors ${process.completedCrosses} of 6${face}`
+            : `Comparing shortlisted colors ${process.completedCrosses} of ${process.totalCrosses}${face}`;
     }
     if (process.phase === "BASELINE_BUDGET_REACHED") {
         return "Comparison budget reached; optimizing best result found";
@@ -220,9 +231,11 @@ function progressLabel(process: SolutionProcess, optimized: boolean): string {
         && process.totalOptimizationCandidates > 0) {
         const face = process.currentCrossFace ? ` (${process.currentCrossFace} cross)` : "";
         const rank = `${process.optimizationCandidate} of ${process.totalOptimizationCandidates}`;
-        return process.phase === "F2L_CANDIDATE_GENERATION"
-            ? `Building F2L candidates for optimized result ${rank}${face}`
-            : `Optimizing candidate ${rank}${face}`;
+        return deepColorNeutral
+            ? `Optimizing color-neutral candidate ${rank}${face}`
+            : process.phase === "F2L_CANDIDATE_GENERATION"
+                ? `Building F2L candidates for optimized result ${rank}${face}`
+                : `Optimizing candidate ${rank}${face}`;
     }
     if (optimized) {
         return process.candidatesEvaluated > 0

@@ -27,20 +27,19 @@ import java.util.concurrent.atomic.AtomicLong;
 final class SolveJobManager implements AutoCloseable {
     private static final Logger LOGGER = LoggerFactory.getLogger(SolveJobManager.class);
     private static final int MAX_RETAINED_FINISHED_JOBS = 100;
-    private static final long SOLVE_DEADLINE_NANOS = TimeUnit.SECONDS.toNanos(15);
 
     private final solver.CfopSolveService solveService;
     private final DatabaseManager databaseManager;
     private final SolveHistoryRepository repository;
     private final OperationalMetrics operationalMetrics;
-    private final long solveDeadlineNanos;
+    private final Long solveDeadlineOverrideNanos;
     private final ExecutorService optimizedExecutor;
     private final ExecutorService fastExecutor;
     private final Map<String, JobState> jobsById = new ConcurrentHashMap<>();
     private final ConcurrentLinkedDeque<String> finishedJobIds = new ConcurrentLinkedDeque<>();
 
     SolveJobManager(solver.CfopSolveService solveService, DatabaseManager databaseManager) {
-        this(solveService, databaseManager, SOLVE_DEADLINE_NANOS, new OperationalMetrics());
+        this(solveService, databaseManager, null, new OperationalMetrics());
     }
 
     SolveJobManager(
@@ -56,23 +55,23 @@ final class SolveJobManager implements AutoCloseable {
             DatabaseManager databaseManager,
             OperationalMetrics operationalMetrics
     ) {
-        this(solveService, databaseManager, SOLVE_DEADLINE_NANOS, operationalMetrics);
+        this(solveService, databaseManager, null, operationalMetrics);
     }
 
     private SolveJobManager(
             solver.CfopSolveService solveService,
             DatabaseManager databaseManager,
-            long solveDeadlineNanos,
+            Long solveDeadlineOverrideNanos,
             OperationalMetrics operationalMetrics
     ) {
         this.solveService = solveService;
         this.databaseManager = databaseManager;
         this.repository = new SolveHistoryRepository(databaseManager);
         this.operationalMetrics = operationalMetrics;
-        if (solveDeadlineNanos <= 0) {
-            throw new IllegalArgumentException("solveDeadlineNanos must be positive");
+        if (solveDeadlineOverrideNanos != null && solveDeadlineOverrideNanos <= 0) {
+            throw new IllegalArgumentException("solveDeadlineOverrideNanos must be positive");
         }
-        this.solveDeadlineNanos = solveDeadlineNanos;
+        this.solveDeadlineOverrideNanos = solveDeadlineOverrideNanos;
         this.optimizedExecutor = boundedExecutor("optimized-solve-worker", 1, configuredQueueSize("server.optimized.queue", 4));
         this.fastExecutor = boundedExecutor("fast-solve-worker", 2, configuredQueueSize("server.fast.queue", 16));
     }
@@ -85,6 +84,7 @@ final class SolveJobManager implements AutoCloseable {
     ) {
         var request = apiRequest.toSolveRequest();
         validateSaveRequest(userId, solveId, saveOnComplete);
+        long solveDeadlineNanos = solveDeadlineNanos(apiRequest);
 
         var job = new JobState(
                 UUID.randomUUID().toString(),
@@ -110,6 +110,13 @@ final class SolveJobManager implements AutoCloseable {
             throw new CapacityException("Solve queue is full; try again shortly");
         }
         return job.snapshot();
+    }
+
+    long solveDeadlineNanos(SolveApiRequest apiRequest) {
+        if (solveDeadlineOverrideNanos != null) {
+            return solveDeadlineOverrideNanos;
+        }
+        return TimeUnit.SECONDS.toNanos(apiRequest.effectiveDeadlineSeconds());
     }
 
     JobSnapshot find(String jobId) {
