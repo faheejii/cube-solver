@@ -162,6 +162,7 @@ export type F2LAlgorithmCatalogResponse = AlgorithmCatalogResponse;
 
 export type SolveJobRequest = SolveRequest & {
     deadlineSeconds?: number;
+    deepColorNeutral?: boolean;
     solveId?: number;
     saveOnComplete?: boolean;
 };

@@ -184,6 +184,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
             crossFace,
             f2lMode,
             deadlineSeconds: settings.solveDeadlineSeconds,
+            ...deepColorNeutralRequest(crossFace, f2lMode, settings.deepColorNeutralOptimization),
         };
 
         void runTrackedSolve(solveRequest, "timer", undefined, (job) => {
@@ -217,7 +218,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 void cancelSolveJob(jobId);
             }
         };
-    }, [committedScramble, crossFace, f2lMode, settings.solveDeadlineSeconds]);
+    }, [committedScramble, crossFace, f2lMode, settings.solveDeadlineSeconds, settings.deepColorNeutralOptimization]);
 
     useEffect(() => {
         if (timerPhase !== "stopped" || stoppedElapsedMs === null) {
@@ -336,6 +337,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 crossFace: requestedCross,
                 f2lMode: mode,
                 deadlineSeconds: settings.solveDeadlineSeconds,
+                ...deepColorNeutralRequest(requestedCross, mode, settings.deepColorNeutralOptimization),
                 solveId: autoSave ? detail.id : undefined,
                 saveOnComplete: autoSave,
             }, "history", (progress) => {
@@ -541,6 +543,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                     crossFace: snapshot.crossFace,
                     f2lMode: snapshot.f2lMode,
                     deadlineSeconds: settings.solveDeadlineSeconds,
+                    ...deepColorNeutralRequest(snapshot.crossFace, snapshot.f2lMode, settings.deepColorNeutralOptimization),
                     solveId: savedAttempt.id,
                     saveOnComplete: true,
                 }, "background");
@@ -611,6 +614,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         setTimerSolutionOpen(false);
         resetTimer();
     }
+
+    const deepModalOptimization = isDeepColorNeutralOptimization(modalCrossFace, modalMode, settings.deepColorNeutralOptimization);
 
     return (
         <main className={`dashboard-shell view-${activeView}`}>
@@ -798,7 +803,13 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                 ) : null}
                                 {modalComputing ? (
                                     <p className="modal-message">
-                                        {modalMode === "optimized"
+                                        {deepModalOptimization
+                                            ? modalJobStatus === "queued"
+                                                ? "Deep color-neutral solve queued · up to 2 minutes..."
+                                                : modalCandidatesEvaluated > 0
+                                                    ? `Evaluating color-neutral candidates... ${modalCandidatesEvaluated}/${Math.max(modalCompletedCandidates, 6)} · Best total: ${modalBestTotalMoves < 0 ? "pending" : `${modalBestTotalMoves} moves`}`
+                                                    : `Evaluating all six cross colors... States: ${modalStatesExplored.toLocaleString()} · Best F2L: ${modalBestMoves < 0 ? "pending" : `${modalBestMoves} moves`}`
+                                            : modalMode === "optimized"
                                             ? modalJobStatus === "queued"
                                                 ? "Optimized solve queued..."
                                                 : modalCandidatesEvaluated > 0
@@ -931,6 +942,20 @@ function buildSaveSolutionRequest(
         }),
         comparisonJson: result.comparison ? JSON.stringify(result.comparison) : null,
     };
+}
+
+function deepColorNeutralRequest(
+    crossFace: string,
+    f2lMode: string,
+    enabled: boolean,
+): {deepColorNeutral?: true} {
+    return isDeepColorNeutralOptimization(crossFace, f2lMode, enabled)
+        ? {deepColorNeutral: true}
+        : {};
+}
+
+function isDeepColorNeutralOptimization(crossFace: string, f2lMode: string, enabled: boolean): boolean {
+    return enabled && crossFace.trim().toUpperCase() === "CN" && f2lMode === "optimized";
 }
 
 function savedSolutionResult(scramble: string, saved: SavedSolution): SolveResponse {

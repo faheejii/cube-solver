@@ -17,6 +17,7 @@ describe("settings", () => {
         expect(normalizeSettings({solveDeadlineSeconds: 999, inspectionEnabled: false, theme: "light"})).toMatchObject({
             solveDeadlineSeconds: 120,
             inspectionEnabled: false,
+            deepColorNeutralOptimization: false,
             theme: "light",
         });
         window.localStorage?.setItem(SETTINGS_STORAGE_KEY, "not json");
@@ -30,8 +31,11 @@ describe("settings", () => {
 
         expect(screen.getByRole("heading", {name: "Settings"})).toBeInTheDocument();
         expect(screen.getByRole("switch", {name: "Inspection time"})).toBeChecked();
+        expect(screen.getByRole("switch", {name: "Deep color-neutral optimization"})).not.toBeChecked();
         await user.click(screen.getByRole("switch", {name: "Inspection time"}));
         expect(settings.inspectionEnabled).toBe(false);
-        expect(screen.getByLabelText("Solver processing limit in seconds")).toHaveValue(15);
+        await user.click(screen.getByRole("switch", {name: "Deep color-neutral optimization"}));
+        expect(settings.deepColorNeutralOptimization).toBe(true);
+        expect(screen.getByLabelText("Solution computation time limit in seconds")).toHaveValue(15);
     });
 });

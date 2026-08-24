@@ -9,12 +9,14 @@ export type Theme = "light" | "dark";
 export type AppSettings = {
     solveDeadlineSeconds: number;
     inspectionEnabled: boolean;
+    deepColorNeutralOptimization: boolean;
     theme: Theme;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
     solveDeadlineSeconds: DEFAULT_SOLVE_DEADLINE_SECONDS,
     inspectionEnabled: true,
+    deepColorNeutralOptimization: false,
     theme: "dark",
 };
 
@@ -33,6 +35,9 @@ export function normalizeSettings(value: unknown): AppSettings {
         inspectionEnabled: typeof candidate.inspectionEnabled === "boolean"
             ? candidate.inspectionEnabled
             : DEFAULT_SETTINGS.inspectionEnabled,
+        deepColorNeutralOptimization: typeof candidate.deepColorNeutralOptimization === "boolean"
+            ? candidate.deepColorNeutralOptimization
+            : DEFAULT_SETTINGS.deepColorNeutralOptimization,
         theme: candidate.theme === "light" || candidate.theme === "dark"
             ? candidate.theme
             : DEFAULT_SETTINGS.theme,

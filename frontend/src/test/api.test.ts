@@ -65,4 +65,29 @@ describe("API session handling", () => {
             body: JSON.stringify({scramble: "R", crossFace: "U", f2lMode: "greedy", deadlineSeconds: 45}),
         }));
     });
+
+    it("sends deep color-neutral optimization when requested", async () => {
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({id: "job-2"}), {
+            status: 200,
+            headers: {"Content-Type": "application/json"},
+        }));
+
+        await startSolveJob({
+            scramble: "R",
+            crossFace: "CN",
+            f2lMode: "optimized",
+            deadlineSeconds: 15,
+            deepColorNeutral: true,
+        });
+
+        expect(fetchMock).toHaveBeenCalledWith("/api/solve-jobs", expect.objectContaining({
+            body: JSON.stringify({
+                scramble: "R",
+                crossFace: "CN",
+                f2lMode: "optimized",
+                deadlineSeconds: 15,
+                deepColorNeutral: true,
+            }),
+        }));
+    });
 });
