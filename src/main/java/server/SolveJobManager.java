@@ -116,7 +116,7 @@ final class SolveJobManager implements AutoCloseable {
         if (solveDeadlineOverrideNanos != null) {
             return solveDeadlineOverrideNanos;
         }
-        return TimeUnit.SECONDS.toNanos(apiRequest.deadlineSecondsOrDefault());
+        return TimeUnit.SECONDS.toNanos(apiRequest.effectiveDeadlineSeconds());
     }
 
     JobSnapshot find(String jobId) {

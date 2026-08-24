@@ -37,7 +37,8 @@ final class SolveRouteHandler implements HttpHandler {
                     JsonSupport.readString(body, "scramble"),
                     JsonSupport.readString(body, "crossFace"),
                     JsonSupport.readString(body, "f2lMode"),
-                    JsonSupport.readLong(body, "deadlineSeconds")
+                    JsonSupport.readLong(body, "deadlineSeconds"),
+                    JsonSupport.readBoolean(body, "deepColorNeutral")
             );
             var job = jobManager.submit(request, null, null, false);
             while (true) {

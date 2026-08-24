@@ -78,7 +78,8 @@ final class SolveJobRouteHandler implements HttpHandler {
                 JsonSupport.readString(body, "f2lMode"),
                 JsonSupport.readLong(body, "solveId"),
                 JsonSupport.readBoolean(body, "saveOnComplete"),
-                JsonSupport.readLong(body, "deadlineSeconds")
+                JsonSupport.readLong(body, "deadlineSeconds"),
+                JsonSupport.readBoolean(body, "deepColorNeutral")
         );
         var user = optionalAuthenticated(exchange, authService);
         if (request.saveOnComplete() && user == null) {

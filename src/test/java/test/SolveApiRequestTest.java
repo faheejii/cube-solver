@@ -53,6 +53,37 @@ public class SolveApiRequestTest {
     }
 
     @Test
+    void deepColorNeutral_shouldForceTheServerDeadlineAndReachTheSolver() {
+        var request = new SolveApiRequest("R", "COLOR_NEUTRAL", "optimized", 15L, true);
+
+        assertTrue(request.isDeepColorNeutralRequest());
+        assertEquals(120L, request.effectiveDeadlineSeconds());
+        assertTrue(request.toSolveRequest().deepColorNeutral());
+        assertEquals(120L, request.toSolveRequest().optimizationDeadlineSeconds());
+    }
+
+    @Test
+    void deepColorNeutral_shouldNotAffectNonMatchingSolveModes() {
+        var fixed = new SolveApiRequest("R", "U", "optimized", 15L, true);
+        var greedy = new SolveApiRequest("R", "COLOR_NEUTRAL", "greedy", 15L, true);
+
+        assertFalse(fixed.isDeepColorNeutralRequest());
+        assertEquals(15L, fixed.effectiveDeadlineSeconds());
+        assertFalse(fixed.toSolveRequest().deepColorNeutral());
+        assertFalse(greedy.isDeepColorNeutralRequest());
+        assertEquals(15L, greedy.effectiveDeadlineSeconds());
+        assertFalse(greedy.toSolveRequest().deepColorNeutral());
+    }
+
+    @Test
+    void solveJobRequest_shouldCarryDeepColorNeutralIntoSolveRequest() {
+        var request = new CreateSolveJobRequest("R", "CN", "optimized", null, false, 15L, true);
+
+        assertTrue(request.solveRequest().toSolveRequest().deepColorNeutral());
+        assertEquals(120L, request.solveRequest().toSolveRequest().optimizationDeadlineSeconds());
+    }
+
+    @Test
     void deadline_shouldRejectValuesOutsideSafeRange() {
         assertThrows(IllegalArgumentException.class,
                 () -> new SolveApiRequest("R", "U", null, 4L));

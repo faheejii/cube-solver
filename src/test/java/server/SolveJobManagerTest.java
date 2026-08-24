@@ -36,6 +36,14 @@ class SolveJobManagerTest {
                 TimeUnit.SECONDS.toNanos(15),
                 manager.solveDeadlineNanos(new SolveApiRequest("R", "U", "greedy"))
         );
+        assertEquals(
+                TimeUnit.SECONDS.toNanos(120),
+                manager.solveDeadlineNanos(new SolveApiRequest("R", "CN", "optimized", 15L, true))
+        );
+        assertEquals(
+                TimeUnit.SECONDS.toNanos(15),
+                manager.solveDeadlineNanos(new SolveApiRequest("R", "CN", "greedy", 15L, true))
+        );
     }
 
     @Test
