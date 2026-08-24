@@ -8,6 +8,7 @@ type Props = {
     loadingMore: boolean;
     error: string | null;
     hasMore: boolean;
+    solveCount: number | null;
     deletingSolveId: number | null;
     onRefresh: () => void;
     onLoadMore: () => void;
@@ -21,6 +22,7 @@ export default function HistoryView({
                                         loadingMore,
                                         error,
                                         hasMore,
+                                        solveCount,
                                         deletingSolveId,
                                         onRefresh,
                                         onLoadMore,
@@ -53,7 +55,9 @@ export default function HistoryView({
             <div className="history-table">
                 {entries.map((entry, index) => (
                     <article className="history-table-row" key={entry.id}>
-                        <span className="history-index">{String(index + 1).padStart(2, "0")}</span>
+                        <span className="history-index">
+                            {String(solveCount === null ? index + 1 : solveCount - index).padStart(2, "0")}
+                        </span>
                         <div className="history-time-cell">
                             <strong>{formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}</strong>
                             <small>{new Date(entry.createdAt).toLocaleString()}</small>

@@ -707,6 +707,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                         loadingMore={historyLoadingMore}
                         error={historyError}
                         hasMore={historyCursor !== null}
+                        solveCount={statistics?.solveCount ?? null}
                         deletingSolveId={deletingSolveId}
                         onRefresh={() => void loadHistory()}
                         onLoadMore={() => void loadMoreHistory()}
@@ -752,23 +753,25 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                 <p className="section-label">History Solution</p>
                                 <h2>{modalDetail ? formatHistoryTime(modalDetail.officialMs, modalDetail.penalty, modalDetail.dnf) : "Loading"}</h2>
                             </div>
-                            <button className="icon-button" type="button" onClick={() => closeSolutionModal()}
-                                    aria-label="Close solution">
-                                <X size={18}/>
-                            </button>
-                            <button
-                                className="history-delete-button"
-                                type="button"
-                                onClick={() => void deleteModalSolve()}
-                                disabled={modalStatus !== "ready" || deletingSolveId !== null || modalComputing || modalSaving}
-                                aria-label="Delete solve"
-                                title="Delete solve"
-                            >
-                                {deletingSolveId === modalEntry?.id
-                                    ? <LoaderCircle size={15}/>
-                                    : <Trash2 size={15}/>
-                                }
-                            </button>
+                            <div className="solution-modal-actions">
+                                <button className="icon-button" type="button" onClick={() => closeSolutionModal()}
+                                        aria-label="Close solution">
+                                    <X size={18}/>
+                                </button>
+                                <button
+                                    className="history-delete-button"
+                                    type="button"
+                                    onClick={() => void deleteModalSolve()}
+                                    disabled={modalStatus !== "ready" || deletingSolveId !== null || modalComputing || modalSaving}
+                                    aria-label="Delete solve"
+                                    title="Delete solve"
+                                >
+                                    {deletingSolveId === modalEntry?.id
+                                        ? <LoaderCircle size={15}/>
+                                        : <Trash2 size={15}/>
+                                    }
+                                </button>
+                            </div>
                         </div>
 
                         {modalStatus === "loading" ? <p className="modal-message">Loading saved solution...</p> : null}
@@ -885,10 +888,12 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                   {f2lModeLabel(result.f2lMode)} · Cross {crossFaceLabel(crossFace)}
                 </span>
                             </div>
-                            <button className="icon-button" type="button" onClick={() => setTimerSolutionOpen(false)}
-                                    aria-label="Close solution">
-                                <X size={18}/>
-                            </button>
+                            <div className="solution-modal-actions">
+                                <button className="icon-button" type="button" onClick={() => setTimerSolutionOpen(false)}
+                                        aria-label="Close solution">
+                                    <X size={18}/>
+                                </button>
+                            </div>
                         </div>
                         <p className="modal-scramble">{result.scramble}</p>
                         <SolutionResultBody result={result} requestedCross={crossFace}/>
@@ -914,10 +919,12 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                   Cross {crossFaceLabel(processPreview.request.crossFace)}
                 </span>
                             </div>
-                            <button className="icon-button" type="button" onClick={() => setProcessPreview(null)}
-                                    aria-label="Close solution">
-                                <X size={18}/>
-                            </button>
+                            <div className="solution-modal-actions">
+                                <button className="icon-button" type="button" onClick={() => setProcessPreview(null)}
+                                        aria-label="Close solution">
+                                    <X size={18}/>
+                                </button>
+                            </div>
                         </div>
                         <p className="modal-scramble">{processPreview.request.scramble}</p>
                         <SolutionResultBody

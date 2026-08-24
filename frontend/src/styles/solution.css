@@ -30,6 +30,12 @@
     justify-content: space-between;
 }
 
+.solution-modal-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
 .solution-modal-header h2 {
     margin: 4px 0 0;
     font-family: "Space Mono", monospace;
@@ -411,4 +417,3 @@
     color: var(--text-soft);
     font-size: 0.66rem;
 }
-
