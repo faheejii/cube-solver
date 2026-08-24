@@ -1,7 +1,7 @@
 import {startTransition, useEffect, useRef, useState} from "react";
 import {randomScrambleForEvent} from "cubing/scramble";
 import {setSearchDebug} from "cubing/search";
-import {Save, X} from "lucide-react";
+import {LoaderCircle, Save, Trash2, X} from "lucide-react";
 import ActiveSolutionsView from "./ActiveSolutionsView";
 import AlgorithmsView from "./AlgorithmsView";
 import DashboardSidebar, {type DashboardView} from "./DashboardSidebar";
@@ -76,6 +76,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const [modalStatus, setModalStatus] = useState<ModalStatus>("idle");
     const [modalError, setModalError] = useState<string | null>(null);
     const [modalDetail, setModalDetail] = useState<SolveHistoryDetail | null>(null);
+    const [modalEntry, setModalEntry] = useState<SolveHistoryEntry | null>(null);
     const [modalMode, setModalMode] = useState<F2LMode>("greedy");
     const [modalCrossFace, setModalCrossFace] = useState("U");
     const [modalResult, setModalResult] = useState<SolveResponse | null>(null);
@@ -290,6 +291,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         setModalError(null);
         setModalDirty(false);
         setModalDetail(null);
+        setModalEntry(entry);
         setModalResult(null);
         try {
             const detail = await fetchSolveHistoryDetail(entry.id);
@@ -464,13 +466,14 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         void computeModalSolution(modalDetail, modalMode, modalCrossFace, autoSave);
     }
 
-    function closeSolutionModal() {
-        if (!confirmDiscardModalPreview()) {
+    function closeSolutionModal(force = false) {
+        if (!force && !confirmDiscardModalPreview()) {
             return;
         }
         setModalStatus("idle");
         modalJobRequestIdRef.current++;
         setModalDetail(null);
+        setModalEntry(null);
         setModalResult(null);
         setModalDirty(false);
         setModalError(null);
@@ -483,6 +486,16 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         setModalCompletedCandidates(0);
         setModalCandidatesEvaluated(0);
         setModalBestTotalMoves(-1);
+    }
+
+    async function deleteModalSolve() {
+        if (!modalEntry || !modalDetail || deletingSolveId !== null || modalComputing || modalSaving) {
+            return;
+        }
+        const deleted = await handleDeleteSolve(modalEntry);
+        if (deleted) {
+            closeSolutionModal(true);
+        }
     }
 
     function commitScramble(nextScramble: string) {
@@ -726,7 +739,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
             <SaveToast message={saveNotice} onDismiss={() => setSaveNotice(null)}/>
 
             {modalStatus !== "idle" ? (
-                <div className="solution-modal-backdrop" role="presentation" onMouseDown={closeSolutionModal}>
+                <div className="solution-modal-backdrop" role="presentation" onMouseDown={() => closeSolutionModal()}>
                     <section
                         className="solution-modal"
                         role="dialog"
@@ -739,9 +752,22 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                 <p className="section-label">History Solution</p>
                                 <h2>{modalDetail ? formatHistoryTime(modalDetail.officialMs, modalDetail.penalty, modalDetail.dnf) : "Loading"}</h2>
                             </div>
-                            <button className="icon-button" type="button" onClick={closeSolutionModal}
+                            <button className="icon-button" type="button" onClick={() => closeSolutionModal()}
                                     aria-label="Close solution">
                                 <X size={18}/>
+                            </button>
+                            <button
+                                className="history-delete-button"
+                                type="button"
+                                onClick={() => void deleteModalSolve()}
+                                disabled={modalStatus !== "ready" || deletingSolveId !== null || modalComputing || modalSaving}
+                                aria-label="Delete solve"
+                                title="Delete solve"
+                            >
+                                {deletingSolveId === modalEntry?.id
+                                    ? <LoaderCircle size={15}/>
+                                    : <Trash2 size={15}/>
+                                }
                             </button>
                         </div>
 

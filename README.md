@@ -304,7 +304,7 @@ Run the deterministic browser authentication tests with:
 npm run test:e2e
 ```
 
-The Playwright tests mock the API and cover registration, login errors, session restoration, logout, protected history, session expiry, catalog previews, and solution/stage playback setup.
+The Playwright tests mock the API and cover registration, login errors, session restoration, logout, protected history, session expiry, catalog previews, solution/stage playback setup, and deleting a solve from the Recent solves rail.
 
 Current frontend behavior:
 
@@ -322,8 +322,8 @@ Current frontend behavior:
 - displays the current scramble on a 3D cube
 - calculates best time, average of 5, average of 12, solve count, and DNF count from saved attempts
 - saves completed attempts to Postgres and advances to the next scramble automatically
-- includes cursor-paginated solve history with Fast/Optimized and cross-specific solution review
-- supports permanent deletion of owned solves, including the saved Fast and Optimized solutions
+- includes cursor-paginated solve history with Fast/Optimized and cross-specific solution review; Recent solves entries in the right rail open the same saved-solution modal
+- supports permanent deletion of owned solves from the History tab or saved-solution modal, including the saved Fast and Optimized solutions
 - includes an Active Solutions page with live progress, result previews, retry, and termination
 - includes an admin-only Algorithms tab with a compact responsive case list, filters, copy actions, expandable details, and cube previews
 - hides admin navigation for normal users while retaining backend authorization for admin catalog access

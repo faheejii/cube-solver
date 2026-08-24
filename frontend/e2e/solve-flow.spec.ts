@@ -74,4 +74,19 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await expect(dialog.locator("[data-playback-alg]")).toHaveAttribute("data-playback-alg", "U R U'");
         await dialog.getByRole("button", {name: "Close solution"}).click();
     });
+
+    test("deletes a saved solve from the right-side history popup", async ({page}) => {
+        const api = await mockProductionApi(page, {user: normalUser, historyEntries: [historyEntry]});
+        await page.goto("/");
+
+        await page.getByRole("button", {name: /#1/}).click();
+        const dialog = page.getByRole("dialog", {name: "Solve solution"});
+        await expect(dialog).toBeVisible();
+
+        page.once("dialog", (confirmation) => confirmation.accept());
+        await dialog.getByRole("button", {name: "Delete solve"}).click();
+
+        await expect(dialog).toHaveCount(0);
+        expect(api.requests.some((request) => request.pathname === "/api/solves/1" && request.method === "DELETE")).toBe(true);
+    });
 });

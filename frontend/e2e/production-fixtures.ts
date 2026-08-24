@@ -187,6 +187,13 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
             });
             return;
         }
+        if (solveMatch && request.method() === "DELETE") {
+            const id = Number(solveMatch[1]);
+            entries = entries.filter((entry) => entry.id !== id);
+            savedBySolve.delete(id);
+            await route.fulfill({status: 204, body: ""});
+            return;
+        }
         const solutionMatch = url.pathname.match(/^\/api\/solves\/(\d+)\/solutions\/([^/]+)$/);
         if (solutionMatch && request.method() === "PUT") {
             const id = Number(solutionMatch[1]);

@@ -78,15 +78,15 @@ export function useHistoryData({activeView, onNotice}: Options) {
         }
     }, [activeView, loadHistory]);
 
-    const handleDeleteSolve = useCallback(async (entry: SolveHistoryEntry) => {
+    const handleDeleteSolve = useCallback(async (entry: SolveHistoryEntry): Promise<boolean> => {
         if (deletingSolveId !== null) {
-            return;
+            return false;
         }
         const displayedTime = formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf);
         if (!window.confirm(
             `Delete the ${displayedTime} solve permanently?\n\nThis also deletes all saved Fast and Optimized solutions.`
         )) {
-            return;
+            return false;
         }
 
         setDeletingSolveId(entry.id);
@@ -96,9 +96,11 @@ export function useHistoryData({activeView, onNotice}: Options) {
             setHistoryEntries((current) => current.filter((solve) => solve.id !== entry.id));
             onNotice("Solve deleted");
             await Promise.all([loadHistory(), loadStatistics()]);
+            return true;
         } catch (deleteError) {
             const message = deleteError instanceof Error ? deleteError.message : "Solve deletion failed";
             setHistoryError(message);
+            return false;
         } finally {
             setDeletingSolveId(null);
         }
