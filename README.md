@@ -57,13 +57,13 @@ Implemented:
 - admin-only Algorithms tab with a compact responsive row list for F2L setup/insert, OLL, and PLL cases
 - AUF-only OLL and PLL lookup; all 24 frame variants are indexed at startup
 - bounded Fast and Optimized solve queues with cancellation support
-- a 15-second end-to-end solver deadline with explicit timeout status
+- a configurable 5–120 second end-to-end solver deadline with explicit timeout status
 - graceful shutdown of HTTP and solver worker executors
 - password-based accounts with revocable, server-side sessions
 - versioned PostgreSQL schema migrations through Flyway
 - pooled PostgreSQL connections and aggregate-based solve statistics
 - Java HTTP API and Vite/React frontend
-- browser-local Settings for the solver processing deadline, 15-second inspection behavior, and theme
+- browser-local Settings for the solver processing deadline, inspection behavior, deep color-neutral optimization, and theme
 - application-owned Three.js cube previews and playback driven by one authoritative cubie/sticker model, with WCA/cubing.js-compatible face, wide, slice, and rotation notation, fixed-camera rendering, setup-state reconstruction, sequential animation, and a WebGL fallback
 - a development-only, lazy-loaded cubing.js 2D reference with deterministic prefix stepping for comparing setup and stage playback; production renders only the custom Three.js player
 
@@ -72,7 +72,7 @@ Known limitations:
 - Some canonical F2L algorithms are not yet optimal; future corpus expansion can target move count and candidate-evaluation efficiency.
 - F2L is database-only in production and fails fast with a diagnostic context when a case is missing.
 - Temporary regression-only F2L seed cases from the pre-database-fallback transition have been removed; uncovered real-world cases now surface as deliberate diagnostics for corpus review.
-- Color-neutral Fast/Optimized evaluation can still fail if every shortlisted cross baseline reaches an uncovered F2L route after recovery; the diagnostic includes the phase, target slot, preserved slots, and signature.
+- Ordinary color-neutral Fast/Optimized evaluation still uses shortlisted cross baselines and can fail if every route reaches an uncovered F2L case; deep color-neutral optimization evaluates all six cross colors and returns the best valid result found before its two-minute budget expires.
 - Production-like Docker/browser verification should be rerun after changes to persisted pair playback, worker assets, static serving, or the Algorithms tab.
 - Optimized F2L can be slower than fast mode on some scrambles because it evaluates more candidate lines before choosing a result.
 
@@ -316,8 +316,9 @@ Current frontend behavior:
 - keeps the scramble read-only by default, with an explicit edit mode
 - supports fixed-face cross solving or color-neutral cross selection
 - supports fast greedy F2L or optimized F2L branch search
+- optionally evaluates all six cross colors for Optimized + Color Neutral solves; this deep mode is disabled by default and uses a fixed two-minute budget
 - includes a timer with inspection behavior similar to common cube timers
-- includes a Settings view where the processing deadline can be set from 5 to 120 seconds and inspection can be enabled or disabled; settings apply to new solve requests and are stored in the current browser
+- includes a Settings view where the processing deadline can be set from 5 to 120 seconds, inspection can be enabled or disabled, and deep color-neutral optimization can be enabled; settings apply to new solve requests and are stored in the current browser
 - displays the current scramble on a 3D cube
 - calculates best time, average of 5, average of 12, solve count, and DNF count from saved attempts
 - saves completed attempts to Postgres and advances to the next scramble automatically
