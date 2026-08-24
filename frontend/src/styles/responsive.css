@@ -79,7 +79,8 @@
     .dashboard-shell,
     .dashboard-shell.view-timer,
     .dashboard-shell.view-history,
-    .dashboard-shell.view-processes {
+    .dashboard-shell.view-processes,
+    .dashboard-shell.view-settings {
         display: block;
         padding: 10px 10px 82px;
     }
@@ -95,7 +96,7 @@
         z-index: 50;
         inset: auto 10px 10px;
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
         width: auto;
         height: 62px;
         border-radius: 18px;
@@ -127,7 +128,8 @@
     }
 
     .dashboard-history-view,
-    .dashboard-process-view {
+    .dashboard-process-view,
+    .dashboard-settings-view {
         min-height: auto;
     }
 
@@ -274,6 +276,11 @@
     }
 
     .dashboard-history-view {
+        padding: 20px 14px;
+    }
+
+    .dashboard-settings-view {
+        min-height: auto;
         padding: 20px 14px;
     }
 

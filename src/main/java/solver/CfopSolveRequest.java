@@ -6,14 +6,16 @@ public record CfopSolveRequest(
         String scramble,
         Face crossFace,
         boolean colorNeutralCross,
-        F2LMode f2lMode
+        F2LMode f2lMode,
+        boolean deepColorNeutral,
+        Long optimizationDeadlineSeconds
 ) {
     public CfopSolveRequest(String scramble, Face crossFace) {
-        this(scramble, crossFace, false, F2LMode.GREEDY);
+        this(scramble, crossFace, false, F2LMode.GREEDY, false, null);
     }
 
     public CfopSolveRequest(String scramble, Face crossFace, F2LMode f2lMode) {
-        this(scramble, crossFace, false, f2lMode);
+        this(scramble, crossFace, false, f2lMode, false, null);
     }
 
     public static CfopSolveRequest colorNeutral(String scramble) {
@@ -21,7 +23,16 @@ public record CfopSolveRequest(
     }
 
     public static CfopSolveRequest colorNeutral(String scramble, F2LMode f2lMode) {
-        return new CfopSolveRequest(scramble, Face.U, true, f2lMode);
+        return new CfopSolveRequest(scramble, Face.U, true, f2lMode, false, null);
+    }
+
+    public CfopSolveRequest(
+            String scramble,
+            Face crossFace,
+            boolean colorNeutralCross,
+            F2LMode f2lMode
+    ) {
+        this(scramble, crossFace, colorNeutralCross, f2lMode, false, null);
     }
 
     public CfopSolveRequest {
@@ -34,5 +45,16 @@ public record CfopSolveRequest(
         if (f2lMode == null) {
             f2lMode = F2LMode.GREEDY;
         }
+        if (optimizationDeadlineSeconds != null
+                && (optimizationDeadlineSeconds < 5L || optimizationDeadlineSeconds > 120L)) {
+            throw new IllegalArgumentException("optimizationDeadlineSeconds must be between 5 and 120");
+        }
+        if (!colorNeutralCross || f2lMode != F2LMode.OPTIMIZED) {
+            deepColorNeutral = false;
+        }
+    }
+
+    public long optimizationDeadlineSecondsOrDefault() {
+        return optimizationDeadlineSeconds == null ? 15L : optimizationDeadlineSeconds;
     }
 }

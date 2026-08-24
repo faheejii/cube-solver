@@ -149,6 +149,7 @@ public class CfopSolveService {
             Consumer<F2LSolver.F2LSearchProgress> progressListener
     ) {
         long startTime = System.nanoTime();
+        long optimizationDeadlineNanos = optimizationDeadlineNanos(request, startTime);
         var scrambledCube = new CubeState();
         MoveApplier.applyAlgorithm(scrambledCube, request.scramble());
         var crossSolver = new CrossSolver();
@@ -164,9 +165,13 @@ public class CfopSolveService {
         crossCandidates.sort(Comparator
                 .comparingInt((CrossCandidate candidate) -> candidate.algorithm().getMoveCount())
                 .thenComparingInt(candidate -> candidate.face().ordinal()));
-        var shortlisted = shortlistCrossCandidates(crossCandidates);
+        var shortlisted = request.deepColorNeutral()
+                ? java.util.List.copyOf(crossCandidates)
+                : shortlistCrossCandidates(crossCandidates);
         var baselines = new ArrayList<FixedCrossBaseline>();
-        long baselineDeadlineNanos = System.nanoTime() + COLOR_NEUTRAL_BASELINE_BUDGET_NANOS;
+        long baselineDeadlineNanos = request.deepColorNeutral()
+                ? optimizationDeadlineNanos
+                : System.nanoTime() + COLOR_NEUTRAL_BASELINE_BUDGET_NANOS;
         for (int index = 0; index < shortlisted.size(); index++) {
             var crossCandidate = shortlisted.get(index);
             var face = crossCandidate.face();
@@ -199,11 +204,12 @@ public class CfopSolveService {
         ));
 
         var best = baselines.get(0);
-        var deadlineNanos = optimizationDeadlineNanos();
-        int candidateCount = Math.min(COLOR_NEUTRAL_OPTIMIZED_CANDIDATES, baselines.size());
+        int candidateCount = request.deepColorNeutral()
+                ? baselines.size()
+                : Math.min(COLOR_NEUTRAL_OPTIMIZED_CANDIDATES, baselines.size());
         boolean budgetExpired = false;
         for (int index = 0; index < candidateCount; index++) {
-            if (System.nanoTime() >= deadlineNanos) {
+            if (System.nanoTime() >= optimizationDeadlineNanos) {
                 budgetExpired = true;
                 break;
             }
@@ -221,7 +227,7 @@ public class CfopSolveService {
                                 face, baselines.size(), shortlisted.size(),
                                 rank, candidateCount, false, progress);
                     },
-                    () -> System.nanoTime() >= deadlineNanos
+                    () -> System.nanoTime() >= optimizationDeadlineNanos
             );
             var optimized = baseline.withContinuation(optimizedContinuation);
             if (SOLUTION_COMPARATOR.compare(
@@ -230,7 +236,7 @@ public class CfopSolveService {
             ) < 0) {
                 best = optimized;
             }
-            if (searchLimitReached.get() || System.nanoTime() >= deadlineNanos) {
+            if (searchLimitReached.get() || System.nanoTime() >= optimizationDeadlineNanos) {
                 budgetExpired = true;
                 break;
             }
@@ -258,7 +264,7 @@ public class CfopSolveService {
         var baseline = prepareFixedCross(request);
         var continuation = baseline.continuation();
         if (request.f2lMode() == F2LMode.OPTIMIZED) {
-            long deadlineNanos = optimizationDeadlineNanos();
+            long deadlineNanos = optimizationDeadlineNanos(request, System.nanoTime());
             var searchLimitReached = new AtomicBoolean();
             var boundedStop = (BooleanSupplier) () -> shouldStop.getAsBoolean()
                     || System.nanoTime() >= deadlineNanos;
@@ -286,6 +292,13 @@ public class CfopSolveService {
      * a longer diagnostic run with -Df2l.optimization.budget-seconds=60. An
      * unlimited run is accepted only when f2l.diagnostic is also enabled.
      */
+    private static long optimizationDeadlineNanos(CfopSolveRequest request, long startTimeNanos) {
+        if (request.optimizationDeadlineSeconds() != null) {
+            return startTimeNanos + TimeUnit.SECONDS.toNanos(request.optimizationDeadlineSecondsOrDefault());
+        }
+        return optimizationDeadlineNanos();
+    }
+
     private static long optimizationDeadlineNanos() {
         var configured = System.getProperty("f2l.optimization.budget-seconds");
         if (configured == null || configured.isBlank()) {
