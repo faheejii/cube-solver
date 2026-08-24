@@ -25,6 +25,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SolveJobManagerTest {
     @Test
+    void deadline_shouldUseRequestValueAndDefaultWhenOmitted() {
+        var manager = manager(new ControlledSolveService(new CountDownLatch(0)));
+
+        assertEquals(
+                TimeUnit.SECONDS.toNanos(60),
+                manager.solveDeadlineNanos(new SolveApiRequest("R", "U", "greedy", 60L))
+        );
+        assertEquals(
+                TimeUnit.SECONDS.toNanos(15),
+                manager.solveDeadlineNanos(new SolveApiRequest("R", "U", "greedy"))
+        );
+        assertEquals(
+                TimeUnit.SECONDS.toNanos(120),
+                manager.solveDeadlineNanos(new SolveApiRequest("R", "CN", "optimized", 15L, true))
+        );
+        assertEquals(
+                TimeUnit.SECONDS.toNanos(15),
+                manager.solveDeadlineNanos(new SolveApiRequest("R", "CN", "greedy", 15L, true))
+        );
+    }
+
+    @Test
     void fastJob_shouldCompleteWhileOptimizedWorkerIsBusy() throws Exception {
         var optimizedRelease = new CountDownLatch(1);
         var service = new ControlledSolveService(optimizedRelease);
