@@ -1,5 +1,6 @@
 import {ArrowUpRight} from "lucide-react";
-import {formatHistoryTime, formatMetricTime, formatRollingAverage} from "./format";
+import {formatHistoryTime} from "./format";
+import StatisticsSummary from "./StatisticsSummary";
 import type {SolveHistoryEntry, SolveStatistics} from "./types";
 
 type Props = {
@@ -26,14 +27,7 @@ export default function StatisticsRail({
                         More <ArrowUpRight size={14}/>
                     </button>
                 </div>
-                <div className="statistics-grid">
-                    <Stat label="Best" value={formatMetricTime(statistics?.bestMs ?? null)} accent="blue"/>
-                    <Stat label="Ao5" value={formatRollingAverage(statistics?.ao5 ?? null)} accent="violet"/>
-                    <Stat label="Ao12" value={formatRollingAverage(statistics?.ao12 ?? null)} accent="cyan"/>
-                    <Stat label="Average" value={formatMetricTime(statistics?.averageMs ?? null)}/>
-                    <Stat label="Solves" value={loading ? "…" : String(statistics?.solveCount ?? 0)}/>
-                    <Stat label="DNFs" value={loading ? "…" : String(statistics?.dnfCount ?? 0)} accent="amber"/>
-                </div>
+                <StatisticsSummary statistics={statistics} loading={loading}/>
             </section>
 
             <section className="rail-card recent-card">
@@ -60,22 +54,5 @@ export default function StatisticsRail({
                 </div>
             </section>
         </aside>
-    );
-}
-
-function Stat({
-                  label,
-                  value,
-                  accent = "",
-              }: {
-    label: string;
-    value: string;
-    accent?: string;
-}) {
-    return (
-        <div className={`rail-stat ${accent ? `accent-${accent}` : ""}`}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-        </div>
     );
 }

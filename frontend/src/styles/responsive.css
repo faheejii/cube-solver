@@ -133,6 +133,18 @@
         min-height: auto;
     }
 
+    .history-statistics .statistics-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .history-statistics .rail-stat:nth-child(even) {
+        border-right: 1px solid var(--border);
+    }
+
+    .history-statistics .rail-stat:nth-child(3n) {
+        border-right: 0;
+    }
+
     .timer-workspace {
         height: calc(100dvh - 92px);
         min-height: 0;
@@ -182,6 +194,22 @@
 }
 
 @media (max-width: 560px) {
+    .history-statistics .statistics-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .history-statistics .rail-stat:nth-child(even) {
+        border-right: 0;
+    }
+
+    .history-statistics .rail-stat:nth-child(3n) {
+        border-right: 1px solid var(--border);
+    }
+
+    .history-statistics .rail-stat:nth-child(2n) {
+        border-right: 0;
+    }
+
     .timer-workspace {
         grid-template-rows: auto auto minmax(0, 1fr) auto;
         gap: 10px;
