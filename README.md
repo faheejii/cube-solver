@@ -322,7 +322,7 @@ Current frontend behavior:
 - presents solution dialogs as near-full-screen utility inspectors with joined cube/stage panes, bottom playback controls, stage navigation, and a speed dropdown
 - includes a Settings view where the processing deadline can be set from 5 to 120 seconds, inspection can be enabled or disabled, and deep color-neutral optimization can be enabled; settings apply to new solve requests and are stored in the current browser
 - displays the current scramble on a 3D cube
-- calculates best time, average of 5, average of 12, solve count, and DNF count from saved attempts
+- calculates best time, average of 5, average of 12, solve count, and DNF count from saved attempts; the same compact statistics summary is available above the History solve list
 - saves completed attempts to Postgres and advances to the next scramble automatically
 - includes cursor-paginated solve history with Fast/Optimized and cross-specific solution review; Recent solves entries in the right rail open the same saved-solution modal
 - supports permanent deletion of owned solves from the History tab or saved-solution modal, including the saved Fast and Optimized solutions
@@ -474,5 +474,5 @@ The backend keeps public solver and server facades stable while moving shared re
 Frontend structure:
 
 - [`frontend/src/App.tsx`](frontend/src/App.tsx) is the authenticated dashboard composition root.
-- [`frontend/src/hooks/useTimer.ts`](frontend/src/hooks/useTimer.ts) owns timer and inspection state, [`frontend/src/hooks/useHistoryData.ts`](frontend/src/hooks/useHistoryData.ts) owns history/statistics data, and [`frontend/src/hooks/useSolveProcesses.ts`](frontend/src/hooks/useSolveProcesses.ts) owns background solve jobs.
+- [`frontend/src/hooks/useTimer.ts`](frontend/src/hooks/useTimer.ts) owns timer and inspection state, [`frontend/src/hooks/useHistoryData.ts`](frontend/src/hooks/useHistoryData.ts) owns history/statistics data, and [`frontend/src/hooks/useSolveProcesses.ts`](frontend/src/hooks/useSolveProcesses.ts) owns background solve jobs. [`frontend/src/StatisticsSummary.tsx`](frontend/src/StatisticsSummary.tsx) renders the shared statistics metric grid used by the timer rail and History tab.
 - [`frontend/src/styles/`](frontend/src/styles/) contains feature-oriented stylesheet modules imported by [`frontend/src/styles.css`](frontend/src/styles.css); the existing global class names and responsive behavior remain stable.

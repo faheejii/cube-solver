@@ -708,6 +708,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                         error={historyError}
                         hasMore={historyCursor !== null}
                         solveCount={statistics?.solveCount ?? null}
+                        statistics={statistics}
+                        statisticsLoading={statisticsLoading}
                         deletingSolveId={deletingSolveId}
                         onRefresh={() => void loadHistory()}
                         onLoadMore={() => void loadMoreHistory()}

@@ -1,6 +1,7 @@
 import {Eye, LoaderCircle, RefreshCw, Trash2} from "lucide-react";
 import {crossFaceLabel, formatHistoryTime} from "./format";
-import type {SolveHistoryEntry} from "./types";
+import StatisticsSummary from "./StatisticsSummary";
+import type {SolveHistoryEntry, SolveStatistics} from "./types";
 
 type Props = {
     entries: SolveHistoryEntry[];
@@ -9,6 +10,8 @@ type Props = {
     error: string | null;
     hasMore: boolean;
     solveCount: number | null;
+    statistics: SolveStatistics | null;
+    statisticsLoading: boolean;
     deletingSolveId: number | null;
     onRefresh: () => void;
     onLoadMore: () => void;
@@ -23,6 +26,8 @@ export default function HistoryView({
                                         error,
                                         hasMore,
                                         solveCount,
+                                        statistics,
+                                        statisticsLoading,
                                         deletingSolveId,
                                         onRefresh,
                                         onLoadMore,
@@ -42,6 +47,11 @@ export default function HistoryView({
                     Refresh
                 </button>
             </header>
+
+            <section className="history-statistics" aria-label="Solve statistics">
+                <div className="history-statistics-header">Statistics</div>
+                <StatisticsSummary statistics={statistics} loading={statisticsLoading}/>
+            </section>
 
             {error ? <div className="dashboard-alert error">{error}</div> : null}
             {loading ? <div className="history-loading"><LoaderCircle size={22}/> Loading history</div> : null}
