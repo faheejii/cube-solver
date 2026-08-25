@@ -37,7 +37,7 @@ export default function SolutionResultBody({result, requestedCross}: Props) {
     }
 
     return (
-        <>
+        <div className="solution-result-body">
             <div className="solution-summary-strip">
                 <SummaryItem label="Total" value={`${result.totalMoveCount} moves`}/>
                 <SummaryItem label="Solver time" value={`${result.elapsedMs.toFixed(1)} ms`}/>
@@ -64,7 +64,7 @@ export default function SolutionResultBody({result, requestedCross}: Props) {
                             const expanded = selectedDetail === stage.name;
                             return (
                                 <article
-                                    className={expanded ? "solution-stage-row expanded" : "solution-stage-row"}
+                                    className={expanded ? `solution-stage-row solution-stage-row-${stage.name} expanded` : `solution-stage-row solution-stage-row-${stage.name}`}
                                     key={stage.name}
                                 >
                                     <button type="button" onClick={() => toggleStage(stage)} aria-expanded={expanded}>
@@ -103,7 +103,7 @@ export default function SolutionResultBody({result, requestedCross}: Props) {
                     {result.comparison ? <ComparisonPanel result={result}/> : null}
                 </aside>
             </div>
-        </>
+        </div>
     );
 }
 
