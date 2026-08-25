@@ -1,5 +1,5 @@
 import {lazy, Suspense, useEffect, useState} from "react";
-import {Pause, Play} from "lucide-react";
+import {Pause, Play, RotateCcw, SkipBack, SkipForward} from "lucide-react";
 import type {SolveResponse, SolveStage} from "./types";
 import CubePreview from "./CubePreview";
 
@@ -96,52 +96,21 @@ export default function CubeAnimator({
         setPlayerKey((key) => key + 1);
     }
 
+    function selectAdjacentStage(offset: -1 | 1) {
+        const currentIndex = options.findIndex((option) => option.id === activeOption.id && option.pairOrder === activeOption.pairOrder);
+        const nextIndex = currentIndex + offset;
+        if (nextIndex < 0 || nextIndex >= options.length) {
+            return;
+        }
+        selectStage(options[nextIndex].id);
+    }
+
     return (
         <section className={compact ? "visualizer-section compact" : "visualizer-section"} aria-label="Cube animation">
             <div className="visualizer-toolbar">
                 <div>
                     <p className="section-label">Playback</p>
                     <h2>3D Cube</h2>
-                </div>
-
-                <div className="playback-controls">
-                    <button
-                        type="button"
-                        className={isPlaying ? "icon-button primary playback-toggle" : "icon-button playback-toggle"}
-                        onClick={togglePlayback}
-                        aria-label={isPlaying ? "Pause playback" : "Play playback"}
-                        title={isPlaying ? "Pause playback" : "Play playback"}
-                    >
-                        {isPlaying ? <Pause size={16} aria-hidden="true"/> : <Play size={16} aria-hidden="true"/>}
-                    </button>
-                    <div className="stage-tabs" aria-label="Animation stage">
-                        {options.map((option) => (
-                            <button
-                                key={option.id}
-                                type="button"
-                                className={option.id === activeOption.id ? "stage-tab active" : "stage-tab"}
-                                onClick={() => selectStage(option.id)}
-                            >
-                                {option.label}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="speed-control" aria-label="Playback speed">
-                        <span>Speed</span>
-                        <div className="speed-options">
-                            {PLAYBACK_SPEEDS.map((speed) => (
-                                <button
-                                    key={speed}
-                                    type="button"
-                                    className={speed === playbackSpeed ? "speed-option active" : "speed-option"}
-                                    onClick={() => selectPlaybackSpeed(speed)}
-                                >
-                                    {speed}x
-                                </button>
-                            ))}
-                        </div>
-                    </div>
                 </div>
             </div>
 
@@ -160,6 +129,59 @@ export default function CubeAnimator({
                     }}
                     data-playback-alg={activeOption.algorithm}
                 />
+            </div>
+
+            <div className="playback-controls-bottom" aria-label="Playback controls">
+                <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => selectAdjacentStage(-1)}
+                    disabled={options.findIndex((option) => option.id === activeOption.id && option.pairOrder === activeOption.pairOrder) <= 0}
+                    aria-label="Previous stage"
+                    title="Previous stage"
+                >
+                    <SkipBack size={16} aria-hidden="true"/>
+                </button>
+                <button
+                    type="button"
+                    className="icon-button"
+                    onClick={resetPlayback}
+                    aria-label="Restart playback"
+                    title="Restart playback"
+                >
+                    <RotateCcw size={15} aria-hidden="true"/>
+                </button>
+                <button
+                    type="button"
+                    className={isPlaying ? "icon-button primary playback-toggle" : "icon-button playback-toggle"}
+                    onClick={togglePlayback}
+                    aria-label={isPlaying ? "Pause playback" : "Play playback"}
+                    title={isPlaying ? "Pause playback" : "Play playback"}
+                >
+                    {isPlaying ? <Pause size={16} aria-hidden="true"/> : <Play size={16} aria-hidden="true"/>}
+                </button>
+                <button
+                    type="button"
+                    className="icon-button"
+                    onClick={() => selectAdjacentStage(1)}
+                    disabled={options.findIndex((option) => option.id === activeOption.id && option.pairOrder === activeOption.pairOrder) >= options.length - 1}
+                    aria-label="Next stage"
+                    title="Next stage"
+                >
+                    <SkipForward size={16} aria-hidden="true"/>
+                </button>
+                <label className="playback-speed-select">
+                    <span>Speed</span>
+                    <select
+                        aria-label="Playback speed"
+                        value={playbackSpeed}
+                        onChange={(event) => selectPlaybackSpeed(Number(event.target.value) as (typeof PLAYBACK_SPEEDS)[number])}
+                    >
+                        {PLAYBACK_SPEEDS.map((speed) => (
+                            <option key={speed} value={speed}>{speed}x</option>
+                        ))}
+                    </select>
+                </label>
             </div>
 
             {import.meta.env.DEV && ReferenceCubePlayer ? (
