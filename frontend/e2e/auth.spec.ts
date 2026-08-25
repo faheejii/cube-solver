@@ -145,7 +145,9 @@ test.describe("protected history", () => {
 
         await expect(page.getByRole("heading", {name: "History"})).toBeVisible();
         await expect(page.getByText("R U R' U'")).toBeVisible();
-        await expect(page.getByText("12.34")).toBeVisible();
+        await expect(
+            page.locator(".history-table-row").filter({hasText: "R U R' U'"}).getByText("12.34")
+        ).toBeVisible();
     });
 
     test("returns to login when a protected request reports session expiry", async ({page}) => {
