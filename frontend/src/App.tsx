@@ -780,24 +780,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                         {modalDetail ? (
                             <>
                                 <div className="solution-modal-controls">
-                                    <div className="mode-toggle" aria-label="History F2L mode">
-                                        <button
-                                            className={modalMode === "greedy" ? "mode-option active" : "mode-option"}
-                                            type="button"
-                                            onClick={() => void handleModalModeChange("greedy")}
-                                            disabled={modalComputing || modalSaving}
-                                        >
-                                            Fast
-                                        </button>
-                                        <button
-                                            className={modalMode === "optimized" ? "mode-option active" : "mode-option"}
-                                            type="button"
-                                            onClick={() => void handleModalModeChange("optimized")}
-                                            disabled={modalComputing || modalSaving}
-                                        >
-                                            Optimized
-                                        </button>
-                                    </div>
                                     <label className="compact-control">
                                         <span>Cross</span>
                                         <select
@@ -812,6 +794,25 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                             ))}
                                         </select>
                                     </label>
+                                    <span className="toolbar-separator" aria-hidden="true"/>
+                                    <div className="workspace-mode-switch" aria-label="History F2L mode">
+                                        <button
+                                            className={modalMode === "greedy" ? "active" : ""}
+                                            type="button"
+                                            onClick={() => void handleModalModeChange("greedy")}
+                                            disabled={modalComputing || modalSaving}
+                                        >
+                                            Fast
+                                        </button>
+                                        <button
+                                            className={modalMode === "optimized" ? "active" : ""}
+                                            type="button"
+                                            onClick={() => void handleModalModeChange("optimized")}
+                                            disabled={modalComputing || modalSaving}
+                                        >
+                                            Optimized
+                                        </button>
+                                    </div>
                                     {modalDirty ? (
                                         <button
                                             className="tool-button primary"
