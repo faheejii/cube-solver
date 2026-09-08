@@ -4,6 +4,7 @@ import {OrbitControls} from "three/addons/controls/OrbitControls.js";
 import {parseAlgorithm as parseNotation, type Move} from "./cube/notation";
 import {applyRenderMove, applyRenderMoves, materialsForCubie, renderStateSignature, solvedRenderCube, type RenderCubeState, type RenderCubie} from "./cube/renderCubeState";
 import {matchesLayer, moveSpec, rotationRadians, type MoveSpec} from "./cube/moveGeometry";
+import {CUBE_FACE_COLORS} from "./cubeFaceColors";
 import "./styles/cube-preview.css";
 
 type Props = {
@@ -18,8 +19,6 @@ type Props = {
     "data-playback-alg"?: string;
 };
 type VisualCubie = {mesh: THREE.Mesh; id: string};
-
-const COLORS: Record<string, number> = {U: 0xf5f5f5, D: 0xf5d547, F: 0x35b86b, B: 0x3d72d8, R: 0xd94b4b, L: 0xf08b35};
 
 export default function CubePreview({
     setupAlgorithm = "",
@@ -196,5 +195,5 @@ function syncMeshes(visualCubies: VisualCubie[], state: RenderCubeState, cubeGro
 }
 
 function stickerMaterials(cubie: RenderCubie) {
-    return materialsForCubie(cubie).map((face) => new THREE.MeshStandardMaterial({color: face ? COLORS[face] : 0x151b24, roughness: .7, metalness: .05}));
+    return materialsForCubie(cubie).map((face) => new THREE.MeshStandardMaterial({color: face ? CUBE_FACE_COLORS[face as keyof typeof CUBE_FACE_COLORS] : 0x151b24, roughness: .7, metalness: .05}));
 }

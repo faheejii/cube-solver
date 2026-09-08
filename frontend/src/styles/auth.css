@@ -86,7 +86,7 @@
 
 .auth-form input:focus {
     border-color: var(--blue);
-    box-shadow: 0 0 0 3px rgba(57, 135, 255, 0.13);
+    box-shadow: none;
 }
 
 .auth-submit { min-height: 50px; margin-top: 5px; }
@@ -104,5 +104,4 @@
 .auth-error { margin: -2px 0 0; color: var(--red); font-size: 0.86rem; }
 .auth-loading-card { display: grid; justify-items: center; }
 .auth-loading-card .auth-brand { justify-self: start; width: 100%; }
-
 
