@@ -309,7 +309,8 @@ The Playwright tests mock the API and cover registration, login errors, session 
 Current frontend behavior:
 
 - supports registration, login, logout, session restoration, and expired-session handling
-- uses a responsive three-column timer dashboard
+- uses a responsive, utilitarian three-column timer dashboard with a compact navigation rail
+- uses a joined timer workspace with centered timer/cube content, dynamically fitted single-line scrambles, and a READY solution action
 - defaults to a dark theme while still supporting a light theme
 - generates a WCA 3x3 scramble on first load and on demand
 - computes the solve in the background for the current committed scramble
@@ -318,6 +319,7 @@ Current frontend behavior:
 - supports fast greedy F2L or optimized F2L branch search
 - optionally evaluates all six cross colors for Optimized + Color Neutral solves; this deep mode is disabled by default and uses a fixed two-minute budget
 - includes a timer with inspection behavior similar to common cube timers
+- presents solution dialogs as near-full-screen utility inspectors with joined cube/stage panes, bottom playback controls, stage navigation, and a speed dropdown
 - includes a Settings view where the processing deadline can be set from 5 to 120 seconds, inspection can be enabled or disabled, and deep color-neutral optimization can be enabled; settings apply to new solve requests and are stored in the current browser
 - displays the current scramble on a 3D cube
 - calculates best time, average of 5, average of 12, solve count, and DNF count from saved attempts; the same compact statistics summary is available above the History solve list
@@ -400,7 +402,7 @@ The parser supports:
 - cube rotations: `x y z`
 - lowercase wide moves: `r u f d l b`
 
-Runtime lowercase wide moves are frame-aware moves executed by `OrientedCube`. OLL and PLL resource notation is compiled once into the face-and-slice form used by the cubie engine, so every returned algorithm text describes the same moves the solver validates and executes.
+Runtime lowercase wide moves, slice moves, and cube rotations are frame-aware moves executed natively by `OrientedCube`. OLL and PLL resource notation is preserved through database loading, solving, API responses, and frontend playback, so returned algorithm text retains native moves such as `r'`, `M'`, and `x`.
 
 Examples:
 
