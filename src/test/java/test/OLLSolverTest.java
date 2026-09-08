@@ -53,7 +53,7 @@ public class OLLSolverTest {
     }
 
     @Test
-    void solve_shouldUseCompiledExecutableNotationForSeededCase20() {
+    void solve_shouldPreserveNativeNotationForSeededCase20() {
         var database = OLLCaseDatabase.seedCases();
         var algorithm = database.allCases().stream()
                 .filter(ollCase -> ollCase.name().equals("case-20"))
@@ -64,9 +64,9 @@ public class OLLSolverTest {
         var setup = setupCubeFor(CubeOrientationKey.all().get(0), algorithm);
         setup.applyMoves(algorithm.getMoves());
 
-        assertEquals("L F R' F' L' R L' R B R B' R' B' R' L", algorithm.toString());
-        assertTrue(algorithm.getMoves().stream()
-                .noneMatch(move -> move.isCubeRotation() || move.isWideMove() || move.ordinal() / 3 >= 12));
+        assertEquals("r U R' U' M2 U R U' R' U' M'", algorithm.toString());
+        assertTrue(algorithm.getMoves().stream().anyMatch(Move::isWideMove));
+        assertTrue(algorithm.getMoves().stream().anyMatch(move -> move == Move.M2 || move == Move.M_PRIME));
         assertTrue(CrossAnalyzer.isCrossSolved(setup.cubeState(), setup.orientation()));
         assertTrue(F2LAnalyzer.isF2LSolved(setup.cubeState(), setup.orientation()));
         assertTrue(OLLAnalyzer.isOllSolved(setup.cubeState(), setup.orientation()));
@@ -103,12 +103,11 @@ public class OLLSolverTest {
         var solution = new OLLSolver(OLLCaseDatabase.seedCases()).solve(cube);
         cube.applyMoves(solution.getMoves());
 
-        assertTrue(solution.getMoves().stream().noneMatch(Move::isCubeRotation));
         assertTrue(OLLAnalyzer.isOllSolved(cube.cubeState(), cube.orientation()));
     }
 
     @Test
-    void seededCases_shouldReplayAcrossAllFramesAndAufsWithoutCubeRotations() {
+    void seededCases_shouldReplayAcrossAllFramesAndAufsWithNativeNotation() {
         var database = OLLCaseDatabase.seedCases();
         var solver = new OLLSolver(database);
         for (var orientationKey : CubeOrientationKey.all()) {
@@ -139,7 +138,6 @@ public class OLLSolverTest {
                     }
                     orientedCube.applyMoves(solution.getMoves());
 
-                    assertTrue(solution.getMoves().stream().noneMatch(Move::isCubeRotation), ollCase.name());
                     assertTrue(CrossAnalyzer.isCrossSolved(orientedCube.cubeState(), orientedCube.orientation()), ollCase.name());
                     assertTrue(F2LAnalyzer.isF2LSolved(orientedCube.cubeState(), orientedCube.orientation()), ollCase.name());
                     assertTrue(OLLAnalyzer.isOllSolved(orientedCube.cubeState(), orientedCube.orientation()), ollCase.name());

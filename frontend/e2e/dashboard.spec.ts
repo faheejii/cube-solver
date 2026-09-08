@@ -61,7 +61,8 @@ test.describe("authenticated dashboard production flow", () => {
         await page.getByRole("button", {name: "Timer"}).click();
 
         await page.getByRole("button", {name: "Optimized"}).click();
-        await page.locator(".workspace-toolbar select").selectOption("CN");
+        await page.locator(".workspace-toolbar .cross-face-trigger").click();
+        await page.getByRole("option", {name: "Color Neutral"}).click();
         await expect.poll(() => api.requests.filter((request) =>
             request.pathname === "/api/solve-jobs" && request.method === "POST"
         ).some((request) => (request.body as Record<string, unknown> | null)?.deepColorNeutral === true)).toBe(true);

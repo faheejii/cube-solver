@@ -25,7 +25,7 @@
 .settings-grid {
     display: grid;
     grid-template-columns: minmax(0, 1.35fr) minmax(260px, 0.65fr);
-    gap: 16px;
+    gap: 0;
 }
 
 .settings-card {
@@ -51,6 +51,11 @@
     gap: 20px;
     border-top: 1px solid var(--border);
     padding-top: 18px;
+}
+
+.settings-card > h2 + .settings-control,
+.settings-card > h2 + .settings-field {
+    border-top: 0;
 }
 
 .settings-control span:first-child,

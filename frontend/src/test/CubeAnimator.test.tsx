@@ -93,12 +93,12 @@ describe("CubeAnimator debug comparison", () => {
         expect(screen.getByTestId("custom-preview")).toHaveAttribute("data-is-playing", "true");
         expect(screen.getByTestId("custom-preview")).toHaveAttribute("data-setup", "R U");
 
-        fireEvent.click(screen.getByRole("button", {name: "CROSS"}));
+        fireEvent.click(screen.getByRole("button", {name: "Next stage"}));
         expect(screen.getByTestId("custom-preview")).toHaveAttribute("data-is-playing", "false");
         expect(screen.getByRole("button", {name: "Play playback"})).toBeInTheDocument();
 
         fireEvent.click(screen.getByRole("button", {name: "Play playback"}));
-        fireEvent.click(screen.getByRole("button", {name: "3x"}));
+        fireEvent.change(screen.getByRole("combobox", {name: "Playback speed"}), {target: {value: "3"}});
         expect(screen.getByTestId("custom-preview")).toHaveAttribute("data-is-playing", "false");
         expect(screen.getByRole("button", {name: "Play playback"})).toBeInTheDocument();
     });
@@ -123,7 +123,7 @@ describe("CubeAnimator debug comparison", () => {
         render(<CubeAnimator result={result}/>);
 
         await waitFor(() => expect(screen.getByTestId("reference-preview")).toBeInTheDocument());
-        await screen.getByRole("button", {name: "CROSS"}).click();
+        await screen.getByRole("button", {name: "Next stage"}).click();
 
         const custom = screen.getByTestId("custom-preview");
         const reference = screen.getByTestId("reference-preview");

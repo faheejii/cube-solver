@@ -7,6 +7,7 @@ import {
     X,
 } from "lucide-react";
 import {crossFaceLabel, f2lModeLabel} from "./format";
+import {CrossFaceSwatch} from "./CrossFaceSelect";
 import type {SolutionProcess} from "./types";
 
 type Props = {
@@ -37,7 +38,6 @@ export default function ActiveSolutionsView({
         <section className="dashboard-process-view">
             <header className="history-view-header">
                 <div>
-                    <span className="dashboard-kicker">Solver queue</span>
                     <h1>Active Solutions</h1>
                     <p>Monitor, terminate, and review solution work from this browser session.</p>
                 </div>
@@ -144,7 +144,7 @@ function ProcessCard({
 
             <div className="process-metadata">
                 <span>{f2lModeLabel(process.request.f2lMode)}</span>
-                <span>Cross {crossFaceLabel(process.request.crossFace)}</span>
+                <span className="cross-face-meta">Cross <CrossFaceSwatch face={process.request.crossFace}/>{crossFaceLabel(process.request.crossFace)}</span>
                 <span>{formatElapsed(process.createdAt, process.updatedAt, active)}</span>
                 {deepColorNeutral ? <span title="Deep color-neutral optimization has a fixed two-minute budget">Deep CN · up to 2m</span> : null}
             </div>
