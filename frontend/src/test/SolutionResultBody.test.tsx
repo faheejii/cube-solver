@@ -43,15 +43,23 @@ const result: SolveResponse = {
 };
 
 describe("SolutionResultBody F2L explanation", () => {
-    it("renders pair cards and comparison facts", () => {
+    it("renders pair cards without the removed comparison panel", () => {
         render(<SolutionResultBody result={result} requestedCross="D"/>);
 
         fireEvent.click(screen.getByRole("button", {name: /F2L/i}));
 
         expect(screen.getByText("Pair 1")).toBeInTheDocument();
         expect(screen.getByText("Shortest available pair")).toBeInTheDocument();
-        expect(screen.getByText("Preserves solved slots")).toBeInTheDocument();
-        expect(screen.getByText("Fast vs Optimized")).toBeInTheDocument();
+        expect(screen.queryByText("Preserves FL")).not.toBeInTheDocument();
+        expect(screen.queryByText("Preserves solved slots")).not.toBeInTheDocument();
+        expect(screen.queryByText("Needs pairing")).not.toBeInTheDocument();
+        expect(screen.queryByText("Already connected")).not.toBeInTheDocument();
+        expect(screen.queryByText("Recovery Unpair")).not.toBeInTheDocument();
+        expect(screen.queryByText(/Case:/)).not.toBeInTheDocument();
+        expect(screen.queryByText("12 setup cases")).not.toBeInTheDocument();
+        expect(screen.queryByText("41 insert cases")).not.toBeInTheDocument();
+        expect(screen.queryByText("[FR, FL]")).not.toBeInTheDocument();
+        expect(screen.queryByText("Fast vs Optimized")).not.toBeInTheDocument();
     });
 
     it("selects an individual pair for playback", () => {

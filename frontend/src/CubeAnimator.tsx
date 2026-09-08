@@ -109,8 +109,7 @@ export default function CubeAnimator({
         <section className={compact ? "visualizer-section compact" : "visualizer-section"} aria-label="Cube animation">
             <div className="visualizer-toolbar">
                 <div>
-                    <p className="section-label">Playback</p>
-                    <h2>3D Cube</h2>
+                    <h2>3D Playback</h2>
                 </div>
             </div>
 

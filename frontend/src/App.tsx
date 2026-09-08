@@ -4,6 +4,7 @@ import {setSearchDebug} from "cubing/search";
 import {LoaderCircle, Save, Trash2, X} from "lucide-react";
 import ActiveSolutionsView from "./ActiveSolutionsView";
 import AlgorithmsView from "./AlgorithmsView";
+import CrossFaceSelect from "./CrossFaceSelect";
 import DashboardSidebar, {type DashboardView} from "./DashboardSidebar";
 import HistoryView from "./HistoryView";
 import SaveToast from "./SaveToast";
@@ -752,7 +753,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                     >
                         <div className="solution-modal-header">
                             <div>
-                                <p className="section-label">History Solution</p>
                                 <h2>{modalDetail ? formatHistoryTime(modalDetail.officialMs, modalDetail.penalty, modalDetail.dnf) : "Loading"}</h2>
                             </div>
                             <div className="solution-modal-actions">
@@ -782,20 +782,15 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                         {modalDetail ? (
                             <>
                                 <div className="solution-modal-controls">
-                                    <label className="compact-control">
+                                    <div className="compact-control">
                                         <span>Cross</span>
-                                        <select
+                                        <CrossFaceSelect
                                             value={modalCrossFace}
-                                            onChange={(event) => void handleModalCrossChange(event.target.value)}
+                                            onChange={(value) => void handleModalCrossChange(value)}
+                                            options={FACE_OPTIONS}
                                             disabled={modalComputing || modalSaving}
-                                        >
-                                            {FACE_OPTIONS.map((option) => (
-                                                <option key={option.value} value={option.value}>
-                                                    {option.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </label>
+                                        />
+                                    </div>
                                     <span className="toolbar-separator" aria-hidden="true"/>
                                     <div className="workspace-mode-switch" aria-label="History F2L mode">
                                         <button
@@ -885,7 +880,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                     >
                         <div className="solution-modal-header">
                             <div>
-                                <p className="section-label">Current scramble</p>
                                 <h2>Solution and summary</h2>
                                 <span className="solution-modal-context">
                   {f2lModeLabel(result.f2lMode)} · Cross {crossFaceLabel(crossFace)}
@@ -916,7 +910,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                     >
                         <div className="solution-modal-header">
                             <div>
-                                <p className="section-label">Completed process</p>
                                 <h2>{f2lModeLabel(processPreview.request.f2lMode)} solution</h2>
                                 <span className="solution-modal-context">
                   Cross {crossFaceLabel(processPreview.request.crossFace)}

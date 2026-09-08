@@ -1,5 +1,6 @@
 import {Eye, LoaderCircle, RefreshCw, Trash2} from "lucide-react";
 import {crossFaceLabel, formatHistoryTime} from "./format";
+import {CrossFaceSwatch} from "./CrossFaceSelect";
 import StatisticsSummary from "./StatisticsSummary";
 import type {SolveHistoryEntry, SolveStatistics} from "./types";
 
@@ -38,7 +39,6 @@ export default function HistoryView({
         <section className="dashboard-history-view">
             <header className="history-view-header">
                 <div>
-                    <span className="dashboard-kicker">Solve archive</span>
                     <h1>History</h1>
                     <p>Review times, scrambles, and saved CFOP solution variants.</p>
                 </div>
@@ -74,7 +74,7 @@ export default function HistoryView({
                         </div>
                         <p>{entry.scramble}</p>
                         <div className="history-variants">
-                            <span>Cross {crossFaceLabel(entry.crossFaceRequested)}</span>
+                            <span className="cross-face-meta">Cross <CrossFaceSwatch face={entry.crossFaceRequested}/>{crossFaceLabel(entry.crossFaceRequested)}</span>
                             <span>{entry.fastCrossFaceRequested ? "Fast saved" : "Fast missing"}</span>
                             <span>{entry.optimizedCrossFaceRequested ? "Optimized saved" : "Optimized missing"}</span>
                         </div>

@@ -49,7 +49,6 @@ export default function AlgorithmsView() {
         <section className="dashboard-algorithms-view">
             <header className="algorithms-view-header">
                 <div>
-                    <span className="dashboard-kicker">Canonical algorithm catalog</span>
                     <h1>Algorithms</h1>
                     <p>Browse the canonical F2L, OLL, and PLL cases available to the solver.</p>
                 </div>

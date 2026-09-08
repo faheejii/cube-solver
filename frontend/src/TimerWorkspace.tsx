@@ -6,6 +6,7 @@ import {
     X,
 } from "lucide-react";
 import ScrambleCube from "./ScrambleCube";
+import CrossFaceSelect from "./CrossFaceSelect";
 import {formatMetricTime, formatRollingAverage} from "./format";
 import type {SolveResponse, SolveStatistics} from "./types";
 
@@ -121,20 +122,15 @@ export default function TimerWorkspace({
                 <div className="toolbar-group">
                     <span className="toolbar-product">3×3</span>
                     <span className="toolbar-separator"/>
-                    <label>
+                    <div className="compact-control">
                         <span>Cross</span>
-                        <select
+                        <CrossFaceSelect
                             value={crossFace}
-                            onChange={(event) => onCrossFaceChange(event.target.value)}
+                            onChange={onCrossFaceChange}
+                            options={faceOptions}
                             disabled={attemptLocked}
-                        >
-                            {faceOptions.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                    {option.label}
-                                </option>
-                            ))}
-                        </select>
-                    </label>
+                        />
+                    </div>
                     <span className="toolbar-separator"/>
                     <div className="workspace-mode-switch" aria-label="F2L mode">
                         <button

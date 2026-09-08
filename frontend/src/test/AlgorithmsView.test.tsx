@@ -71,6 +71,7 @@ describe("AlgorithmsView", () => {
         fireEvent.change(screen.getByRole("combobox", {name: "Algorithm phase"}), {
             target: {value: "insert"},
         });
-        await waitFor(() => expect(screen.getByText("Canonical algorithm catalog")).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole("heading", {name: "Algorithms"})).toBeInTheDocument());
+        expect(screen.queryByText("Canonical algorithm catalog")).not.toBeInTheDocument();
     });
 });
