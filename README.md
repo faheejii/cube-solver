@@ -402,7 +402,7 @@ The parser supports:
 - cube rotations: `x y z`
 - lowercase wide moves: `r u f d l b`
 
-Runtime lowercase wide moves are frame-aware moves executed by `OrientedCube`. OLL and PLL resource notation is compiled once into the face-and-slice form used by the cubie engine, so every returned algorithm text describes the same moves the solver validates and executes.
+Runtime lowercase wide moves, slice moves, and cube rotations are frame-aware moves executed natively by `OrientedCube`. OLL and PLL resource notation is preserved through database loading, solving, API responses, and frontend playback, so returned algorithm text retains native moves such as `r'`, `M'`, and `x`.
 
 Examples:
 
