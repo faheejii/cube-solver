@@ -112,11 +112,6 @@ public class PLLCaseDatabase {
 
     public void validate() {
         for (var pllCase : caseList) {
-            for (var move : pllCase.algorithm().getMoves()) {
-                if (move.isCubeRotation()) {
-                    throw new IllegalArgumentException("PLL DB algorithms must not contain cube rotations: " + pllCase.name());
-                }
-            }
             for (var orientationKey : CubeOrientationKey.all()) {
                 for (var finalAuf : FINAL_AUF_TRIALS) {
                     validateSeedVariant(setupCubeFor(orientationKey, pllCase.algorithm().concat(finalAuf)), pllCase.algorithm().concat(finalAuf), pllCase.name());
@@ -143,9 +138,7 @@ public class PLLCaseDatabase {
     }
 
     private static Algorithm parseLastLayerAlgorithm(String algorithm) {
-        return Algorithm.materializeWideAndSliceMoves(
-                Algorithm.parse(NotationNormalizer.normalizeLastLayerAlgorithm(algorithm))
-        );
+        return Algorithm.parse(NotationNormalizer.normalizeLastLayerAlgorithm(algorithm));
     }
 
     private static Map<LookupKey, List<PLLCase>> findDuplicateSignatures(Collection<PLLCase> pllCases) {

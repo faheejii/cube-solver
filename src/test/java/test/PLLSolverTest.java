@@ -70,7 +70,6 @@ public class PLLSolverTest {
         var solution = solver.solve(cube);
 
         cube.applyMoves(solution.getMoves());
-        assertTrue(solution.getMoves().stream().noneMatch(Move::isCubeRotation));
         assertTrue(PLLAnalyzer.isPllSolved(cube.cubeState(), cube.orientation()));
     }
 
@@ -83,7 +82,6 @@ public class PLLSolverTest {
         var solution = solver.solve(cube);
 
         cube.applyMoves(solution.getMoves());
-        assertTrue(solution.getMoves().stream().noneMatch(Move::isCubeRotation));
         assertTrue(PLLAnalyzer.isPllSolved(cube.cubeState(), cube.orientation()));
     }
 
@@ -124,7 +122,7 @@ public class PLLSolverTest {
     }
 
     @Test
-    void solve_shouldCoverEverySeededCaseAcrossAllFramesAndFinalAufsWithoutCubeRotations() {
+    void solve_shouldCoverEverySeededCaseAcrossAllFramesAndFinalAufsWithNativeNotation() {
         var database = PLLCaseDatabase.seedCases();
         var solver = new PLLSolver(database);
 
@@ -136,7 +134,6 @@ public class PLLSolverTest {
                     var solution = solver.solve(cube);
                     cube.applyMoves(solution.getMoves());
 
-                    assertTrue(solution.getMoves().stream().noneMatch(Move::isCubeRotation), pllCase.name());
                     assertTrue(isFullySolved(cube), pllCase.name());
                 }
             }

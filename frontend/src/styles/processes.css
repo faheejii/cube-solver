@@ -27,7 +27,7 @@
 
 .process-list {
     display: grid;
-    gap: 12px;
+    gap: 0;
 }
 
 .process-card {
@@ -181,4 +181,3 @@
         transform: translateX(330%);
     }
 }
-

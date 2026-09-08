@@ -110,11 +110,6 @@ public class OLLCaseDatabase {
 
     public void validate() {
         for (var ollCase : caseList) {
-            for (var move : ollCase.algorithm().getMoves()) {
-                if (move.isCubeRotation()) {
-                    throw new IllegalArgumentException("OLL DB algorithms must not contain cube rotations: " + ollCase.name());
-                }
-            }
             for (var orientationKey : CubeOrientationKey.all()) {
                 var setupCube = setupCubeFor(orientationKey, ollCase.algorithm());
                 validateSeedVariant(setupCube, ollCase.algorithm(), ollCase.name());
@@ -137,9 +132,7 @@ public class OLLCaseDatabase {
     }
 
     private static Algorithm parseLastLayerAlgorithm(String algorithm) {
-        return Algorithm.materializeWideAndSliceMoves(
-                Algorithm.parse(NotationNormalizer.normalizeLastLayerAlgorithm(algorithm))
-        );
+        return Algorithm.parse(NotationNormalizer.normalizeLastLayerAlgorithm(algorithm));
     }
 
     private static Map<LookupKey, List<OLLCase>> findDuplicateSignatures(Collection<OLLCase> ollCases) {

@@ -37,12 +37,11 @@ export default function SolutionResultBody({result, requestedCross}: Props) {
     }
 
     return (
-        <>
+        <div className="solution-result-body">
             <div className="solution-summary-strip">
                 <SummaryItem label="Total" value={`${result.totalMoveCount} moves`}/>
                 <SummaryItem label="Solver time" value={`${result.elapsedMs.toFixed(1)} ms`}/>
                 {crossDiffers ? <SummaryItem label="Chosen cross" value={result.crossFace}/> : null}
-                <SummaryItem label="Solved slots" value={`${solvedSlotCount(result.solvedF2LSlots)}/4`}/>
             </div>
 
             <div className="solution-result-layout">
@@ -64,7 +63,7 @@ export default function SolutionResultBody({result, requestedCross}: Props) {
                             const expanded = selectedDetail === stage.name;
                             return (
                                 <article
-                                    className={expanded ? "solution-stage-row expanded" : "solution-stage-row"}
+                                    className={expanded ? `solution-stage-row solution-stage-row-${stage.name} expanded` : `solution-stage-row solution-stage-row-${stage.name}`}
                                     key={stage.name}
                                 >
                                     <button type="button" onClick={() => toggleStage(stage)} aria-expanded={expanded}>
@@ -100,10 +99,9 @@ export default function SolutionResultBody({result, requestedCross}: Props) {
                             );
                         })}
                     </div>
-                    {result.comparison ? <ComparisonPanel result={result}/> : null}
                 </aside>
             </div>
-        </>
+        </div>
     );
 }
 
@@ -119,11 +117,6 @@ function F2LDetails({
     const pairs = result.f2l.pairs;
     return (
         <div className="solution-f2l-details">
-            <div className="solution-stage-f2l-meta">
-                <span>{result.f2lSetupCaseCount} setup cases</span>
-                <span>{result.f2lInsertCaseCount} insert cases</span>
-                <span>{result.solvedF2LSlots}</span>
-            </div>
             {pairs.length === 0 ? (
                 <p className="solution-f2l-empty">No F2L pairs generated.</p>
             ) : (
@@ -162,16 +155,14 @@ function F2LPairCard({
             </button>
             <div className="solution-pair-body">
                 <code>{pair.algorithm || "No moves"}</code>
-                <span className="solution-pair-range">
-                    Moves {pair.startMoveIndex}–{pair.endMoveIndex}
-                </span>
                 <div className="solution-pair-tags">
-                    {pair.preservedSlots.map((slot) => <span key={slot}>Preserves {slot}</span>)}
-                    {reasonCodes(pair).map((code) => <span key={code}>{reasonLabel(code)}</span>)}
+                    {reasonCodes(pair)
+                        .filter((code) => code !== "PAIR_ALREADY_CONNECTED"
+                            && code !== "PRESERVES_SOLVED_SLOTS"
+                            && code !== "RECOVERY_UNPAIR")
+                        .map((code) => <span key={code}>{reasonLabel(code)}</span>)}
                 </div>
                 <div className="solution-pair-facts">
-                    <span>Case: {pair.case.cornerPosition}/{pair.case.edgePosition}</span>
-                    <span>{pair.case.initiallyConnected ? "Already connected" : "Needs pairing"}</span>
                     {pair.moveBreakdownAvailable ? (
                         <span>Breakdown: {pair.setupAlgorithm ?? ""} {pair.pairingAlgorithm ?? ""} {pair.insertionAlgorithm ?? ""}</span>
                     ) : <span>Move breakdown unavailable</span>}
@@ -181,45 +172,12 @@ function F2LPairCard({
     );
 }
 
-function ComparisonPanel({result}: { result: SolveResponse }) {
-    const comparison = result.comparison;
-    if (!comparison) {
-        return null;
-    }
-    return (
-        <section className="solution-comparison" aria-label="Fast versus Optimized comparison">
-            <div className="solution-comparison-heading">
-                <strong>Fast vs Optimized</strong>
-                <small>Optimized minus Fast</small>
-            </div>
-            <div className="solution-comparison-grid">
-                <ComparisonMetric label="F2L" value={comparison.f2lMoveDifference}/>
-                <ComparisonMetric label="Last layer" value={comparison.ollMoveDifference + comparison.pllMoveDifference}/>
-                <ComparisonMetric label="Total" value={comparison.totalMoveDifference}/>
-                <ComparisonMetric label="Rotations" value={comparison.rotationDifference}/>
-            </div>
-            {comparison.pairOrderChanged ? <span className="solution-comparison-note">Pair order changed</span> : null}
-            <div className="solution-pair-tags">
-                {comparison.explanationCodes.map((code) => (
-                    <span key={code}>{comparisonLabel(code)}</span>
-                ))}
-            </div>
-        </section>
-    );
-}
-
-function ComparisonMetric({label, value}: { label: string; value: number }) {
-    return <div><span>{label}</span><strong>{signedValue(value)}</strong></div>;
-}
-
 function reasonCodes(pair: F2LPair): string[] {
     return pair.selectionEvidence.reasonCodes;
 }
 
 function reasonLabel(code: string): string {
     return {
-        PAIR_ALREADY_CONNECTED: "Already connected",
-        PRESERVES_SOLVED_SLOTS: "Preserves solved slots",
         SHORTEST_AVAILABLE_PAIR: "Shortest available pair",
         NO_ROTATION_REQUIRED: "No rotation required",
         FEWER_ROTATIONS: "Fewer rotations",
@@ -229,24 +187,8 @@ function reasonLabel(code: string): string {
     }[code] ?? formatCode(code);
 }
 
-function comparisonLabel(code: string): string {
-    return {
-        SHORTER_F2L: "Shorter F2L",
-        SHORTER_LAST_LAYER: "Shorter last layer",
-        SHORTER_TOTAL_ROUTE: "Shorter total route",
-        FEWER_ROTATIONS: "Fewer rotations",
-        DIFFERENT_PAIR_ORDER: "Different pair order",
-        LOCAL_PAIR_LONGER_GLOBAL_ROUTE_SHORTER: "Longer local pair, shorter global route",
-        NO_MEASURABLE_IMPROVEMENT: "No measurable improvement",
-    }[code] ?? formatCode(code);
-}
-
 function formatCode(code: string): string {
     return code.toLowerCase().replace(/_/g, " ").replace(/(^|\s)\S/g, (letter: string) => letter.toUpperCase());
-}
-
-function signedValue(value: number): string {
-    return value > 0 ? `+${value}` : String(value);
 }
 
 function SummaryItem({label, value}: { label: string; value: string }) {
@@ -260,8 +202,4 @@ function SummaryItem({label, value}: { label: string; value: string }) {
 
 function normalizedCross(value: string): string {
     return value.trim().toUpperCase();
-}
-
-function solvedSlotCount(summary: string): number {
-    return (summary.match(/\b(FR|FL|BL|BR)\b/g) ?? []).length;
 }
