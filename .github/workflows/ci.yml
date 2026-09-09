@@ -49,7 +49,7 @@ jobs:
       - run: npm test
       - run: npm run build
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:e2e
+      - run: PLAYWRIGHT_SERVER=preview npm run test:e2e
 
   container:
     runs-on: ubuntu-latest

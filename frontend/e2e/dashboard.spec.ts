@@ -2,6 +2,26 @@ import {expect, test} from "@playwright/test";
 import {mockProductionApi, normalUser} from "./production-fixtures";
 
 test.describe("authenticated dashboard production flow", () => {
+    test("generates and regenerates scrambles in the production worker", async ({page}) => {
+        const pageErrors: Error[] = [];
+        page.on("pageerror", (error) => pageErrors.push(error));
+
+        await mockProductionApi(page, {user: normalUser});
+        await page.goto("/");
+
+        const scramble = page.locator(".dashboard-scramble-card p");
+        await expect(scramble).not.toHaveText("Preparing scramble…");
+        const initialScramble = (await scramble.textContent())?.trim();
+
+        expect(initialScramble).toBeTruthy();
+        expect(initialScramble).not.toBe("R D R' D2 R D' R'");
+
+        await page.getByRole("button", {name: "Generate new scramble"}).click();
+        await expect.poll(async () => (await scramble.textContent())?.trim()).not.toBe(initialScramble);
+        expect((await scramble.textContent())?.trim()).toBeTruthy();
+        expect(pageErrors.filter((error) => error.message.includes("document is not defined"))).toEqual([]);
+    });
+
     test("keeps the normal-user dashboard scoped to user features", async ({page}) => {
         await mockProductionApi(page, {user: normalUser});
         await page.goto("/");
