@@ -1,5 +1,7 @@
 import {defineConfig, devices} from "@playwright/test";
 
+const usePreviewServer = process.env.PLAYWRIGHT_SERVER === "preview";
+
 export default defineConfig({
     testDir: "./e2e",
     fullyParallel: true,
@@ -13,9 +15,11 @@ export default defineConfig({
         ...devices["Desktop Chrome"],
     },
     webServer: process.env.PLAYWRIGHT_BASE_URL ? undefined : {
-        command: "npm run dev -- --host 127.0.0.1 --port 4173",
+        command: usePreviewServer
+            ? "npm run preview -- --host 127.0.0.1 --port 4173"
+            : "npm run dev -- --host 127.0.0.1 --port 4173",
         url: "http://127.0.0.1:4173",
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: !process.env.CI && !usePreviewServer,
         timeout: 120_000,
     },
 });

@@ -304,6 +304,13 @@ Run the deterministic browser authentication tests with:
 npm run test:e2e
 ```
 
+To exercise the production bundle and scramble worker locally, build first and run:
+
+```bash
+npm run build
+PLAYWRIGHT_SERVER=preview npm run test:e2e
+```
+
 The Playwright tests mock the API and cover registration, login errors, session restoration, logout, protected history, session expiry, catalog previews, solution/stage playback setup, and deleting a solve from the Recent solves rail.
 
 Current frontend behavior:
