@@ -1,7 +1,6 @@
 package server;
 
 import database.DatabaseHealth;
-import database.DatabaseManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -13,6 +12,7 @@ import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.web.servlet.MockMvc;
 
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -27,7 +27,7 @@ class SpringHealthControllerTest {
     private MockMvc mockMvc;
 
     @MockBean
-    private DatabaseManager databaseManager;
+    private SpringDatabaseHealth databaseHealth;
 
     @MockBean
     private OperationalMetrics operationalMetrics;
@@ -36,10 +36,10 @@ class SpringHealthControllerTest {
     static class MvcTestConfiguration {
         @Bean
         SpringHealthController springHealthController(
-                DatabaseManager databaseManager,
+                SpringDatabaseHealth databaseHealth,
                 OperationalMetrics operationalMetrics
         ) {
-            return new SpringHealthController(databaseManager, operationalMetrics);
+            return new SpringHealthController(databaseHealth, operationalMetrics);
         }
     }
 
@@ -53,7 +53,7 @@ class SpringHealthControllerTest {
 
     @Test
     void readyRoute_returnsHealthyDatabaseResponse() throws Exception {
-        when(databaseManager.health()).thenReturn(DatabaseHealth.ok());
+        when(databaseHealth.check()).thenReturn(DatabaseHealth.ok());
 
         mockMvc.perform(get("/api/health/ready"))
                 .andExpect(status().isOk())
@@ -64,12 +64,43 @@ class SpringHealthControllerTest {
 
     @Test
     void readyRoute_returnsServiceUnavailableWhenDatabaseIsUnavailable() throws Exception {
-        when(databaseManager.health()).thenReturn(DatabaseHealth.error("connection refused"));
+        when(databaseHealth.check()).thenReturn(DatabaseHealth.error("connection refused"));
 
         mockMvc.perform(get("/api/health/ready"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.status").value("error"))
                 .andExpect(jsonPath("$.database.status").value("error"))
                 .andExpect(jsonPath("$.database.message").value("connection refused"));
+    }
+
+    @Test
+    void springDatabaseHealth_reportsDisabledWhenDataSourceIsUnavailable() {
+        var health = new SpringDatabaseHealth(null).check();
+
+        org.junit.jupiter.api.Assertions.assertEquals(DatabaseHealth.disabled(), health);
+    }
+
+    @Test
+    void springDatabaseHealth_probesConfiguredDataSource() throws Exception {
+        var dataSource = mock(javax.sql.DataSource.class);
+        var connection = mock(java.sql.Connection.class);
+        var statement = mock(java.sql.Statement.class);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.createStatement()).thenReturn(statement);
+
+        var health = new SpringDatabaseHealth(dataSource).check();
+
+        org.junit.jupiter.api.Assertions.assertEquals(DatabaseHealth.ok(), health);
+        org.mockito.Mockito.verify(statement).execute("SELECT 1");
+    }
+
+    @Test
+    void springDatabaseHealth_preservesDatabaseFailureMessage() throws Exception {
+        var dataSource = mock(javax.sql.DataSource.class);
+        when(dataSource.getConnection()).thenThrow(new java.sql.SQLException("connection refused"));
+
+        var health = new SpringDatabaseHealth(dataSource).check();
+
+        org.junit.jupiter.api.Assertions.assertEquals(DatabaseHealth.error("connection refused"), health);
     }
 }
