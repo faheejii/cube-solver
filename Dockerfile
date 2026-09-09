@@ -32,4 +32,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
     CMD curl --fail --silent http://localhost:${SERVER_PORT:-8080}/api/health/ready || exit 1
 
-ENTRYPOINT ["sh", "-c", "exec java -Dserver.port=${SERVER_PORT:-8080} -Dfrontend.dist=/app/frontend/dist ${JAVA_OPTS:-} -cp '/app/classes:/app/dependency/*' server.ApiServerMain"]
+ENTRYPOINT ["sh", "-c", "exec java -Dserver.port=${SERVER_PORT:-8080} -Dfrontend.dist=/app/frontend/dist ${JAVA_OPTS:-} -cp '/app/classes:/app/dependency/*' server.SpringCubeApplication"]

@@ -1,17 +1,17 @@
 package springboot;
 
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
+import server.SpringCubeApplication;
 
 /**
- * Additive Spring Boot entry point for the server migration.
+ * Compatibility launcher for the Spring Boot server.
  *
- * <p>The existing {@code server.ApiServerMain} remains the production entry
- * point until the route handlers are migrated into Spring MVC.</p>
+ * <p>The production application now lives in the {@code server} package so
+ * that its component scan includes the HTTP adapters and persistence
+ * configuration. Keep this class for callers that used the initial migration
+ * entry point, but delegate to the canonical application.</p>
  */
-@SpringBootApplication(scanBasePackages = "springboot")
 public class CubeSolverSpringApplication {
     public static void main(String[] args) {
-        SpringApplication.run(CubeSolverSpringApplication.class, args);
+        SpringCubeApplication.main(args);
     }
 }
