@@ -3,7 +3,6 @@ package server;
 import api.SolveApiRequest;
 import database.DatabaseManager;
 import database.SaveSolutionCommand;
-import database.SolveHistoryRepository;
 import solver.CfopSolveResult;
 import solver.F2LMode;
 import solver.SolveCancellation;
@@ -29,8 +28,7 @@ final class SolveJobManager implements AutoCloseable {
     private static final int MAX_RETAINED_FINISHED_JOBS = 100;
 
     private final solver.CfopSolveService solveService;
-    private final DatabaseManager databaseManager;
-    private final SolveHistoryRepository repository;
+    private final CompletedSolutionPersistence completedSolutionPersistence;
     private final OperationalMetrics operationalMetrics;
     private final Long solveDeadlineOverrideNanos;
     private final ExecutorService optimizedExecutor;
@@ -39,7 +37,7 @@ final class SolveJobManager implements AutoCloseable {
     private final ConcurrentLinkedDeque<String> finishedJobIds = new ConcurrentLinkedDeque<>();
 
     SolveJobManager(solver.CfopSolveService solveService, DatabaseManager databaseManager) {
-        this(solveService, databaseManager, null, new OperationalMetrics());
+        this(solveService, new LegacySolveHistoryPersistence(databaseManager), null, new OperationalMetrics());
     }
 
     SolveJobManager(
@@ -47,7 +45,7 @@ final class SolveJobManager implements AutoCloseable {
             DatabaseManager databaseManager,
             long solveDeadlineNanos
     ) {
-        this(solveService, databaseManager, solveDeadlineNanos, new OperationalMetrics());
+        this(solveService, new LegacySolveHistoryPersistence(databaseManager), solveDeadlineNanos, new OperationalMetrics());
     }
 
     SolveJobManager(
@@ -55,18 +53,28 @@ final class SolveJobManager implements AutoCloseable {
             DatabaseManager databaseManager,
             OperationalMetrics operationalMetrics
     ) {
-        this(solveService, databaseManager, null, operationalMetrics);
+        this(solveService, new LegacySolveHistoryPersistence(databaseManager), null, operationalMetrics);
+    }
+
+    SolveJobManager(
+            solver.CfopSolveService solveService,
+            CompletedSolutionPersistence completedSolutionPersistence,
+            OperationalMetrics operationalMetrics
+    ) {
+        this(solveService, completedSolutionPersistence, null, operationalMetrics);
     }
 
     private SolveJobManager(
             solver.CfopSolveService solveService,
-            DatabaseManager databaseManager,
+            CompletedSolutionPersistence completedSolutionPersistence,
             Long solveDeadlineOverrideNanos,
             OperationalMetrics operationalMetrics
     ) {
         this.solveService = solveService;
-        this.databaseManager = databaseManager;
-        this.repository = new SolveHistoryRepository(databaseManager);
+        this.completedSolutionPersistence = java.util.Objects.requireNonNull(
+                completedSolutionPersistence,
+                "completedSolutionPersistence"
+        );
         this.operationalMetrics = operationalMetrics;
         if (solveDeadlineOverrideNanos != null && solveDeadlineOverrideNanos <= 0) {
             throw new IllegalArgumentException("solveDeadlineOverrideNanos must be positive");
@@ -197,7 +205,7 @@ final class SolveJobManager implements AutoCloseable {
             );
             SolveCancellation.throwIfCancelled();
             CheckedRunnable saveAction = saveOnComplete
-                    ? () -> repository.upsertSolution(toSaveCommand(
+                    ? () -> completedSolutionPersistence.save(toSaveCommand(
                         userId,
                         solveId,
                         requestedCrossFace,
@@ -258,7 +266,7 @@ final class SolveJobManager implements AutoCloseable {
         if (!saveOnComplete) {
             return;
         }
-        if (!databaseManager.isConfigured()) {
+        if (!completedSolutionPersistence.isConfigured()) {
             throw new IllegalArgumentException("Database is not configured");
         }
         if (userId == null || userId.isBlank() || solveId == null) {
