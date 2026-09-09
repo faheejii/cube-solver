@@ -34,7 +34,7 @@ final class SpringSolveJobController {
         );
         var user = SpringRequestSupport.currentUser();
         if (request.saveOnComplete() && user == null) {
-            throw new AuthService.UnauthorizedException("Authentication required");
+            throw new SpringAuthContracts.UnauthorizedException("Authentication required");
         }
         var job = jobManager.submit(
                 request.solveRequest(),

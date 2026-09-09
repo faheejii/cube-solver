@@ -68,7 +68,7 @@ final class SpringRequestSupport {
     static AuthUser requireUser() {
         var user = currentUser();
         if (user == null) {
-            throw new AuthService.UnauthorizedException("Authentication required");
+            throw new SpringAuthContracts.UnauthorizedException("Authentication required");
         }
         return user;
     }
@@ -76,7 +76,7 @@ final class SpringRequestSupport {
     static AuthUser requireAdmin() {
         var user = requireUser();
         if (!user.isAdmin()) {
-            throw new AuthService.ForbiddenException("Administrator access required");
+            throw new SpringAuthContracts.ForbiddenException("Administrator access required");
         }
         return user;
     }

@@ -13,17 +13,17 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 final class SpringExceptionHandler {
     private static final Logger LOGGER = LoggerFactory.getLogger(SpringExceptionHandler.class);
 
-    @ExceptionHandler(AuthService.UnauthorizedException.class)
-    ResponseEntity<String> unauthorized(AuthService.UnauthorizedException exception) {
+    @ExceptionHandler(SpringAuthContracts.UnauthorizedException.class)
+    ResponseEntity<String> unauthorized(SpringAuthContracts.UnauthorizedException exception) {
         return SpringRequestSupport.error(401, exception.getMessage());
     }
 
-    @ExceptionHandler(AuthService.AuthConflictException.class)
-    ResponseEntity<String> conflict(AuthService.AuthConflictException exception) {
+    @ExceptionHandler(SpringAuthContracts.AuthConflictException.class)
+    ResponseEntity<String> conflict(SpringAuthContracts.AuthConflictException exception) {
         return SpringRequestSupport.error(409, exception.getMessage());
     }
 
-    @ExceptionHandler({AuthService.ForbiddenException.class, SolveJobManager.ForbiddenException.class})
+    @ExceptionHandler({SpringAuthContracts.ForbiddenException.class, SolveJobManager.ForbiddenException.class})
     ResponseEntity<String> forbidden(RuntimeException exception) {
         return SpringRequestSupport.error(403, exception.getMessage());
     }

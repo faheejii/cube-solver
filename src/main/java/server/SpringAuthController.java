@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** MVC adapter for the existing authentication service and cube_session cookie contract. */
+/** MVC adapter for the Spring authentication service and cube_session cookie contract. */
 @RestController
 @RequestMapping("/api/auth")
 final class SpringAuthController {
@@ -95,13 +95,13 @@ final class SpringAuthController {
 
     private ResponseEntity<String> authenticatedResponse(
             int status,
-            AuthService.AuthenticatedSession session
+            SpringAuthContracts.AuthenticatedSession session
     ) {
         return ResponseEntity.status(status)
                 .header("X-Request-Id", java.util.UUID.randomUUID().toString())
                 .header(HttpHeaders.SET_COOKIE, SessionCookie.create(
                         session.token(),
-                        AuthService.SESSION_LIFETIME,
+                        SpringAuthContracts.SESSION_LIFETIME,
                         HttpServerSupport.configuredSecureCookies()))
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)

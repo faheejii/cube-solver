@@ -21,7 +21,7 @@ import java.util.UUID;
 /** Spring/JPA authentication path that preserves the legacy cookie and password contracts. */
 @Service
 final class SpringAuthService {
-    static final Duration SESSION_LIFETIME = AuthService.SESSION_LIFETIME;
+    static final Duration SESSION_LIFETIME = SpringAuthContracts.SESSION_LIFETIME;
 
     private final UserJpaRepository users;
     private final AuthSessionJpaRepository sessions;
@@ -52,7 +52,7 @@ final class SpringAuthService {
     }
 
     @Transactional
-    AuthService.AuthenticatedSession register(RegisterRequest request) {
+    SpringAuthContracts.AuthenticatedSession register(RegisterRequest request) {
         var credential = passwordHasher.hash(request.password());
         var token = sessionToken.generate();
         var expiresAt = now().plus(SESSION_LIFETIME);
@@ -66,18 +66,18 @@ final class SpringAuthService {
             user = users.saveAndFlush(user);
             sessions.save(new AuthSessionEntity(user, SessionToken.hash(token), expiresAt));
         } catch (DataIntegrityViolationException exception) {
-            throw new AuthService.AuthConflictException("An account with that email already exists");
+            throw new SpringAuthContracts.AuthConflictException("An account with that email already exists");
         }
-        return new AuthService.AuthenticatedSession(toAuthUser(user), token, expiresAt);
+        return new SpringAuthContracts.AuthenticatedSession(toAuthUser(user), token, expiresAt);
     }
 
     @Transactional
-    AuthService.AuthenticatedSession login(LoginRequest request) {
+    SpringAuthContracts.AuthenticatedSession login(LoginRequest request) {
         var user = users.findCredentialByEmail(request.email()).orElse(null);
         if (user == null) {
             // Keep missing-account login work comparable to a normal PBKDF2 verification.
             passwordHasher.hash(request.password());
-            throw new AuthService.UnauthorizedException("Invalid email or password");
+            throw new SpringAuthContracts.UnauthorizedException("Invalid email or password");
         }
         var credential = new StoredCredential(
                 toAuthUser(user),
@@ -86,12 +86,12 @@ final class SpringAuthService {
                 user.getPasswordIterations() == null ? 0 : user.getPasswordIterations()
         );
         if (!passwordHasher.verify(request.password(), credential)) {
-            throw new AuthService.UnauthorizedException("Invalid email or password");
+            throw new SpringAuthContracts.UnauthorizedException("Invalid email or password");
         }
         var token = sessionToken.generate();
         var expiresAt = now().plus(SESSION_LIFETIME);
         sessions.save(new AuthSessionEntity(user, SessionToken.hash(token), expiresAt));
-        return new AuthService.AuthenticatedSession(toAuthUser(user), token, expiresAt);
+        return new SpringAuthContracts.AuthenticatedSession(toAuthUser(user), token, expiresAt);
     }
 
     @Transactional
