@@ -18,13 +18,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/auth")
 final class SpringAuthController {
     private final database.DatabaseManager databaseManager;
-    private final AuthService authService;
+    private final SpringAuthService authService;
     private final SolveJobManager solveJobManager;
     private final RequestRateLimiter rateLimiter;
 
     SpringAuthController(
             database.DatabaseManager databaseManager,
-            AuthService authService,
+            SpringAuthService authService,
             SolveJobManager solveJobManager,
             RequestRateLimiter rateLimiter
     ) {

@@ -10,14 +10,13 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
 
-import java.sql.SQLException;
 import java.util.List;
 
 /** Authenticates the existing opaque cube_session token against the existing session table. */
 final class SpringSessionAuthenticationProvider implements AuthenticationProvider {
-    private final AuthService authService;
+    private final SpringAuthService authService;
 
-    SpringSessionAuthenticationProvider(AuthService authService) {
+    SpringSessionAuthenticationProvider(SpringAuthService authService) {
         this.authService = authService;
     }
 
@@ -31,7 +30,9 @@ final class SpringSessionAuthenticationProvider implements AuthenticationProvide
             }
             var authority = new SimpleGrantedAuthority("ROLE_" + user.role().toUpperCase(java.util.Locale.ROOT));
             return new UsernamePasswordAuthenticationToken(user, null, List.of(authority));
-        } catch (SQLException exception) {
+        } catch (BadCredentialsException exception) {
+            throw exception;
+        } catch (RuntimeException exception) {
             throw new AuthenticationServiceException("Unable to authenticate session", exception);
         }
     }

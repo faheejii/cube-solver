@@ -18,7 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 class SpringSecurityConfiguration {
     @Bean
-    SpringSessionAuthenticationProvider sessionAuthenticationProvider(AuthService authService) {
+    SpringSessionAuthenticationProvider sessionAuthenticationProvider(SpringAuthService authService) {
         return new SpringSessionAuthenticationProvider(authService);
     }
 

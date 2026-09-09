@@ -1,6 +1,5 @@
 package server;
 
-import database.AuthRepository;
 import database.DatabaseManager;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -36,11 +35,6 @@ class SpringServerConfiguration {
             OperationalMetrics operationalMetrics
     ) {
         return new SolveJobManager(solveService, databaseManager, operationalMetrics);
-    }
-
-    @Bean
-    AuthService authService(DatabaseManager databaseManager) {
-        return new AuthService(new AuthRepository(databaseManager));
     }
 
     @Bean
