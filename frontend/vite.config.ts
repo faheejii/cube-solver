@@ -47,6 +47,9 @@ export default defineConfig({
     // cubing's generated module worker must not use Vite's DOM-only preload helper.
     modulePreload: false,
   },
+  worker: {
+    format: "es",
+  },
   test: {
     environment: "jsdom",
     setupFiles: "./src/test/setup.ts",
