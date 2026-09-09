@@ -125,13 +125,28 @@ Compile the Java project:
 mvn -q clean compile
 ```
 
-## Run The API Server
-
-Start the Java API server:
+Run the focused Spring MVC contract test for asynchronous solve-job wiring:
 
 ```bash
-mvn -q compile exec:java -Dexec.mainClass=server.ApiServerMain
+mvn -q -Dtest=server.SpringSolveJobControllerTest test
 ```
+
+## Run The API Server
+
+Start the Spring Boot API server:
+
+```bash
+mvn -q compile exec:java -Dexec.mainClass=server.SpringCubeApplication
+```
+
+The Spring MVC server preserves the existing API paths, response shapes, session
+cookie contract, and solver entry points. Spring Security owns request
+authorization, Spring Data JPA owns migrated authentication/history/statistics
+persistence, and Flyway remains the schema authority. Asynchronous solve jobs
+retain their existing ownership, queue, cancellation, and save-on-complete
+contracts behind the Spring MVC adapter. The original `server.ApiServerMain`
+launcher and JDBC repositories remain available for compatibility and existing
+focused tests while the migration proceeds.
 
 The server exposes:
 
@@ -475,6 +490,9 @@ API and server:
 - [`src/main/java/server/SolveHistoryRouteHandler.java`](src/main/java/server/SolveHistoryRouteHandler.java)
 - [`src/main/java/server/StatisticsRouteHandler.java`](src/main/java/server/StatisticsRouteHandler.java)
 - [`src/main/java/server/ApiServerMain.java`](src/main/java/server/ApiServerMain.java)
+- [`src/main/java/server/SpringCubeApplication.java`](src/main/java/server/SpringCubeApplication.java)
+- [`src/main/java/server/SpringSecurityConfiguration.java`](src/main/java/server/SpringSecurityConfiguration.java)
+- [`src/main/java/database/persistence/`](src/main/java/database/persistence/)
 
 The backend keeps public solver and server facades stable while moving shared responsibilities into focused package-private collaborators. `F2LSolver` owns F2L orchestration and trace flow, while `F2LOptimizedSearch` owns bounded optimized search and `F2LStateCodec` owns compact state encoding and frame execution. `LastLayerSolver` owns OLL/PLL stage execution and status handling. `CubeHttpServer` only wires lifecycle and routes; `HttpServerSupport` centralizes request policy, and each API route has its own handler without changing endpoint paths or response shapes.
 
