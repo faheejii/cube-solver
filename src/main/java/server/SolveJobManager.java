@@ -33,11 +33,13 @@ final class SolveJobManager implements AutoCloseable {
     private final Long solveDeadlineOverrideNanos;
     private final ExecutorService optimizedExecutor;
     private final ExecutorService fastExecutor;
+    private final boolean ownsExecutors;
     private final Map<String, JobState> jobsById = new ConcurrentHashMap<>();
     private final ConcurrentLinkedDeque<String> finishedJobIds = new ConcurrentLinkedDeque<>();
 
     SolveJobManager(solver.CfopSolveService solveService, DatabaseManager databaseManager) {
-        this(solveService, new LegacySolveHistoryPersistence(databaseManager), null, new OperationalMetrics());
+        this(solveService, new LegacySolveHistoryPersistence(databaseManager), null,
+                new OperationalMetrics(), null, null, true);
     }
 
     SolveJobManager(
@@ -45,7 +47,8 @@ final class SolveJobManager implements AutoCloseable {
             DatabaseManager databaseManager,
             long solveDeadlineNanos
     ) {
-        this(solveService, new LegacySolveHistoryPersistence(databaseManager), solveDeadlineNanos, new OperationalMetrics());
+        this(solveService, new LegacySolveHistoryPersistence(databaseManager), solveDeadlineNanos,
+                new OperationalMetrics(), null, null, true);
     }
 
     SolveJobManager(
@@ -53,7 +56,8 @@ final class SolveJobManager implements AutoCloseable {
             DatabaseManager databaseManager,
             OperationalMetrics operationalMetrics
     ) {
-        this(solveService, new LegacySolveHistoryPersistence(databaseManager), null, operationalMetrics);
+        this(solveService, new LegacySolveHistoryPersistence(databaseManager), null,
+                operationalMetrics, null, null, true);
     }
 
     SolveJobManager(
@@ -61,14 +65,28 @@ final class SolveJobManager implements AutoCloseable {
             CompletedSolutionPersistence completedSolutionPersistence,
             OperationalMetrics operationalMetrics
     ) {
-        this(solveService, completedSolutionPersistence, null, operationalMetrics);
+        this(solveService, completedSolutionPersistence, null, operationalMetrics, null, null, true);
+    }
+
+    SolveJobManager(
+            solver.CfopSolveService solveService,
+            CompletedSolutionPersistence completedSolutionPersistence,
+            OperationalMetrics operationalMetrics,
+            ExecutorService optimizedExecutor,
+            ExecutorService fastExecutor
+    ) {
+        this(solveService, completedSolutionPersistence, null, operationalMetrics,
+                optimizedExecutor, fastExecutor, false);
     }
 
     private SolveJobManager(
             solver.CfopSolveService solveService,
             CompletedSolutionPersistence completedSolutionPersistence,
             Long solveDeadlineOverrideNanos,
-            OperationalMetrics operationalMetrics
+            OperationalMetrics operationalMetrics,
+            ExecutorService optimizedExecutor,
+            ExecutorService fastExecutor,
+            boolean ownsExecutors
     ) {
         this.solveService = solveService;
         this.completedSolutionPersistence = java.util.Objects.requireNonNull(
@@ -80,8 +98,13 @@ final class SolveJobManager implements AutoCloseable {
             throw new IllegalArgumentException("solveDeadlineOverrideNanos must be positive");
         }
         this.solveDeadlineOverrideNanos = solveDeadlineOverrideNanos;
-        this.optimizedExecutor = boundedExecutor("optimized-solve-worker", 1, configuredQueueSize("server.optimized.queue", 4));
-        this.fastExecutor = boundedExecutor("fast-solve-worker", 2, configuredQueueSize("server.fast.queue", 16));
+        this.optimizedExecutor = optimizedExecutor == null
+                ? boundedExecutor("optimized-solve-worker", 1, configuredQueueSize("server.optimized.queue", 4))
+                : java.util.Objects.requireNonNull(optimizedExecutor, "optimizedExecutor");
+        this.fastExecutor = fastExecutor == null
+                ? boundedExecutor("fast-solve-worker", 2, configuredQueueSize("server.fast.queue", 16))
+                : java.util.Objects.requireNonNull(fastExecutor, "fastExecutor");
+        this.ownsExecutors = ownsExecutors;
     }
 
     JobSnapshot submit(
@@ -315,8 +338,10 @@ final class SolveJobManager implements AutoCloseable {
 
     @Override
     public void close() {
-        optimizedExecutor.shutdownNow();
-        fastExecutor.shutdownNow();
+        if (ownsExecutors) {
+            optimizedExecutor.shutdownNow();
+            fastExecutor.shutdownNow();
+        }
     }
 
     static final class CapacityException extends IllegalStateException {

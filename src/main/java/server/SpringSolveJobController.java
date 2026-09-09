@@ -15,11 +15,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/solve-jobs")
 final class SpringSolveJobController {
     private final SolveJobManager jobManager;
-    private final AuthService authService;
 
-    SpringSolveJobController(SolveJobManager jobManager, AuthService authService) {
+    SpringSolveJobController(SolveJobManager jobManager) {
         this.jobManager = jobManager;
-        this.authService = authService;
     }
 
     @PostMapping
