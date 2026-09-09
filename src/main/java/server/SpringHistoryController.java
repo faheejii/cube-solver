@@ -5,7 +5,7 @@ import api.SaveSolutionApiRequest;
 import database.CreateSolveAttemptCommand;
 import database.DatabaseManager;
 import database.SaveSolutionCommand;
-import database.SolveHistoryRepository;
+import database.persistence.entity.SpringHistoryPersistenceService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,15 +22,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/solves")
 final class SpringHistoryController {
     private final DatabaseManager databaseManager;
-    private final SolveHistoryRepository repository;
+    private final SpringHistoryPersistenceService history;
     private final SolveJobManager solveJobManager;
 
     SpringHistoryController(
             DatabaseManager databaseManager,
+            SpringHistoryPersistenceService history,
             SolveJobManager solveJobManager
     ) {
         this.databaseManager = databaseManager;
-        this.repository = new SolveHistoryRepository(databaseManager);
+        this.history = history;
         this.solveJobManager = solveJobManager;
     }
 
@@ -48,7 +49,7 @@ final class SpringHistoryController {
                 JsonSupport.readInteger(json, "officialMs"),
                 JsonSupport.readBoolean(json, "dnf")
         );
-        var saved = repository.createAttempt(new CreateSolveAttemptCommand(
+        var saved = history.createAttempt(new CreateSolveAttemptCommand(
                 user.externalId(),
                 request.clientAttemptId(),
                 request.scramble(),
@@ -71,7 +72,7 @@ final class SpringHistoryController {
         var limit = parseLimit(limitValue);
         var cursor = database.HistoryCursor.parse(cursorValue);
         return SpringRequestSupport.json(200, JsonSupport.solveHistoryPageJson(
-                repository.listPage(user.externalId(), limit, cursor)));
+                history.listPage(user.externalId(), limit, cursor)));
     }
 
     @GetMapping("/{solveId}")
@@ -79,7 +80,7 @@ final class SpringHistoryController {
         ensureDatabase();
         var user = SpringRequestSupport.requireUser();
         return SpringRequestSupport.json(200, JsonSupport.solveHistoryDetailJson(
-                repository.findDetail(user.externalId(), parseSolveId(solveId))));
+                history.findDetail(user.externalId(), parseSolveId(solveId))));
     }
 
     @DeleteMapping("/{solveId}")
@@ -87,9 +88,9 @@ final class SpringHistoryController {
         ensureDatabase();
         var user = SpringRequestSupport.requireUser();
         var id = parseSolveId(solveId);
-        repository.requireOwnedSolve(user.externalId(), id);
+        history.findDetail(user.externalId(), id);
         solveJobManager.cancelLinkedJobs(user.externalId(), id);
-        repository.deleteSolve(user.externalId(), id);
+        history.deleteSolve(user.externalId(), id);
         return SpringRequestSupport.noContent();
     }
 
@@ -109,7 +110,7 @@ final class SpringHistoryController {
             throw new IllegalArgumentException("Solution mode does not match request path");
         }
         var solution = combinedSolution(request);
-        var saved = repository.upsertSolution(new SaveSolutionCommand(
+        var saved = history.upsertSolution(new SaveSolutionCommand(
                 user.externalId(),
                 parseSolveId(solveId),
                 mode,

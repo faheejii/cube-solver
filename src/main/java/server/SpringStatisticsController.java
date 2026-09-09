@@ -1,7 +1,7 @@
 package server;
 
 import database.DatabaseManager;
-import database.SolveHistoryRepository;
+import database.persistence.entity.SpringHistoryPersistenceService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -12,11 +12,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/stats")
 final class SpringStatisticsController {
     private final DatabaseManager databaseManager;
-    private final SolveHistoryRepository repository;
+    private final SpringHistoryPersistenceService history;
 
-    SpringStatisticsController(DatabaseManager databaseManager) {
+    SpringStatisticsController(DatabaseManager databaseManager, SpringHistoryPersistenceService history) {
         this.databaseManager = databaseManager;
-        this.repository = new SolveHistoryRepository(databaseManager);
+        this.history = history;
     }
 
     @GetMapping
@@ -26,6 +26,6 @@ final class SpringStatisticsController {
         }
         var user = SpringRequestSupport.requireUser();
         return SpringRequestSupport.json(200, JsonSupport.solveStatisticsJson(
-                repository.statistics(user.externalId())));
+                history.statistics(user.externalId())));
     }
 }
