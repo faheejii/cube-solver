@@ -8,7 +8,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
-import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /** Shared request parsing, response, cookie, and authenticated-user policy for MVC adapters. */
@@ -28,7 +27,7 @@ final class SpringRequestSupport {
     }
 
     static ResponseEntity<String> error(int status, String message) {
-        var code = ApiResponses.codeFor(status, message);
+        var code = errorCode(status, message);
         var requestId = UUID.randomUUID().toString();
         var body = "{\"error\":\"" + escape(message) + "\","
                 + "\"code\":\"" + code.name() + "\","
@@ -44,16 +43,6 @@ final class SpringRequestSupport {
         return ResponseEntity.noContent()
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .build();
-    }
-
-    static String requireJson(String body) {
-        if (body == null) {
-            throw new IllegalArgumentException("Request body is required");
-        }
-        if (body.getBytes(StandardCharsets.UTF_8).length > MAX_JSON_BODY_BYTES) {
-            throw new IllegalArgumentException("Request body is too large");
-        }
-        return body;
     }
 
     static AuthUser currentUser() {
@@ -94,7 +83,7 @@ final class SpringRequestSupport {
         return null;
     }
 
-    static boolean isTrustedMutation(HttpServletRequest request) {
+    static boolean isTrustedMutation(HttpServletRequest request, String corsOrigin) {
         var method = request.getMethod();
         if (!("POST".equalsIgnoreCase(method)
                 || "PUT".equalsIgnoreCase(method)
@@ -103,18 +92,7 @@ final class SpringRequestSupport {
             return true;
         }
         var origin = request.getHeader(HttpHeaders.ORIGIN);
-        return origin == null || configuredCorsOrigin().equals(origin);
-    }
-
-    static void addCorsHeaders(HttpHeaders headers) {
-        headers.set(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, configuredCorsOrigin());
-        headers.set(HttpHeaders.ACCESS_CONTROL_ALLOW_METHODS, "GET,POST,PUT,DELETE,OPTIONS");
-        headers.set(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type");
-        headers.set(HttpHeaders.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true");
-    }
-
-    static String configuredCorsOrigin() {
-        return System.getProperty("server.cors.origin", "http://localhost:5173");
+        return origin == null || corsOrigin.equals(origin);
     }
 
     static String escape(String value) {
@@ -128,5 +106,22 @@ final class SpringRequestSupport {
                 .replace("\t", "\\t")
                 .replace("\b", "\\b")
                 .replace("\f", "\\f");
+    }
+
+    private static ApiErrorCode errorCode(int status, String message) {
+        if (status == 405) {
+            return ApiErrorCode.METHOD_NOT_ALLOWED;
+        }
+        if (status == 404 || "Solve not found".equals(message) || "Solve job not found".equals(message)) {
+            return ApiErrorCode.NOT_FOUND;
+        }
+        if (status == 401) return ApiErrorCode.UNAUTHORIZED;
+        if (status == 403) return ApiErrorCode.FORBIDDEN;
+        if (status == 409) return ApiErrorCode.CONFLICT;
+        if (status == 429) return ApiErrorCode.RATE_LIMITED;
+        if (status == 504) return ApiErrorCode.TIMEOUT;
+        if (status == 503) return ApiErrorCode.SERVICE_UNAVAILABLE;
+        if (status >= 500) return ApiErrorCode.INTERNAL_ERROR;
+        return ApiErrorCode.BAD_REQUEST;
     }
 }

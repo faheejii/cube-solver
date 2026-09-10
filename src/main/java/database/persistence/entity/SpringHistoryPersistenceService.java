@@ -19,11 +19,13 @@ import statistics.SolveStatistics;
 import statistics.SolveStatisticsCalculator;
 
 import java.math.RoundingMode;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 /** JPA-backed history and statistics operations for the Spring API adapters. */
 @Service
-public final class SpringHistoryPersistenceService {
+public class SpringHistoryPersistenceService {
     private final UserJpaRepository users;
     private final SolveJpaRepository solves;
     private final SolveSolutionJpaRepository solutions;
@@ -150,7 +152,7 @@ public final class SpringHistoryPersistenceService {
         var user = requireUser(userExternalId);
         var aggregate = solves.aggregateStatistics(user.getId());
         var timed = solves.findRecentTimedSolves(user.getId(), 12).stream()
-                .map(row -> new TimedSolve(row.getId(), row.getOfficialMs(), Boolean.TRUE.equals(row.getDnf()), row.getCreatedAt()))
+                .map(row -> new TimedSolve(row.getId(), row.getOfficialMs(), Boolean.TRUE.equals(row.getDnf()), toOffsetDateTime(row.getCreatedAt())))
                 .toList();
         var recent = solves.findHistoryPage(user.getId(), null, null, 5).stream().map(this::toEntry).toList();
         var average = aggregate.getAverageMs() == null
@@ -184,8 +186,12 @@ public final class SpringHistoryPersistenceService {
         return new SolveHistoryEntry(
                 row.getId(), row.getClientAttemptId(), row.getScramble(), row.getCrossFaceRequested(),
                 row.getTimerMs(), row.getOfficialMs(), row.getPenalty(), Boolean.TRUE.equals(row.getDnf()),
-                row.getFastCross(), row.getOptimizedCross(), row.getCreatedAt()
+                row.getFastCross(), row.getOptimizedCross(), toOffsetDateTime(row.getCreatedAt())
         );
+    }
+
+    private static OffsetDateTime toOffsetDateTime(java.time.Instant instant) {
+        return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
     private SavedSolution toSavedSolution(SolveSolutionEntity solution) {

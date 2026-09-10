@@ -18,15 +18,7 @@ final class SpringSolveController {
     }
 
     @PostMapping
-    ResponseEntity<String> solve(@RequestBody String body) throws Exception {
-        var json = SpringRequestSupport.requireJson(body);
-        var request = new SolveApiRequest(
-                JsonSupport.readString(json, "scramble"),
-                JsonSupport.readString(json, "crossFace"),
-                JsonSupport.readString(json, "f2lMode"),
-                JsonSupport.readLong(json, "deadlineSeconds"),
-                JsonSupport.readBoolean(json, "deepColorNeutral")
-        );
+    ResponseEntity<String> solve(@RequestBody SolveApiRequest request) throws Exception {
         var job = jobManager.submit(request, null, null, false);
         while (true) {
             var snapshot = jobManager.find(job.id());

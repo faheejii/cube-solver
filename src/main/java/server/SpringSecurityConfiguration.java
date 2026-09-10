@@ -12,8 +12,9 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import springboot.config.ServerProperties;
 
-/** Stateless Spring Security wiring for the legacy cookie/session and route authorization policy. */
+/** Stateless Spring Security wiring for cookie/session authentication and route authorization. */
 @Configuration
 @EnableWebSecurity
 class SpringSecurityConfiguration {
@@ -34,9 +35,10 @@ class SpringSecurityConfiguration {
 
     @Bean
     FilterRegistrationBean<SpringRequestPolicyFilter> requestPolicyFilterRegistration(
-            OperationalMetrics metrics
+            OperationalMetrics metrics,
+            ServerProperties serverProperties
     ) {
-        var registration = new FilterRegistrationBean<>(new SpringRequestPolicyFilter(metrics));
+        var registration = new FilterRegistrationBean<>(new SpringRequestPolicyFilter(metrics, serverProperties));
         registration.setOrder(Integer.MIN_VALUE);
         return registration;
     }

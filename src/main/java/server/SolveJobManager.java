@@ -1,7 +1,6 @@
 package server;
 
 import api.SolveApiRequest;
-import database.DatabaseManager;
 import database.SaveSolutionCommand;
 import solver.CfopSolveResult;
 import solver.F2LMode;
@@ -37,27 +36,11 @@ final class SolveJobManager implements AutoCloseable {
     private final Map<String, JobState> jobsById = new ConcurrentHashMap<>();
     private final ConcurrentLinkedDeque<String> finishedJobIds = new ConcurrentLinkedDeque<>();
 
-    SolveJobManager(solver.CfopSolveService solveService, DatabaseManager databaseManager) {
-        this(solveService, new LegacySolveHistoryPersistence(databaseManager), null,
-                new OperationalMetrics(), null, null, true);
-    }
-
     SolveJobManager(
             solver.CfopSolveService solveService,
-            DatabaseManager databaseManager,
-            long solveDeadlineNanos
+            CompletedSolutionPersistence completedSolutionPersistence
     ) {
-        this(solveService, new LegacySolveHistoryPersistence(databaseManager), solveDeadlineNanos,
-                new OperationalMetrics(), null, null, true);
-    }
-
-    SolveJobManager(
-            solver.CfopSolveService solveService,
-            DatabaseManager databaseManager,
-            OperationalMetrics operationalMetrics
-    ) {
-        this(solveService, new LegacySolveHistoryPersistence(databaseManager), null,
-                operationalMetrics, null, null, true);
+        this(solveService, completedSolutionPersistence, new OperationalMetrics());
     }
 
     SolveJobManager(
@@ -66,6 +49,15 @@ final class SolveJobManager implements AutoCloseable {
             OperationalMetrics operationalMetrics
     ) {
         this(solveService, completedSolutionPersistence, null, operationalMetrics, null, null, true);
+    }
+
+    SolveJobManager(
+            solver.CfopSolveService solveService,
+            CompletedSolutionPersistence completedSolutionPersistence,
+            OperationalMetrics operationalMetrics,
+            long solveDeadlineNanos
+    ) {
+        this(solveService, completedSolutionPersistence, solveDeadlineNanos, operationalMetrics, null, null, true);
     }
 
     SolveJobManager(
@@ -399,7 +391,7 @@ final class SolveJobManager implements AutoCloseable {
                 result.pll().moveCount(),
                 result.pll().solved(),
                 result.pll().status(),
-                DatabaseManager.SOLVER_VERSION,
+                SolverVersion.CURRENT,
                 JsonSupport.f2lTraceJson(result.f2l(), result.f2lTrace()),
                 JsonSupport.modeComparisonJson(result.modeComparison())
         );

@@ -60,6 +60,11 @@ final class SpringExceptionHandler {
 
     @ExceptionHandler({IllegalArgumentException.class, HttpMessageNotReadableException.class})
     ResponseEntity<String> badRequest(Exception exception) {
+        if (exception instanceof IllegalArgumentException
+                && ("Solve not found".equals(exception.getMessage())
+                || "Solve job not found".equals(exception.getMessage()))) {
+            return SpringRequestSupport.error(404, exception.getMessage());
+        }
         return SpringRequestSupport.error(400, exception.getMessage());
     }
 

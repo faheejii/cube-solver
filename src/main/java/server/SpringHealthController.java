@@ -68,4 +68,8 @@ final class SpringDatabaseHealth {
                     : message);
         }
     }
+
+    boolean isConfigured() {
+        return dataSource != null;
+    }
 }

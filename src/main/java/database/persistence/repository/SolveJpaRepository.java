@@ -47,8 +47,11 @@ public interface SolveJpaRepository extends JpaRepository<SolveEntity, Long>, So
               ON ss.solve_id = s.id AND ss.status = 'ready'
             WHERE s.user_id = :userId
               AND (
-                    :cursorCreatedAt IS NULL
-                    OR (s.created_at, s.id) < (:cursorCreatedAt, :cursorId)
+                    CAST(:cursorCreatedAt AS TIMESTAMP WITH TIME ZONE) IS NULL
+                    OR (s.created_at, s.id) < (
+                        CAST(:cursorCreatedAt AS TIMESTAMP WITH TIME ZONE),
+                        CAST(:cursorId AS BIGINT)
+                    )
                   )
             GROUP BY s.id
             ORDER BY s.created_at DESC, s.id DESC

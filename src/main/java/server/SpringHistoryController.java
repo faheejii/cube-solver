@@ -2,8 +2,8 @@ package server;
 
 import api.CreateSolveAttemptRequest;
 import api.SaveSolutionApiRequest;
+import api.SpringSaveSolutionRequest;
 import database.CreateSolveAttemptCommand;
-import database.DatabaseManager;
 import database.SaveSolutionCommand;
 import database.persistence.entity.SpringHistoryPersistenceService;
 import org.springframework.http.ResponseEntity;
@@ -21,34 +21,24 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/solves")
 final class SpringHistoryController {
-    private final DatabaseManager databaseManager;
+    private final SpringDatabaseHealth databaseHealth;
     private final SpringHistoryPersistenceService history;
     private final SolveJobManager solveJobManager;
 
     SpringHistoryController(
-            DatabaseManager databaseManager,
+            SpringDatabaseHealth databaseHealth,
             SpringHistoryPersistenceService history,
             SolveJobManager solveJobManager
     ) {
-        this.databaseManager = databaseManager;
+        this.databaseHealth = databaseHealth;
         this.history = history;
         this.solveJobManager = solveJobManager;
     }
 
     @PostMapping
-    ResponseEntity<String> createAttempt(@RequestBody String body) throws Exception {
+    ResponseEntity<String> createAttempt(@RequestBody CreateSolveAttemptRequest request) throws Exception {
         ensureDatabase();
         var user = SpringRequestSupport.requireUser();
-        var json = SpringRequestSupport.requireJson(body);
-        var request = new CreateSolveAttemptRequest(
-                JsonSupport.readString(json, "clientAttemptId"),
-                JsonSupport.readString(json, "scramble"),
-                JsonSupport.readString(json, "crossFaceRequested"),
-                JsonSupport.readInteger(json, "timerMs"),
-                JsonSupport.readString(json, "penalty"),
-                JsonSupport.readInteger(json, "officialMs"),
-                JsonSupport.readBoolean(json, "dnf")
-        );
         var saved = history.createAttempt(new CreateSolveAttemptCommand(
                 user.externalId(),
                 request.clientAttemptId(),
@@ -76,7 +66,7 @@ final class SpringHistoryController {
     }
 
     @GetMapping("/{solveId}")
-    ResponseEntity<String> detail(@PathVariable String solveId) throws Exception {
+    ResponseEntity<String> detail(@PathVariable("solveId") String solveId) throws Exception {
         ensureDatabase();
         var user = SpringRequestSupport.requireUser();
         return SpringRequestSupport.json(200, JsonSupport.solveHistoryDetailJson(
@@ -84,7 +74,7 @@ final class SpringHistoryController {
     }
 
     @DeleteMapping("/{solveId}")
-    ResponseEntity<Void> delete(@PathVariable String solveId) throws Exception {
+    ResponseEntity<Void> delete(@PathVariable("solveId") String solveId) throws Exception {
         ensureDatabase();
         var user = SpringRequestSupport.requireUser();
         var id = parseSolveId(solveId);
@@ -96,16 +86,16 @@ final class SpringHistoryController {
 
     @PutMapping("/{solveId}/solutions/{mode}")
     ResponseEntity<String> upsertSolution(
-            @PathVariable String solveId,
-            @PathVariable String mode,
-            @RequestBody String body
+            @PathVariable("solveId") String solveId,
+            @PathVariable("mode") String mode,
+            @RequestBody SpringSaveSolutionRequest body
     ) throws Exception {
         ensureDatabase();
         var user = SpringRequestSupport.requireUser();
         if (!mode.equals("greedy") && !mode.equals("optimized")) {
             throw new IllegalArgumentException("Invalid F2L mode: " + mode);
         }
-        var request = readSolutionRequest(SpringRequestSupport.requireJson(body));
+        var request = body.toApiRequest();
         if (!mode.equals(request.f2lMode())) {
             throw new IllegalArgumentException("Solution mode does not match request path");
         }
@@ -140,7 +130,7 @@ final class SpringHistoryController {
                 request.pllMoves(),
                 request.pllSolved(),
                 request.pllStatus(),
-                DatabaseManager.SOLVER_VERSION,
+                SolverVersion.CURRENT,
                 request.f2lTraceJson(),
                 request.comparisonJson()
         ));
@@ -148,7 +138,7 @@ final class SpringHistoryController {
     }
 
     private void ensureDatabase() {
-        if (!databaseManager.isConfigured()) {
+        if (!databaseHealth.isConfigured()) {
             throw new SpringDatabaseUnavailableException();
         }
     }
@@ -166,38 +156,6 @@ final class SpringHistoryController {
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException("Invalid solve ID");
         }
-    }
-
-    private static SaveSolutionApiRequest readSolutionRequest(String body) {
-        return new SaveSolutionApiRequest(
-                JsonSupport.readString(body, "crossFaceRequested"),
-                JsonSupport.readString(body, "crossFaceChosen"),
-                JsonSupport.readString(body, "f2lMode"),
-                JsonSupport.readInteger(body, "f2lSetupCaseCount"),
-                JsonSupport.readInteger(body, "f2lInsertCaseCount"),
-                JsonSupport.readString(body, "solvedF2LSlots"),
-                JsonSupport.readInteger(body, "totalMoves"),
-                JsonSupport.readBoolean(body, "fullySolved"),
-                JsonSupport.readDouble(body, "solveElapsedMs"),
-                JsonSupport.readString(body, "crossAlgorithm"),
-                JsonSupport.readInteger(body, "crossMoves"),
-                JsonSupport.readBoolean(body, "crossSolved"),
-                JsonSupport.readString(body, "crossStatus"),
-                JsonSupport.readString(body, "f2lAlgorithm"),
-                JsonSupport.readInteger(body, "f2lMoves"),
-                JsonSupport.readBoolean(body, "f2lSolved"),
-                JsonSupport.readString(body, "f2lStatus"),
-                JsonSupport.readString(body, "ollAlgorithm"),
-                JsonSupport.readInteger(body, "ollMoves"),
-                JsonSupport.readBoolean(body, "ollSolved"),
-                JsonSupport.readString(body, "ollStatus"),
-                JsonSupport.readString(body, "pllAlgorithm"),
-                JsonSupport.readInteger(body, "pllMoves"),
-                JsonSupport.readBoolean(body, "pllSolved"),
-                JsonSupport.readString(body, "pllStatus"),
-                JsonSupport.readRawField(body, "f2lTraceJson"),
-                JsonSupport.readRawField(body, "comparisonJson")
-        );
     }
 
     private static String combinedSolution(SaveSolutionApiRequest request) {

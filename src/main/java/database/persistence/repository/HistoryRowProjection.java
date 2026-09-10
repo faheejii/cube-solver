@@ -1,6 +1,6 @@
 package database.persistence.repository;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 
 /** Native projection used by the later history service; it keeps cursor ordering in SQL. */
 public interface HistoryRowProjection {
@@ -12,7 +12,7 @@ public interface HistoryRowProjection {
     Integer getOfficialMs();
     String getPenalty();
     Boolean getDnf();
-    OffsetDateTime getCreatedAt();
+    Instant getCreatedAt();
     String getFastCross();
     String getOptimizedCross();
 }

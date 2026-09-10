@@ -1,8 +1,11 @@
 package database.persistence.repository;
 
 import database.persistence.entity.AuthSessionEntity;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -11,5 +14,7 @@ public interface AuthSessionJpaRepository extends JpaRepository<AuthSessionEntit
     @EntityGraph(attributePaths = "user")
     Optional<AuthSessionEntity> findByTokenHashAndExpiresAtAfter(String tokenHash, OffsetDateTime now);
 
-    long deleteByTokenHash(String tokenHash);
+    @Modifying
+    @Query("delete from AuthSessionEntity session where session.tokenHash = :tokenHash")
+    int deleteByTokenHash(@Param("tokenHash") String tokenHash);
 }

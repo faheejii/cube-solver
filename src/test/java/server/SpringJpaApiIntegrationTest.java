@@ -12,8 +12,11 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import test.PostgresTestDatabase;
+import database.persistence.repository.AuthSessionJpaRepository;
+import database.persistence.repository.UserJpaRepository;
 
 import jakarta.servlet.http.Cookie;
 import java.sql.SQLException;
@@ -57,12 +60,15 @@ class SpringJpaApiIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private ApplicationContext applicationContext;
+
     private String sessionToken;
 
     @DynamicPropertySource
     static void registerDatabase(DynamicPropertyRegistry registry) throws Exception {
         postgres = PostgresTestDatabase.create();
-        postgres.manager().initialize();
+        postgres.initialize();
         schemaUrl = System.getenv("TEST_DATABASE_URL")
                 + (System.getenv("TEST_DATABASE_URL").contains("?") ? "&" : "?")
                 + "currentSchema=" + postgres.schema();
@@ -86,6 +92,12 @@ class SpringJpaApiIntegrationTest {
     @BeforeEach
     void clearSession() {
         sessionToken = null;
+    }
+
+    @Test
+    void fullSpringContext_shouldDiscoverJpaRepositories() {
+        assertNotNull(applicationContext.getBean(UserJpaRepository.class));
+        assertNotNull(applicationContext.getBean(AuthSessionJpaRepository.class));
     }
 
     @Test
@@ -156,7 +168,8 @@ class SpringJpaApiIntegrationTest {
         mockMvc.perform(get("/api/solves/" + solveId).cookie(sessionCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.solutions", hasSize(1)))
-                .andExpect(jsonPath("$.solutions[0].mode", is("greedy")));
+                .andExpect(jsonPath("$.solutions[0].mode", is("greedy")))
+                .andExpect(jsonPath("$.solutions[0].f2l.traceComplete", is(true)));
 
         createSolve("attempt-" + UUID.randomUUID(), 1400, false);
         createSolve("attempt-" + UUID.randomUUID(), null, true);
@@ -208,6 +221,41 @@ class SpringJpaApiIntegrationTest {
                 .andExpect(jsonPath("$.solutions[0].mode", is("greedy")));
     }
 
+    @Test
+    void history_shouldBeOwnerScopedAndSupportCursorPagination() throws Exception {
+        var owner = uniqueEmail("history-owner");
+        loginAs(owner);
+        var first = createSolve("attempt-" + UUID.randomUUID(), 1000, false);
+        createSolve("attempt-" + UUID.randomUUID(), 1100, false);
+        createSolve("attempt-" + UUID.randomUUID(), 1200, false);
+        var firstId = jsonLong(first, "id");
+
+        var firstPage = mockMvc.perform(get("/api/solves?limit=2").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(2)))
+                .andReturn();
+        var cursor = jsonString(firstPage, "nextCursor");
+        assertNotNull(cursor);
+        mockMvc.perform(get("/api/solves")
+                        .param("limit", "2")
+                        .param("cursor", cursor)
+                        .cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.nextCursor").doesNotExist());
+
+        loginAs(uniqueEmail("history-other"));
+        mockMvc.perform(get("/api/solves/" + firstId).cookie(sessionCookie()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code", is("NOT_FOUND")))
+                .andExpect(jsonPath("$.requestId", notNullValue()));
+        mockMvc.perform(delete("/api/solves/" + firstId).cookie(sessionCookie()))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/solves").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(0)));
+    }
+
     private void loginAs(String email) throws Exception {
         var result = mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -252,7 +300,7 @@ class SpringJpaApiIntegrationTest {
     private static String solutionBody() {
         return """
                 {"crossFaceRequested":"U","crossFaceChosen":"U","f2lMode":"greedy",
-                 "f2lSetupCaseCount":0,"f2lInsertCaseCount":0,"solvedF2LSlots":"",
+                 "f2lSetupCaseCount":0,"f2lInsertCaseCount":0,"solvedF2LSlots":"FR,FL,BL,BR",
                  "totalMoves":4,"fullySolved":true,"solveElapsedMs":12.5,
                  "crossAlgorithm":"R U","crossMoves":2,"crossSolved":true,"crossStatus":"solved",
                  "f2lAlgorithm":"","f2lMoves":0,"f2lSolved":true,"f2lStatus":"solved",

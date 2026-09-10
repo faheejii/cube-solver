@@ -1,6 +1,5 @@
 package server;
 
-import database.DatabaseManager;
 import database.persistence.entity.SpringHistoryPersistenceService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -11,17 +10,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api/stats")
 final class SpringStatisticsController {
-    private final DatabaseManager databaseManager;
+    private final SpringDatabaseHealth databaseHealth;
     private final SpringHistoryPersistenceService history;
 
-    SpringStatisticsController(DatabaseManager databaseManager, SpringHistoryPersistenceService history) {
-        this.databaseManager = databaseManager;
+    SpringStatisticsController(SpringDatabaseHealth databaseHealth, SpringHistoryPersistenceService history) {
+        this.databaseHealth = databaseHealth;
         this.history = history;
     }
 
     @GetMapping
     ResponseEntity<String> stats() throws Exception {
-        if (!databaseManager.isConfigured()) {
+        if (!databaseHealth.isConfigured()) {
             throw new SpringDatabaseUnavailableException();
         }
         var user = SpringRequestSupport.requireUser();

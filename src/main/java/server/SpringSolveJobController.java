@@ -21,17 +21,7 @@ final class SpringSolveJobController {
     }
 
     @PostMapping
-    ResponseEntity<String> create(@RequestBody String body) throws Exception {
-        var json = SpringRequestSupport.requireJson(body);
-        var request = new CreateSolveJobRequest(
-                JsonSupport.readString(json, "scramble"),
-                JsonSupport.readString(json, "crossFace"),
-                JsonSupport.readString(json, "f2lMode"),
-                JsonSupport.readLong(json, "solveId"),
-                JsonSupport.readBoolean(json, "saveOnComplete"),
-                JsonSupport.readLong(json, "deadlineSeconds"),
-                JsonSupport.readBoolean(json, "deepColorNeutral")
-        );
+    ResponseEntity<String> create(@RequestBody CreateSolveJobRequest request) throws Exception {
         var user = SpringRequestSupport.currentUser();
         if (request.saveOnComplete() && user == null) {
             throw new SpringAuthContracts.UnauthorizedException("Authentication required");
@@ -46,14 +36,14 @@ final class SpringSolveJobController {
     }
 
     @GetMapping("/{jobId}")
-    ResponseEntity<String> find(@PathVariable String jobId) throws Exception {
+    ResponseEntity<String> find(@PathVariable("jobId") String jobId) throws Exception {
         var user = SpringRequestSupport.currentUser();
         var job = jobManager.find(jobId, user == null ? null : user.externalId());
         return SpringRequestSupport.json(200, JsonSupport.solveJobJson(job));
     }
 
     @DeleteMapping("/{jobId}")
-    ResponseEntity<String> cancel(@PathVariable String jobId) throws Exception {
+    ResponseEntity<String> cancel(@PathVariable("jobId") String jobId) throws Exception {
         var user = SpringRequestSupport.currentUser();
         var job = jobManager.cancel(jobId, user == null ? null : user.externalId());
         return SpringRequestSupport.json(200, JsonSupport.solveJobJson(job));

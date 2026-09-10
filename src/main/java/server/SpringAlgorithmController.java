@@ -1,7 +1,6 @@
 package server;
 
 import algorithms.AlgorithmCaseCatalog;
-import database.DatabaseManager;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,10 +13,10 @@ import java.util.Locale;
 @RestController
 @RequestMapping("/api/algorithms")
 final class SpringAlgorithmController {
-    private final DatabaseManager databaseManager;
+    private final SpringDatabaseHealth databaseHealth;
 
-    SpringAlgorithmController(DatabaseManager databaseManager) {
-        this.databaseManager = databaseManager;
+    SpringAlgorithmController(SpringDatabaseHealth databaseHealth) {
+        this.databaseHealth = databaseHealth;
     }
 
     @GetMapping
@@ -28,7 +27,7 @@ final class SpringAlgorithmController {
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "q", required = false, defaultValue = "") String search
     ) {
-        if (!databaseManager.isConfigured()) {
+        if (!databaseHealth.isConfigured()) {
             throw new SpringDatabaseUnavailableException();
         }
         SpringRequestSupport.requireAdmin();

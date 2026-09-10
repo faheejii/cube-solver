@@ -11,9 +11,9 @@ class DatabaseMigrationIntegrationTest {
     @EnabledIfEnvironmentVariable(named = "TEST_DATABASE_URL", matches = ".+")
     void initialize_shouldApplyFlywayHistoryAndAuthenticationSchema() throws Exception {
         try (var database = PostgresTestDatabase.create()) {
-            database.manager().initialize();
+            database.initialize();
 
-            try (var connection = database.manager().openConnection(); var statement = connection.createStatement()) {
+            try (var connection = database.openConnection(); var statement = connection.createStatement()) {
                 try (var result = statement.executeQuery("SELECT COUNT(*) FROM flyway_schema_history WHERE success")) {
                     assertTrue(result.next());
                     assertEquals(1, result.getInt(1));

@@ -5,15 +5,18 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.filter.OncePerRequestFilter;
+import springboot.config.ServerProperties;
 
 import java.io.IOException;
 
-/** Keeps the legacy CORS/origin policy and request metrics at the servlet boundary. */
+/** Applies CORS/origin policy and request metrics at the servlet boundary. */
 final class SpringRequestPolicyFilter extends OncePerRequestFilter {
     private final OperationalMetrics metrics;
+    private final ServerProperties serverProperties;
 
-    SpringRequestPolicyFilter(OperationalMetrics metrics) {
+    SpringRequestPolicyFilter(OperationalMetrics metrics, ServerProperties serverProperties) {
         this.metrics = metrics;
+        this.serverProperties = serverProperties;
     }
 
     @Override
@@ -23,7 +26,7 @@ final class SpringRequestPolicyFilter extends OncePerRequestFilter {
             FilterChain filterChain
     ) throws ServletException, IOException {
         var headers = response;
-        headers.setHeader("Access-Control-Allow-Origin", SpringRequestSupport.configuredCorsOrigin());
+        headers.setHeader("Access-Control-Allow-Origin", serverProperties.getCors().getOrigin());
         headers.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
         headers.setHeader("Access-Control-Allow-Headers", "Content-Type");
         headers.setHeader("Access-Control-Allow-Credentials", "true");
@@ -31,8 +34,12 @@ final class SpringRequestPolicyFilter extends OncePerRequestFilter {
             response.setStatus(HttpServletResponse.SC_NO_CONTENT);
             return;
         }
-        if (!SpringRequestSupport.isTrustedMutation(request)) {
+        if (!SpringRequestSupport.isTrustedMutation(request, serverProperties.getCors().getOrigin())) {
             write(SpringRequestSupport.error(403, "Untrusted request origin"), response);
+            return;
+        }
+        if (request.getContentLengthLong() > SpringRequestSupport.MAX_JSON_BODY_BYTES) {
+            write(SpringRequestSupport.error(400, "Request body is too large"), response);
             return;
         }
 

@@ -18,7 +18,7 @@ class SpringAuthContractsTest {
     }
 
     @Test
-    void mapsAuthenticationErrorsToTheExistingApiResponses() {
+    void mapsAuthenticationErrorsToTheExistingJsonContract() {
         assertError(exceptionHandler.unauthorized(
                 new SpringAuthContracts.UnauthorizedException("Authentication required")),
                 401, "Authentication required");

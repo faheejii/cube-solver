@@ -1,10 +1,10 @@
 package database.persistence.repository;
 
-import java.time.OffsetDateTime;
+import java.time.Instant;
 
 public interface TimedSolveProjection {
     Long getId();
     Integer getOfficialMs();
     Boolean getDnf();
-    OffsetDateTime getCreatedAt();
+    Instant getCreatedAt();
 }

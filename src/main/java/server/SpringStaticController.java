@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
+import springboot.config.ServerProperties;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -19,9 +20,11 @@ import java.nio.file.Path;
 @Controller
 final class SpringStaticController {
     private final Path frontendDistDir;
+    private final ServerProperties serverProperties;
 
-    SpringStaticController(Path frontendDistDir) {
+    SpringStaticController(Path frontendDistDir, ServerProperties serverProperties) {
         this.frontendDistDir = frontendDistDir;
+        this.serverProperties = serverProperties;
     }
 
     @RequestMapping(value = "/**", method = RequestMethod.GET)
@@ -46,14 +49,14 @@ final class SpringStaticController {
         var bytes = Files.readAllBytes(target);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentTypeFor(target)))
-                .header(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, SpringRequestSupport.configuredCorsOrigin())
+                .header(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, serverProperties.getCors().getOrigin())
                 .body(new ByteArrayResource(bytes));
     }
 
     private ResponseEntity<Resource> resource(int status, String body, MediaType mediaType) {
         return ResponseEntity.status(status)
                 .contentType(mediaType)
-                .header(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, SpringRequestSupport.configuredCorsOrigin())
+                .header(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, serverProperties.getCors().getOrigin())
                 .body(new ByteArrayResource(body.getBytes(StandardCharsets.UTF_8)));
     }
 

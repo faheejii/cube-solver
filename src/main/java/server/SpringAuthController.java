@@ -12,49 +12,45 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import springboot.config.ServerProperties;
 
 /** MVC adapter for the Spring authentication service and cube_session cookie contract. */
 @RestController
 @RequestMapping("/api/auth")
 final class SpringAuthController {
-    private final database.DatabaseManager databaseManager;
+    private final SpringDatabaseHealth databaseHealth;
     private final SpringAuthService authService;
     private final SolveJobManager solveJobManager;
     private final RequestRateLimiter rateLimiter;
+    private final ServerProperties serverProperties;
 
     SpringAuthController(
-            database.DatabaseManager databaseManager,
+            SpringDatabaseHealth databaseHealth,
             SpringAuthService authService,
             SolveJobManager solveJobManager,
-            RequestRateLimiter rateLimiter
+            RequestRateLimiter rateLimiter,
+            ServerProperties serverProperties
     ) {
-        this.databaseManager = databaseManager;
+        this.databaseHealth = databaseHealth;
         this.authService = authService;
         this.solveJobManager = solveJobManager;
         this.rateLimiter = rateLimiter;
+        this.serverProperties = serverProperties;
     }
 
     @PostMapping("/register")
-    ResponseEntity<String> register(HttpServletRequest request, @RequestBody String body) throws Exception {
+    ResponseEntity<String> register(HttpServletRequest request, @RequestBody RegisterRequest body) throws Exception {
         ensureDatabase();
         checkRateLimit(request);
-        var session = authService.register(new RegisterRequest(
-                JsonSupport.readString(SpringRequestSupport.requireJson(body), "email"),
-                JsonSupport.readString(body, "password"),
-                JsonSupport.readString(body, "displayName")
-        ));
+        var session = authService.register(body);
         return authenticatedResponse(201, session);
     }
 
     @PostMapping("/login")
-    ResponseEntity<String> login(HttpServletRequest request, @RequestBody String body) throws Exception {
+    ResponseEntity<String> login(HttpServletRequest request, @RequestBody LoginRequest body) throws Exception {
         ensureDatabase();
         checkRateLimit(request);
-        var json = SpringRequestSupport.requireJson(body);
-        var session = authService.login(new LoginRequest(
-                JsonSupport.readString(json, "email"),
-                JsonSupport.readString(json, "password")
-        ));
+        var session = authService.login(body);
         return authenticatedResponse(200, session);
     }
 
@@ -68,7 +64,7 @@ final class SpringAuthController {
         }
         authService.logout(token);
         return ResponseEntity.noContent()
-                .header(HttpHeaders.SET_COOKIE, SessionCookie.clear(HttpServerSupport.configuredSecureCookies()))
+                .header(HttpHeaders.SET_COOKIE, SessionCookie.clear(serverProperties.getCookie().isSecure()))
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .build();
     }
@@ -81,7 +77,7 @@ final class SpringAuthController {
     }
 
     private void ensureDatabase() {
-        if (!databaseManager.isConfigured()) {
+        if (!databaseHealth.isConfigured()) {
             throw new SpringDatabaseUnavailableException();
         }
     }
@@ -102,7 +98,7 @@ final class SpringAuthController {
                 .header(HttpHeaders.SET_COOKIE, SessionCookie.create(
                         session.token(),
                         SpringAuthContracts.SESSION_LIFETIME,
-                        HttpServerSupport.configuredSecureCookies()))
+                        serverProperties.getCookie().isSecure()))
                 .header(HttpHeaders.CACHE_CONTROL, "no-store")
                 .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
                 .body(JsonSupport.authUserJson(session.user()));

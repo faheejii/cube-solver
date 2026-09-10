@@ -1,17 +1,15 @@
 package server;
 
-import database.DatabaseManager;
 import database.persistence.entity.SpringHistoryPersistenceService;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import springboot.config.ServerProperties;
+import springboot.config.FrontendProperties;
 import solver.CfopSolveService;
 
 import javax.sql.DataSource;
-import java.sql.SQLException;
-
 import java.nio.file.Path;
 import java.util.concurrent.ExecutorService;
 
@@ -31,19 +29,7 @@ class SpringServerConfiguration {
         return arguments -> promoteConfiguredAdmin(dataSources.getIfAvailable(), adminProperties.getEmail());
     }
 
-    @Bean(destroyMethod = "close")
-    DatabaseManager databaseManager(ObjectProvider<DataSource> dataSources) throws java.sql.SQLException {
-        var databaseManager = DatabaseManager.fromEnvironment();
-        // Spring Boot's Flyway auto-configuration owns migrations when its
-        // DataSource is available. The legacy manager remains available to
-        // compatibility-facing adapters, but must not migrate a second time.
-        if (dataSources.getIfAvailable() == null) {
-            databaseManager.initialize();
-        }
-        return databaseManager;
-    }
-
-    private static void promoteConfiguredAdmin(DataSource dataSource, String adminEmail) throws SQLException {
+    private static void promoteConfiguredAdmin(DataSource dataSource, String adminEmail) throws java.sql.SQLException {
         if (dataSource == null || adminEmail == null || adminEmail.isBlank()) {
             return;
         }
@@ -94,15 +80,15 @@ class SpringServerConfiguration {
     }
 
     @Bean
-    RequestRateLimiter authRequestRateLimiter() {
+    RequestRateLimiter authRequestRateLimiter(ServerProperties serverProperties) {
         return new RequestRateLimiter(
-                HttpServerSupport.configuredAuthRateLimit(),
+                serverProperties.getAuthRequestsPerMinute(),
                 java.time.Duration.ofMinutes(1)
         );
     }
 
     @Bean
-    Path frontendDistDirectory(@Value("${frontend.dist:frontend/dist}") String frontendDist) {
-        return Path.of(frontendDist).toAbsolutePath().normalize();
+    Path frontendDistDirectory(FrontendProperties frontendProperties) {
+        return frontendProperties.distPath();
     }
 }
