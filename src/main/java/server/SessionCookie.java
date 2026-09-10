@@ -1,7 +1,5 @@
 package server;
 
-import com.sun.net.httpserver.Headers;
-
 import java.time.Duration;
 
 final class SessionCookie {
@@ -10,8 +8,8 @@ final class SessionCookie {
     private SessionCookie() {
     }
 
-    static String read(Headers headers) {
-        for (var header : headers.getOrDefault("Cookie", java.util.List.of())) {
+    static String read(Iterable<String> cookieHeaders) {
+        for (var header : cookieHeaders) {
             for (var cookie : header.split(";")) {
                 var parts = cookie.trim().split("=", 2);
                 if (parts.length == 2 && NAME.equals(parts[0])) {
