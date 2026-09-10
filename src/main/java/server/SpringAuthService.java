@@ -9,8 +9,10 @@ import database.persistence.entity.UserEntity;
 import database.persistence.repository.AuthSessionJpaRepository;
 import database.persistence.repository.UserJpaRepository;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import springboot.config.AdminProperties;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -18,9 +20,9 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.UUID;
 
-/** Spring/JPA authentication path that preserves the legacy cookie and password contracts. */
+/** Spring/JPA authentication path that preserves the public cookie and password contracts. */
 @Service
-final class SpringAuthService {
+class SpringAuthService {
     static final Duration SESSION_LIFETIME = SpringAuthContracts.SESSION_LIFETIME;
 
     private final UserJpaRepository users;
@@ -30,9 +32,14 @@ final class SpringAuthService {
     private final Clock clock;
     private final String adminEmail;
 
-    SpringAuthService(UserJpaRepository users, AuthSessionJpaRepository sessions) {
+    @Autowired
+    SpringAuthService(
+            UserJpaRepository users,
+            AuthSessionJpaRepository sessions,
+            AdminProperties adminProperties
+    ) {
         this(users, sessions, new PasswordHasher(), new SessionToken(), Clock.systemUTC(),
-                database.DatabaseConfig.adminEmailFromEnvironment());
+                adminProperties.getEmail());
     }
 
     SpringAuthService(

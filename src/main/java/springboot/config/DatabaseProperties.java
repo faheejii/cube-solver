@@ -11,13 +11,13 @@ public class DatabaseProperties {
     private String password;
     private PoolProperties pool = new PoolProperties();
 
-    static DatabaseProperties fromLegacyDefaults() {
+    static DatabaseProperties fromEnvironmentDefaults() {
         var dotenv = Dotenv.loadDefault();
         var properties = new DatabaseProperties();
-        properties.url = LegacyPropertyDefaults.legacyValue(dotenv, "database.url", "DATABASE_URL");
-        properties.user = LegacyPropertyDefaults.legacyValue(dotenv, "database.user", "DATABASE_USER");
-        properties.password = LegacyPropertyDefaults.legacyValue(dotenv, "database.password", "DATABASE_PASSWORD");
-        var poolSize = LegacyPropertyDefaults.legacyValue(dotenv, "database.pool.size", "DATABASE_POOL_SIZE");
+        properties.url = EnvironmentPropertyDefaults.value(dotenv, "database.url", "DATABASE_URL");
+        properties.user = EnvironmentPropertyDefaults.value(dotenv, "database.user", "DATABASE_USER");
+        properties.password = EnvironmentPropertyDefaults.value(dotenv, "database.password", "DATABASE_PASSWORD");
+        var poolSize = EnvironmentPropertyDefaults.value(dotenv, "database.pool.size", "DATABASE_POOL_SIZE");
         if (poolSize != null) {
             try {
                 properties.pool.size = Integer.parseInt(poolSize);

@@ -10,10 +10,10 @@ import java.nio.file.Path;
 public class FrontendProperties {
     private String dist = "frontend/dist";
 
-    static FrontendProperties fromLegacyDefaults() {
+    static FrontendProperties fromEnvironmentDefaults() {
         var dotenv = Dotenv.loadDefault();
         var properties = new FrontendProperties();
-        var configured = LegacyPropertyDefaults.legacyValue(dotenv, "frontend.dist", "FRONTEND_DIST");
+        var configured = EnvironmentPropertyDefaults.value(dotenv, "frontend.dist", "FRONTEND_DIST");
         if (configured != null) {
             properties.dist = configured;
         }

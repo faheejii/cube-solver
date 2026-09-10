@@ -2,8 +2,9 @@ package springboot.config;
 
 import config.Dotenv;
 
-final class LegacyPropertyDefaults {
-    private LegacyPropertyDefaults() {
+/** Resolves Spring settings from JVM properties, environment, and root .env values. */
+final class EnvironmentPropertyDefaults {
+    private EnvironmentPropertyDefaults() {
     }
 
     static String firstNonBlank(String... values) {
@@ -15,7 +16,7 @@ final class LegacyPropertyDefaults {
         return null;
     }
 
-    static String legacyValue(Dotenv dotenv, String systemProperty, String environmentVariable) {
+    static String value(Dotenv dotenv, String systemProperty, String environmentVariable) {
         return firstNonBlank(
                 System.getProperty(systemProperty),
                 System.getenv(environmentVariable),

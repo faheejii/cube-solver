@@ -3,17 +3,18 @@ package springboot.config;
 import config.Dotenv;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** Spring-bound view of the existing server compatibility settings. */
+/** Spring-bound server settings. */
 @ConfigurationProperties(prefix = "server")
 public class ServerProperties {
     private int port = 8080;
+    private int authRequestsPerMinute = 20;
     private CorsProperties cors = new CorsProperties();
     private CookieProperties cookie = new CookieProperties();
 
-    static ServerProperties fromLegacyDefaults() {
+    static ServerProperties fromEnvironmentDefaults() {
         var dotenv = Dotenv.loadDefault();
         var properties = new ServerProperties();
-        var port = LegacyPropertyDefaults.legacyValue(dotenv, "server.port", "SERVER_PORT");
+        var port = EnvironmentPropertyDefaults.value(dotenv, "server.port", "SERVER_PORT");
         if (port != null) {
             try {
                 properties.port = Integer.parseInt(port);
@@ -21,13 +22,21 @@ public class ServerProperties {
                 properties.port = 8080;
             }
         }
-        var corsOrigin = LegacyPropertyDefaults.legacyValue(dotenv, "server.cors.origin", "SERVER_CORS_ORIGIN");
+        var corsOrigin = EnvironmentPropertyDefaults.value(dotenv, "server.cors.origin", "SERVER_CORS_ORIGIN");
         if (corsOrigin != null) {
             properties.cors.origin = corsOrigin;
         }
-        var cookieSecure = LegacyPropertyDefaults.legacyValue(dotenv, "server.cookie.secure", "SERVER_COOKIE_SECURE");
+        var cookieSecure = EnvironmentPropertyDefaults.value(dotenv, "server.cookie.secure", "SERVER_COOKIE_SECURE");
         if (cookieSecure != null) {
             properties.cookie.secure = Boolean.parseBoolean(cookieSecure);
+        }
+        var authRateLimit = EnvironmentPropertyDefaults.value(dotenv, "server.auth.requestsPerMinute", "AUTH_RATE_LIMIT");
+        if (authRateLimit != null) {
+            try {
+                properties.authRequestsPerMinute = Integer.parseInt(authRateLimit);
+            } catch (NumberFormatException ignored) {
+                properties.authRequestsPerMinute = 20;
+            }
         }
         return properties;
     }
@@ -38,6 +47,14 @@ public class ServerProperties {
 
     public void setPort(int port) {
         this.port = port;
+    }
+
+    public int getAuthRequestsPerMinute() {
+        return Math.max(1, authRequestsPerMinute);
+    }
+
+    public void setAuthRequestsPerMinute(int authRequestsPerMinute) {
+        this.authRequestsPerMinute = authRequestsPerMinute;
     }
 
     public CorsProperties getCors() {

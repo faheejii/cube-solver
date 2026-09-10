@@ -8,10 +8,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class AdminProperties {
     private String email;
 
-    static AdminProperties fromLegacyDefaults() {
+    static AdminProperties fromEnvironmentDefaults() {
         var dotenv = Dotenv.loadDefault();
         var properties = new AdminProperties();
-        properties.email = LegacyPropertyDefaults.legacyValue(dotenv, "admin.email", "ADMIN_EMAIL");
+        properties.email = EnvironmentPropertyDefaults.value(dotenv, "admin.email", "ADMIN_EMAIL");
         return properties;
     }
 

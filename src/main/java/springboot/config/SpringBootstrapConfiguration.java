@@ -10,32 +10,32 @@ import org.springframework.context.annotation.Configuration;
 
 import javax.sql.DataSource;
 
-/** Shared Spring foundations used while the existing HTTP routes are migrated. */
+/** Shared Spring foundations for database, frontend, server, and admin settings. */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnClass(HikariDataSource.class)
 public class SpringBootstrapConfiguration {
     @Bean
     @ConfigurationProperties("database")
     DatabaseProperties databaseProperties() {
-        return DatabaseProperties.fromLegacyDefaults();
+        return DatabaseProperties.fromEnvironmentDefaults();
     }
 
     @Bean
     @ConfigurationProperties("frontend")
     FrontendProperties frontendProperties() {
-        return FrontendProperties.fromLegacyDefaults();
+        return FrontendProperties.fromEnvironmentDefaults();
     }
 
     @Bean
     @ConfigurationProperties("server")
     ServerProperties serverProperties() {
-        return ServerProperties.fromLegacyDefaults();
+        return ServerProperties.fromEnvironmentDefaults();
     }
 
     @Bean
     @ConfigurationProperties("admin")
     AdminProperties adminProperties() {
-        return AdminProperties.fromLegacyDefaults();
+        return AdminProperties.fromEnvironmentDefaults();
     }
 
     @Bean
