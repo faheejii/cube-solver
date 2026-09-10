@@ -93,7 +93,7 @@ mvn -q -Dmaven.compiler.useIncrementalCompilation=false test
 Run the focused catalog/database/API checks:
 
 ```bash
-mvn -q -Dtest=F2LCaseCatalogTest,OLLCaseDatabaseTest,PLLCaseDatabaseTest,ApiResponsesTest test
+mvn -q -Dtest=F2LCaseCatalogTest,OLLCaseDatabaseTest,PLLCaseDatabaseTest test
 ```
 
 Run the focused F2L trace tests:
@@ -119,6 +119,19 @@ npm test
 npm run build
 ```
 
+Run the complete production-stack verification locally:
+
+```bash
+mvn -q -DskipTests package
+./scripts/docker-smoke-test.sh
+```
+
+The smoke test starts an isolated Compose project with temporary host ports,
+checks the Spring health and metrics endpoints, exercises authentication,
+authorization, solve jobs, history, statistics, and static frontend serving,
+then removes only that isolated project. It does not use or remove the normal
+development database volume.
+
 Compile the Java project:
 
 ```bash
@@ -141,12 +154,14 @@ mvn -q compile exec:java -Dexec.mainClass=server.SpringCubeApplication
 
 The Spring MVC server preserves the existing API paths, response shapes, session
 cookie contract, and solver entry points. Spring Security owns request
-authorization, Spring Data JPA owns migrated authentication/history/statistics
-persistence, and Flyway remains the schema authority. Asynchronous solve jobs
-retain their existing ownership, queue, cancellation, and save-on-complete
-contracts behind the Spring MVC adapter. The original `server.ApiServerMain`
-launcher and JDBC repositories remain available for compatibility and existing
-focused tests while the migration proceeds.
+authorization, Spring Data JPA owns authentication/history/statistics persistence,
+and Flyway remains the schema authority. Asynchronous solve jobs retain their
+existing ownership, queue, cancellation, and save-on-complete contracts behind
+the Spring MVC adapter.
+
+`server.SpringCubeApplication` is the only supported backend entrypoint. The
+former standalone HTTP server and compatibility launcher are no longer part of
+the project.
 
 The server exposes:
 
@@ -227,7 +242,7 @@ Configuration priority is:
 The default port is `8080`. To change it:
 
 ```bash
-mvn -q compile exec:java -Dexec.mainClass=server.ApiServerMain -Dserver.port=9090
+mvn -q compile exec:java -Dexec.mainClass=server.SpringCubeApplication -Dserver.port=9090
 ```
 
 `GET /api/health/live` reports process liveness. `GET /api/health/ready` reports database readiness and returns `503` when a configured database is unavailable.
@@ -288,6 +303,11 @@ docker compose up -d postgres
 export TEST_DATABASE_URL='postgresql://cube_solver:cube_solver@localhost:5433/cube_solver'
 mvn -q -Dmaven.compiler.useIncrementalCompilation=false test
 ```
+
+Database-backed tests use an isolated `PostgresTestDatabase` fixture. It creates
+a unique schema, applies the Flyway migrations to that schema, and closes its
+Hikari datasource during teardown; it does not depend on the production server
+runtime or legacy database wrappers.
 
 The liveness endpoint is `GET /api/health/live`, readiness is `GET /api/health/ready`, and process metrics are available at `GET /api/metrics`. CI runs [`scripts/docker-smoke-test.sh`](scripts/docker-smoke-test.sh) against the built Compose stack. The smoke script uses isolated host ports (`18080` for the app and `55433` for Postgres by default) so it can run while the normal development stack is using `8080` and `5433`; override them with `SMOKE_APP_PORT` and `SMOKE_POSTGRES_PORT` if needed.
 
@@ -481,20 +501,17 @@ Solvers:
 API and server:
 
 - [`src/main/java/api/SolveApiRequest.java`](src/main/java/api/SolveApiRequest.java)
-- [`src/main/java/server/CubeHttpServer.java`](src/main/java/server/CubeHttpServer.java)
-- [`src/main/java/server/HttpServerSupport.java`](src/main/java/server/HttpServerSupport.java)
-- [`src/main/java/server/AlgorithmCatalogRouteHandler.java`](src/main/java/server/AlgorithmCatalogRouteHandler.java)
-- [`src/main/java/server/AuthRouteHandler.java`](src/main/java/server/AuthRouteHandler.java)
-- [`src/main/java/server/SolveJobRouteHandler.java`](src/main/java/server/SolveJobRouteHandler.java)
-- [`src/main/java/server/SolveRouteHandler.java`](src/main/java/server/SolveRouteHandler.java)
-- [`src/main/java/server/SolveHistoryRouteHandler.java`](src/main/java/server/SolveHistoryRouteHandler.java)
-- [`src/main/java/server/StatisticsRouteHandler.java`](src/main/java/server/StatisticsRouteHandler.java)
-- [`src/main/java/server/ApiServerMain.java`](src/main/java/server/ApiServerMain.java)
 - [`src/main/java/server/SpringCubeApplication.java`](src/main/java/server/SpringCubeApplication.java)
+- [`src/main/java/server/SpringAuthController.java`](src/main/java/server/SpringAuthController.java)
+- [`src/main/java/server/SpringHistoryController.java`](src/main/java/server/SpringHistoryController.java)
+- [`src/main/java/server/SpringSolveJobController.java`](src/main/java/server/SpringSolveJobController.java)
+- [`src/main/java/server/SpringSolveController.java`](src/main/java/server/SpringSolveController.java)
+- [`src/main/java/server/SpringStatisticsController.java`](src/main/java/server/SpringStatisticsController.java)
+- [`src/main/java/server/SpringAlgorithmController.java`](src/main/java/server/SpringAlgorithmController.java)
 - [`src/main/java/server/SpringSecurityConfiguration.java`](src/main/java/server/SpringSecurityConfiguration.java)
 - [`src/main/java/database/persistence/`](src/main/java/database/persistence/)
 
-The backend keeps public solver and server facades stable while moving shared responsibilities into focused package-private collaborators. `F2LSolver` owns F2L orchestration and trace flow, while `F2LOptimizedSearch` owns bounded optimized search and `F2LStateCodec` owns compact state encoding and frame execution. `LastLayerSolver` owns OLL/PLL stage execution and status handling. `CubeHttpServer` only wires lifecycle and routes; `HttpServerSupport` centralizes request policy, and each API route has its own handler without changing endpoint paths or response shapes.
+The production backend runs through Spring Boot. Spring MVC owns request routing, Spring Security owns cookie authentication, Spring Data JPA owns persistence, and Flyway owns schema startup. `F2LSolver` owns F2L orchestration and trace flow, while `F2LOptimizedSearch` owns bounded optimized search and `F2LStateCodec` owns compact state encoding and frame execution. `LastLayerSolver` owns OLL/PLL stage execution and status handling.
 
 Frontend structure:
 
