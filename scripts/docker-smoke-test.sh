@@ -62,9 +62,26 @@ register_user() {
     "$base_url/api/auth/register"
 }
 
+login_user() {
+  local email=$1
+  local cookie=$2
+  curl --fail --silent --show-error \
+    -c "$cookie" \
+    -H 'Content-Type: application/json' \
+    -d "{\"email\":\"$email\",\"password\":\"smoke-password\"}" \
+    "$base_url/api/auth/login"
+}
+
 register_user "$user_email" "$user_cookie" | grep -q "$user_email"
 user_me=$(curl --fail --silent --show-error -b "$user_cookie" "$base_url/api/auth/me")
 [[ "$user_me" == *"$user_email"* ]]
+
+curl --fail --silent --show-error -b "$user_cookie" -c "$user_cookie" -X POST \
+  "$base_url/api/auth/logout" >/dev/null
+logged_out_status=$(curl --silent --show-error -o /dev/null -w '%{http_code}' \
+  -b "$user_cookie" "$base_url/api/auth/me")
+[[ "$logged_out_status" == "401" ]]
+login_user "$user_email" "$user_cookie" >/dev/null
 
 user_algorithms_status=$(curl --silent --show-error -o "$user_algorithms_body" \
   -w '%{http_code}' -b "$user_cookie" "$base_url/api/algorithms")
@@ -85,6 +102,25 @@ attempt_body=$(curl --fail --silent --show-error \
 history_body=$(curl --fail --silent --show-error -b "$user_cookie" "$base_url/api/solves")
 [[ "$history_body" == *"$attempt_id"* ]]
 
+for index in 1 2 3; do
+  curl --fail --silent --show-error \
+    -b "$user_cookie" \
+    -H 'Content-Type: application/json' \
+    -d "{\"clientAttemptId\":\"${attempt_id}-${index}\",\"scramble\":\"R U ${index}\",\"crossFaceRequested\":\"U\",\"timerMs\":$((1234 + index)),\"penalty\":\"none\",\"officialMs\":$((1234 + index)),\"dnf\":false}" \
+    "$base_url/api/solves" >/dev/null
+done
+page_body=$(curl --fail --silent --show-error -b "$user_cookie" \
+  "$base_url/api/solves?limit=2")
+next_cursor=$(sed -n 's/.*"nextCursor":"\([^"]*\)".*/\1/p' <<<"$page_body")
+[[ -n "$next_cursor" ]]
+next_page=$(curl --fail --silent --show-error -G -b "$user_cookie" \
+  --data-urlencode "limit=2" --data-urlencode "cursor=$next_cursor" \
+  "$base_url/api/solves")
+[[ "$next_page" == *'"items"'* ]]
+
+stats_body=$(curl --fail --silent --show-error -b "$user_cookie" "$base_url/api/stats")
+[[ "$stats_body" == *'"solveCount"'* ]]
+
 job_body=$(curl --fail --silent --show-error \
   -b "$user_cookie" \
   -H 'Content-Type: application/json' \
@@ -102,6 +138,24 @@ while (( SECONDS < job_deadline )); do
   sleep 2
 done
 [[ "$job_status" == *'"status":"completed"'* || "$job_status" == *'"status":"failed"'* || "$job_status" == *'"status":"timed_out"'* ]]
+
+cancel_job_body=$(curl --fail --silent --show-error \
+  -b "$user_cookie" \
+  -H 'Content-Type: application/json' \
+  -d "{\"scramble\":\"R U R' F2 B2 L2 D2\",\"crossFace\":\"U\",\"f2lMode\":\"optimized\",\"saveOnComplete\":false,\"deadlineSeconds\":120}" \
+  "$base_url/api/solve-jobs")
+cancel_job_id=$(sed -n 's/.*"id":"\([^"]*\)".*/\1/p' <<<"$cancel_job_body")
+[[ -n "$cancel_job_id" ]]
+cancelled_body=$(curl --fail --silent --show-error -X DELETE -b "$user_cookie" \
+  "$base_url/api/solve-jobs/$cancel_job_id")
+[[ "$cancelled_body" == *'"status"'* ]]
+
+other_cookie=$(mktemp)
+register_user "other-${project_name}@example.com" "$other_cookie" >/dev/null
+other_status=$(curl --silent --show-error -o /dev/null -w '%{http_code}' \
+  -b "$other_cookie" "$base_url/api/solve-jobs/$cancel_job_id")
+[[ "$other_status" == "403" ]]
+rm -f "$other_cookie"
 
 "${compose[@]}" ps
 echo "Docker smoke test passed"

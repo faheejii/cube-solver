@@ -1,9 +1,7 @@
 package server;
 
 import api.SolveApiRequest;
-import database.DatabaseManager;
 import database.SaveSolutionCommand;
-import database.SolveHistoryRepository;
 import solver.CfopSolveResult;
 import solver.F2LMode;
 import solver.SolveCancellation;
@@ -29,51 +27,76 @@ final class SolveJobManager implements AutoCloseable {
     private static final int MAX_RETAINED_FINISHED_JOBS = 100;
 
     private final solver.CfopSolveService solveService;
-    private final DatabaseManager databaseManager;
-    private final SolveHistoryRepository repository;
+    private final CompletedSolutionPersistence completedSolutionPersistence;
     private final OperationalMetrics operationalMetrics;
     private final Long solveDeadlineOverrideNanos;
     private final ExecutorService optimizedExecutor;
     private final ExecutorService fastExecutor;
+    private final boolean ownsExecutors;
     private final Map<String, JobState> jobsById = new ConcurrentHashMap<>();
     private final ConcurrentLinkedDeque<String> finishedJobIds = new ConcurrentLinkedDeque<>();
 
-    SolveJobManager(solver.CfopSolveService solveService, DatabaseManager databaseManager) {
-        this(solveService, databaseManager, null, new OperationalMetrics());
-    }
-
     SolveJobManager(
             solver.CfopSolveService solveService,
-            DatabaseManager databaseManager,
-            long solveDeadlineNanos
+            CompletedSolutionPersistence completedSolutionPersistence
     ) {
-        this(solveService, databaseManager, solveDeadlineNanos, new OperationalMetrics());
+        this(solveService, completedSolutionPersistence, new OperationalMetrics());
     }
 
     SolveJobManager(
             solver.CfopSolveService solveService,
-            DatabaseManager databaseManager,
+            CompletedSolutionPersistence completedSolutionPersistence,
             OperationalMetrics operationalMetrics
     ) {
-        this(solveService, databaseManager, null, operationalMetrics);
+        this(solveService, completedSolutionPersistence, null, operationalMetrics, null, null, true);
+    }
+
+    SolveJobManager(
+            solver.CfopSolveService solveService,
+            CompletedSolutionPersistence completedSolutionPersistence,
+            OperationalMetrics operationalMetrics,
+            long solveDeadlineNanos
+    ) {
+        this(solveService, completedSolutionPersistence, solveDeadlineNanos, operationalMetrics, null, null, true);
+    }
+
+    SolveJobManager(
+            solver.CfopSolveService solveService,
+            CompletedSolutionPersistence completedSolutionPersistence,
+            OperationalMetrics operationalMetrics,
+            ExecutorService optimizedExecutor,
+            ExecutorService fastExecutor
+    ) {
+        this(solveService, completedSolutionPersistence, null, operationalMetrics,
+                optimizedExecutor, fastExecutor, false);
     }
 
     private SolveJobManager(
             solver.CfopSolveService solveService,
-            DatabaseManager databaseManager,
+            CompletedSolutionPersistence completedSolutionPersistence,
             Long solveDeadlineOverrideNanos,
-            OperationalMetrics operationalMetrics
+            OperationalMetrics operationalMetrics,
+            ExecutorService optimizedExecutor,
+            ExecutorService fastExecutor,
+            boolean ownsExecutors
     ) {
         this.solveService = solveService;
-        this.databaseManager = databaseManager;
-        this.repository = new SolveHistoryRepository(databaseManager);
+        this.completedSolutionPersistence = java.util.Objects.requireNonNull(
+                completedSolutionPersistence,
+                "completedSolutionPersistence"
+        );
         this.operationalMetrics = operationalMetrics;
         if (solveDeadlineOverrideNanos != null && solveDeadlineOverrideNanos <= 0) {
             throw new IllegalArgumentException("solveDeadlineOverrideNanos must be positive");
         }
         this.solveDeadlineOverrideNanos = solveDeadlineOverrideNanos;
-        this.optimizedExecutor = boundedExecutor("optimized-solve-worker", 1, configuredQueueSize("server.optimized.queue", 4));
-        this.fastExecutor = boundedExecutor("fast-solve-worker", 2, configuredQueueSize("server.fast.queue", 16));
+        this.optimizedExecutor = optimizedExecutor == null
+                ? boundedExecutor("optimized-solve-worker", 1, configuredQueueSize("server.optimized.queue", 4))
+                : java.util.Objects.requireNonNull(optimizedExecutor, "optimizedExecutor");
+        this.fastExecutor = fastExecutor == null
+                ? boundedExecutor("fast-solve-worker", 2, configuredQueueSize("server.fast.queue", 16))
+                : java.util.Objects.requireNonNull(fastExecutor, "fastExecutor");
+        this.ownsExecutors = ownsExecutors;
     }
 
     JobSnapshot submit(
@@ -197,7 +220,7 @@ final class SolveJobManager implements AutoCloseable {
             );
             SolveCancellation.throwIfCancelled();
             CheckedRunnable saveAction = saveOnComplete
-                    ? () -> repository.upsertSolution(toSaveCommand(
+                    ? () -> completedSolutionPersistence.save(toSaveCommand(
                         userId,
                         solveId,
                         requestedCrossFace,
@@ -258,7 +281,7 @@ final class SolveJobManager implements AutoCloseable {
         if (!saveOnComplete) {
             return;
         }
-        if (!databaseManager.isConfigured()) {
+        if (!completedSolutionPersistence.isConfigured()) {
             throw new IllegalArgumentException("Database is not configured");
         }
         if (userId == null || userId.isBlank() || solveId == null) {
@@ -307,8 +330,10 @@ final class SolveJobManager implements AutoCloseable {
 
     @Override
     public void close() {
-        optimizedExecutor.shutdownNow();
-        fastExecutor.shutdownNow();
+        if (ownsExecutors) {
+            optimizedExecutor.shutdownNow();
+            fastExecutor.shutdownNow();
+        }
     }
 
     static final class CapacityException extends IllegalStateException {
@@ -366,7 +391,7 @@ final class SolveJobManager implements AutoCloseable {
                 result.pll().moveCount(),
                 result.pll().solved(),
                 result.pll().status(),
-                DatabaseManager.SOLVER_VERSION,
+                SolverVersion.CURRENT,
                 JsonSupport.f2lTraceJson(result.f2l(), result.f2lTrace()),
                 JsonSupport.modeComparisonJson(result.modeComparison())
         );

@@ -1,8 +1,7 @@
 package server;
 
 import api.SolveApiRequest;
-import database.DatabaseConfig;
-import database.DatabaseManager;
+import database.SaveSolutionCommand;
 import org.junit.jupiter.api.Test;
 import solver.CfopSolveRequest;
 import solver.CfopSolveResult;
@@ -187,12 +186,7 @@ class SolveJobManagerTest {
         var service = new ControlledSolveService(optimizedRelease);
         var manager = new SolveJobManager(
                 service,
-                new DatabaseManager(new DatabaseConfig(
-                        true,
-                        "jdbc:postgresql://invalid/test",
-                        "test",
-                        "test"
-                ))
+                new InMemoryPersistence()
         );
         var linked = manager.submit(
                 new SolveApiRequest("R", "U", "optimized"),
@@ -221,12 +215,7 @@ class SolveJobManagerTest {
         var release = new CountDownLatch(1);
         var manager = new SolveJobManager(
                 new ControlledSolveService(release),
-                new DatabaseManager(new DatabaseConfig(
-                        true,
-                        "jdbc:postgresql://invalid/test",
-                        "test",
-                        "test"
-                ))
+                new InMemoryPersistence()
         );
         var job = manager.submit(new SolveApiRequest("R", "U", "optimized"), "owner", 7L, true);
 
@@ -245,12 +234,7 @@ class SolveJobManagerTest {
         var release = new CountDownLatch(1);
         var manager = new SolveJobManager(
                 new ControlledSolveService(release),
-                new DatabaseManager(new DatabaseConfig(
-                        true,
-                        "jdbc:postgresql://invalid/test",
-                        "test",
-                        "test"
-                ))
+                new InMemoryPersistence()
         );
         var owned = manager.submit(new SolveApiRequest("R", "U", "optimized"), "owner", 7L, true);
         var other = manager.submit(new SolveApiRequest("U", "U", "optimized"), "other", 8L, true);
@@ -279,7 +263,8 @@ class SolveJobManagerTest {
         var service = new ControlledSolveService(release);
         var manager = new SolveJobManager(
                 service,
-                new DatabaseManager(DatabaseConfig.disabled()),
+                new InMemoryPersistence(),
+                new OperationalMetrics(),
                 TimeUnit.MILLISECONDS.toNanos(25)
         );
         var running = manager.submit(
@@ -298,8 +283,19 @@ class SolveJobManagerTest {
     private static SolveJobManager manager(CfopSolveService service) {
         return new SolveJobManager(
                 service,
-                new DatabaseManager(DatabaseConfig.disabled())
+                new InMemoryPersistence()
         );
+    }
+
+    private static final class InMemoryPersistence implements CompletedSolutionPersistence {
+        @Override
+        public boolean isConfigured() {
+            return true;
+        }
+
+        @Override
+        public void save(SaveSolutionCommand command) {
+        }
     }
 
     private static SolveJobManager.JobSnapshot waitForStatus(

@@ -1,9 +1,9 @@
 package server;
 
-import com.sun.net.httpserver.Headers;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,11 +25,10 @@ class SessionCookieTest {
 
     @Test
     void read_shouldFindSessionAmongOtherCookies() {
-        var headers = new Headers();
-        headers.add("Cookie", "theme=dark; cube_session=opaque-token; locale=en");
+        var headers = List.of("theme=dark; cube_session=opaque-token; locale=en");
 
         assertEquals("opaque-token", SessionCookie.read(headers));
-        assertNull(SessionCookie.read(new Headers()));
+        assertNull(SessionCookie.read(List.of()));
     }
 
     @Test

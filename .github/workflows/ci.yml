@@ -31,6 +31,12 @@ jobs:
           distribution: temurin
           java-version: '25'
           cache: maven
+      - name: Guard removed legacy HTTP runtime
+        run: |
+          if rg -n 'ApiServerMain|CubeHttpServer|HttpServerSupport|ApiResponses|LegacySolveHistoryPersistence|AlgorithmCatalogRouteHandler|AuthRouteHandler|HealthMetricsHandler|SolveHistoryRouteHandler|SolveJobRouteHandler|SolveRouteHandler|StatisticsRouteHandler|StaticFileHandler' src/main/java src/test/java; then
+            echo 'Removed legacy HTTP runtime references found' >&2
+            exit 1
+          fi
       - run: mvn -q -Dmaven.compiler.useIncrementalCompilation=false test
 
   frontend:
