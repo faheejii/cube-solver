@@ -5,11 +5,13 @@ public record CreateSolveJobRequest(
         String crossFace,
         String f2lMode,
         Long solveId,
-        boolean saveOnComplete,
+        Boolean saveOnComplete,
         Long deadlineSeconds,
-        boolean deepColorNeutral
+        Boolean deepColorNeutral
 ) {
     public CreateSolveJobRequest {
+        saveOnComplete = Boolean.TRUE.equals(saveOnComplete);
+        deepColorNeutral = Boolean.TRUE.equals(deepColorNeutral);
         SolveApiRequest.validateDeadlineSeconds(deadlineSeconds);
     }
 

@@ -1,7 +1,8 @@
 package algorithms;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import cfop.F2LCaseSignature;
 import cfop.F2LSlot;
 import cfop.OLLCaseSignature;
@@ -246,7 +247,7 @@ public final class AlgorithmCaseCatalog {
                 throw new IllegalStateException("Missing algorithm corpus resource " + resource);
             }
             return JSON.readTree(stream);
-        } catch (IOException exception) {
+        } catch (IOException | JacksonException exception) {
             throw new IllegalStateException("Could not read algorithm corpus resource " + resource, exception);
         }
     }

@@ -81,6 +81,7 @@ Known limitations:
 - Java 25
 - Maven 3.9+
 - Node.js 22.12+ and npm 10+ for frontend development and builds
+- Spring Boot 4.1.1 with native Jackson 3 APIs
 
 ## Build And Test
 
@@ -125,6 +126,11 @@ Run the complete production-stack verification locally:
 mvn -q -DskipTests package
 ./scripts/docker-smoke-test.sh
 ```
+
+The backend uses Spring Boot 4.1.1, Spring MVC, Spring Security, Spring Data
+JPA, and Flyway. JSON binding uses Jackson 3 (`tools.jackson`); no legacy HTTP
+runtime or Jackson 2 compatibility layer is supported. The Docker smoke test
+builds and exercises the same Spring entrypoint used by production.
 
 The smoke test starts an isolated Compose project with temporary host ports,
 checks the Spring health and metrics endpoints, exercises authentication,
