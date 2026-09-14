@@ -9,13 +9,14 @@ public record SolveApiRequest(
         String crossFace,
         String f2lMode,
         Long deadlineSeconds,
-        boolean deepColorNeutral
+        Boolean deepColorNeutral
 ) {
     public static final long DEFAULT_DEADLINE_SECONDS = 15L;
     public static final long MIN_DEADLINE_SECONDS = 5L;
     public static final long MAX_DEADLINE_SECONDS = 120L;
 
     public SolveApiRequest {
+        deepColorNeutral = Boolean.TRUE.equals(deepColorNeutral);
         validateDeadlineSeconds(deadlineSeconds);
     }
 
