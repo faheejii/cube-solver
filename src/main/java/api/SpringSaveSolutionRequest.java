@@ -1,6 +1,6 @@
 package api;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 /** Jackson-bound Spring request preserving the API's structured metadata fields. */
 public record SpringSaveSolutionRequest(

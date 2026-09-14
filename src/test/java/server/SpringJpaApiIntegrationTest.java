@@ -5,7 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -315,12 +315,12 @@ class SpringJpaApiIntegrationTest {
     }
 
     private static long jsonLong(MvcResult result, String field) throws Exception {
-        return new com.fasterxml.jackson.databind.ObjectMapper()
+        return new tools.jackson.databind.ObjectMapper()
                 .readTree(result.getResponse().getContentAsString()).get(field).longValue();
     }
 
     private static String jsonString(MvcResult result, String field) throws Exception {
-        return new com.fasterxml.jackson.databind.ObjectMapper()
+        return new tools.jackson.databind.ObjectMapper()
                 .readTree(result.getResponse().getContentAsString()).get(field).textValue();
     }
 }

@@ -1,6 +1,7 @@
 package api;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 public record SaveSolutionApiRequest(
         String crossFaceRequested,
@@ -75,7 +76,7 @@ public record SaveSolutionApiRequest(
                 if (node == null || !node.isObject()) {
                     throw new IllegalArgumentException(field + " must be a JSON object");
                 }
-            } catch (java.io.IOException exception) {
+            } catch (JacksonException exception) {
                 throw new IllegalArgumentException(field + " must be valid JSON", exception);
             }
         }
