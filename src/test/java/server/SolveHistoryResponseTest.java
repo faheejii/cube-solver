@@ -1,6 +1,6 @@
 package server;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 import database.SavedSolution;
 import database.SolveHistoryDetail;
 import org.junit.jupiter.api.Test;

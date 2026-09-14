@@ -18,8 +18,9 @@ import solver.F2LSolveTrace;
 import statistics.RollingAverage;
 import statistics.SolveStatistics;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 final class JsonSupport {
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -131,7 +132,7 @@ final class JsonSupport {
             var root = JSON.readTree(json);
             var error = root == null ? null : root.get("error");
             return error != null && error.isTextual() ? error.textValue() : null;
-        } catch (java.io.IOException exception) {
+        } catch (JacksonException exception) {
             return null;
         }
     }
@@ -368,7 +369,7 @@ final class JsonSupport {
         try {
             var node = JSON.readTree(value);
             return node != null && node.isObject();
-        } catch (java.io.IOException exception) {
+        } catch (JacksonException exception) {
             return false;
         }
     }
@@ -522,7 +523,7 @@ final class JsonSupport {
                 throw new IllegalArgumentException("Request body must be a JSON object");
             }
             return root.get(fieldName);
-        } catch (java.io.IOException exception) {
+        } catch (JacksonException exception) {
             throw new IllegalArgumentException("Invalid JSON request body", exception);
         }
     }
