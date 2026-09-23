@@ -1,8 +1,6 @@
 import {fireEvent, render, screen, waitFor} from "@testing-library/react";
 import {describe, expect, it, vi} from "vitest";
 
-vi.mock("cubing/twisty", () => ({}));
-
 vi.mock("../api", () => ({
     fetchAlgorithms: vi.fn(async () => ({
         version: "1",
@@ -44,6 +42,12 @@ vi.mock("../api", () => ({
             notes: "",
         }],
     })),
+}));
+
+vi.mock("../DeferredCubePreview", () => ({
+    default: ({setupAlgorithm = "", algorithm = ""}: {setupAlgorithm?: string; algorithm?: string}) => (
+        <div data-preview-setup={setupAlgorithm} data-preview-alg={algorithm}/>
+    ),
 }));
 
 import AlgorithmsView from "../AlgorithmsView";

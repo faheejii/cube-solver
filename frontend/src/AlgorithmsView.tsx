@@ -1,7 +1,7 @@
 import {Clipboard, LoaderCircle, Search} from "lucide-react";
 import {useEffect, useMemo, useState} from "react";
 import {fetchAlgorithms} from "./api";
-import CubePreview from "./CubePreview";
+import DeferredCubePreview from "./DeferredCubePreview";
 import type {AlgorithmCatalogEntry} from "./types";
 
 const PHASES = ["", "setup", "insert", "oll", "pll"];
@@ -122,7 +122,7 @@ export default function AlgorithmsView() {
                             <button className="dashboard-secondary-button compact" type="button" onClick={() => setPreview(null)}>Close</button>
                         </div>
                         <div className="cube-player-shell algorithm-preview-player">
-                            <CubePreview
+                            <DeferredCubePreview
                                 setupAlgorithm={preview.previewSetup ?? ""}
                                 algorithm={preview.algorithm}
                             />

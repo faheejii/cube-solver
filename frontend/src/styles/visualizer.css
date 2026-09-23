@@ -117,58 +117,6 @@
     font-size: 0.67rem;
 }
 
-.cube-comparison-debug {
-    display: grid;
-    gap: 12px;
-    border: 1px dashed rgba(129, 153, 190, 0.55);
-    border-radius: 15px;
-    padding: 14px;
-}
-
-.cube-comparison-controls,
-.cube-comparison-buttons {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.cube-comparison-controls {
-    justify-content: space-between;
-}
-
-.cube-comparison-controls > div:first-child {
-    display: grid;
-    gap: 3px;
-}
-
-.cube-comparison-controls span,
-.cube-comparison-notation {
-    color: var(--muted);
-    font-family: "Space Mono", monospace;
-    font-size: 0.67rem;
-}
-
-.cube-comparison-buttons button {
-    min-height: 34px;
-    border: 1px solid var(--border);
-    border-radius: 9px;
-    background: var(--panel-muted);
-    color: var(--text);
-    cursor: pointer;
-    padding: 0 11px;
-}
-
-.cube-comparison-buttons button:disabled {
-    cursor: default;
-    opacity: 0.4;
-}
-
-.cube-comparison-notation {
-    display: grid;
-    gap: 4px;
-    overflow-wrap: anywhere;
-}
-
 .compact-control,
 .mode-toggle {
     display: inline-flex;
@@ -267,13 +215,4 @@
 }
 
 @media (max-width: 720px) {
-    .cube-comparison-controls {
-        align-items: stretch;
-        flex-direction: column;
-    }
-
-    .cube-comparison-buttons {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-    }
 }
