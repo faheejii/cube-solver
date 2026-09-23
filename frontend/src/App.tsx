@@ -1,15 +1,10 @@
-import {startTransition, useEffect, useRef, useState} from "react";
+import {lazy, startTransition, Suspense, useEffect, useRef, useState} from "react";
 import {randomScrambleForEvent} from "cubing/scramble";
 import {setSearchDebug} from "cubing/search";
 import {LoaderCircle, Save, Trash2, X} from "lucide-react";
-import ActiveSolutionsView from "./ActiveSolutionsView";
-import AlgorithmsView from "./AlgorithmsView";
 import CrossFaceSelect from "./CrossFaceSelect";
 import DashboardSidebar, {type DashboardView} from "./DashboardSidebar";
-import HistoryView from "./HistoryView";
 import SaveToast from "./SaveToast";
-import SettingsView from "./SettingsView";
-import SolutionResultBody from "./SolutionResultBody";
 import StatisticsRail from "./StatisticsRail";
 import TimerWorkspace from "./TimerWorkspace";
 import {
@@ -42,7 +37,13 @@ import type {
 
 setSearchDebug({prioritizeEsbuildWorkaroundForWorkerInstantiation: true});
 
+const SolutionResultBody = lazy(() => import("./SolutionResultBody"));
+
 const DEFAULT_SCRAMBLE = "R D R' D2 R D' R'";
+const ActiveSolutionsView = lazy(() => import("./ActiveSolutionsView"));
+const AlgorithmsView = lazy(() => import("./AlgorithmsView"));
+const HistoryView = lazy(() => import("./HistoryView"));
+const SettingsView = lazy(() => import("./SettingsView"));
 const FACE_OPTIONS = [
     {value: "U", label: "U"},
     {value: "D", label: "D"},
@@ -701,33 +702,39 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                         ) : null}
 
                     </>
-                ) : activeView === "history" ? (
-                    <HistoryView
-                        entries={historyEntries}
-                        loading={historyStatus === "loading"}
-                        loadingMore={historyLoadingMore}
-                        error={historyError}
-                        hasMore={historyCursor !== null}
-                        solveCount={statistics?.solveCount ?? null}
-                        statistics={statistics}
-                        statisticsLoading={statisticsLoading}
-                        deletingSolveId={deletingSolveId}
-                        onRefresh={() => void loadHistory()}
-                        onLoadMore={() => void loadMoreHistory()}
-                        onOpenSolve={(entry) => void openHistorySolution(entry)}
-                        onDeleteSolve={(entry) => void handleDeleteSolve(entry)}
-                    />
-                ) : activeView === "settings" ? (
-                    <SettingsView settings={settings} onChange={updateSettings}/>
                 ) : (
-                    activeView === "algorithms" && user.role === "admin" ? <AlgorithmsView/> : <ActiveSolutionsView
-                        processes={processes}
-                        onCancel={(process) => void terminateProcess(process)}
-                        onRetry={retryProcess}
-                        onPreview={setProcessPreview}
-                        onDismiss={dismissProcess}
-                        onClearFinished={clearFinishedProcesses}
-                    />
+                    <Suspense fallback={<TabViewLoading/>}>
+                        {activeView === "history" ? (
+                            <HistoryView
+                                entries={historyEntries}
+                                loading={historyStatus === "loading"}
+                                loadingMore={historyLoadingMore}
+                                error={historyError}
+                                hasMore={historyCursor !== null}
+                                solveCount={statistics?.solveCount ?? null}
+                                statistics={statistics}
+                                statisticsLoading={statisticsLoading}
+                                deletingSolveId={deletingSolveId}
+                                onRefresh={() => void loadHistory()}
+                                onLoadMore={() => void loadMoreHistory()}
+                                onOpenSolve={(entry) => void openHistorySolution(entry)}
+                                onDeleteSolve={(entry) => void handleDeleteSolve(entry)}
+                            />
+                        ) : activeView === "settings" ? (
+                            <SettingsView settings={settings} onChange={updateSettings}/>
+                        ) : activeView === "algorithms" && user.role === "admin" ? (
+                            <AlgorithmsView/>
+                        ) : (
+                            <ActiveSolutionsView
+                                processes={processes}
+                                onCancel={(process) => void terminateProcess(process)}
+                                onRetry={retryProcess}
+                                onPreview={setProcessPreview}
+                                onDismiss={dismissProcess}
+                                onClearFinished={clearFinishedProcesses}
+                            />
+                        )}
+                    </Suspense>
                 )}
             </div>
 
@@ -860,7 +867,9 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                 ) : null}
 
                                 {modalResult ? (
-                                    <SolutionResultBody result={modalResult} requestedCross={modalCrossFace}/>
+                                    <Suspense fallback={<SolutionPlaybackLoading/>}>
+                                        <SolutionResultBody result={modalResult} requestedCross={modalCrossFace}/>
+                                    </Suspense>
                                 ) : null}
                             </>
                         ) : null}
@@ -893,7 +902,9 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                             </div>
                         </div>
                         <p className="modal-scramble">{result.scramble}</p>
-                        <SolutionResultBody result={result} requestedCross={crossFace}/>
+                        <Suspense fallback={<SolutionPlaybackLoading/>}>
+                            <SolutionResultBody result={result} requestedCross={crossFace}/>
+                        </Suspense>
                     </section>
                 </div>
             ) : null}
@@ -923,14 +934,29 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                             </div>
                         </div>
                         <p className="modal-scramble">{processPreview.request.scramble}</p>
-                        <SolutionResultBody
-                            result={processPreview.result}
-                            requestedCross={processPreview.request.crossFace}
-                        />
+                        <Suspense fallback={<SolutionPlaybackLoading/>}>
+                            <SolutionResultBody
+                                result={processPreview.result}
+                                requestedCross={processPreview.request.crossFace}
+                            />
+                        </Suspense>
                     </section>
                 </div>
             ) : null}
         </main>
+    );
+}
+
+function SolutionPlaybackLoading() {
+    return <p className="modal-message">Loading solution playback...</p>;
+}
+
+function TabViewLoading() {
+    return (
+        <div className="history-loading" role="status" aria-live="polite">
+            <LoaderCircle size={22}/>
+            Loading view...
+        </div>
     );
 }
 

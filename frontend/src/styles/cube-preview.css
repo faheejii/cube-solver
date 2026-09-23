@@ -43,66 +43,11 @@
     min-height: 160px;
 }
 
-.reference-cube-player {
-    border: 1px dashed rgba(145, 165, 195, 0.45);
-    border-radius: 15px;
-    padding: 12px;
-    background: rgba(15, 22, 34, 0.72);
+.deferred-cube-preview {
+    box-sizing: border-box;
 }
 
-.reference-cube-heading,
-.reference-cube-metadata {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
+.cube-preview-loading-indicator {
     color: var(--muted);
-    font-family: "Space Mono", monospace;
-    font-size: 0.67rem;
-}
-
-.reference-cube-heading strong {
-    color: var(--text);
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-}
-
-.reference-cube-metadata {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    overflow-wrap: anywhere;
-    line-height: 1.45;
-}
-
-.reference-cube-status {
-    min-height: 220px;
-    display: grid;
-    place-items: center;
-    margin: 12px 0;
-    color: var(--muted);
-    text-align: center;
-}
-
-.reference-cube-status.error {
-    color: var(--danger, #ef7777);
-}
-
-.reference-cube-loading {
-    border: 1px dashed rgba(145, 165, 195, 0.45);
-    border-radius: 15px;
-    padding: 24px;
-    color: var(--muted);
-    text-align: center;
-}
-
-@media (max-width: 640px) {
-    .reference-cube-heading,
-    .reference-cube-metadata {
-        display: block;
-    }
-
-    .reference-cube-heading span,
-    .reference-cube-metadata span {
-        display: block;
-        margin-top: 6px;
-    }
+    font-size: 0.75rem;
 }

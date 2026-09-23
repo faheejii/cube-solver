@@ -2,6 +2,64 @@ import {expect, test} from "@playwright/test";
 import {mockProductionApi, normalUser} from "./production-fixtures";
 
 test.describe("authenticated dashboard production flow", () => {
+    test("loads the Three.js chunk only when a cube preview nears the viewport", async ({page}) => {
+        await page.addInitScript(() => {
+            type ObserverHandle = {notify: (isIntersecting: boolean) => void};
+            const handles: ObserverHandle[] = [];
+            Object.defineProperty(window, "__cubePreviewObservers", {value: handles});
+            Object.defineProperty(window, "IntersectionObserver", {
+                configurable: true,
+                value: class ControlledIntersectionObserver {
+                    private target: Element | null = null;
+
+                    constructor(private readonly callback: IntersectionObserverCallback) {
+                        handles.push({
+                            notify: (isIntersecting) => {
+                                if (!this.target) throw new Error("Preview observer has no target");
+                                const rect = this.target.getBoundingClientRect();
+                                this.callback([{
+                                    isIntersecting,
+                                    target: this.target,
+                                    boundingClientRect: rect,
+                                    intersectionRatio: isIntersecting ? 1 : 0,
+                                    intersectionRect: rect,
+                                    rootBounds: null,
+                                    time: performance.now(),
+                                }], this as unknown as IntersectionObserver);
+                            },
+                        });
+                    }
+
+                    observe(target: Element) { this.target = target; }
+                    disconnect() {}
+                    unobserve() {}
+                    takeRecords() { return []; }
+                },
+            });
+        });
+
+        const rendererRequests: string[] = [];
+        page.on("request", (request) => {
+            const url = request.url();
+            if (url.includes("three-vendor-") || /\/src\/CubePreview\.tsx(?:\?|$)/.test(url)) {
+                rendererRequests.push(url);
+            }
+        });
+
+        await mockProductionApi(page, {user: normalUser});
+        await page.goto("/");
+        await expect(page.getByRole("button", {name: "Generate new scramble"})).toBeVisible();
+        await expect.poll(() => page.evaluate(() => (window as Window & {__cubePreviewObservers: unknown[]}).__cubePreviewObservers.length)).toBeGreaterThan(0);
+        expect(rendererRequests).toEqual([]);
+
+        await page.evaluate(() => {
+            const observers = (window as Window & {__cubePreviewObservers: Array<{notify: (visible: boolean) => void}>}).__cubePreviewObservers;
+            observers[0].notify(true);
+        });
+        await expect.poll(() => rendererRequests.length).toBeGreaterThan(0);
+        await expect(page.locator(".scramble-cube canvas")).toBeVisible();
+    });
+
     test("generates and regenerates scrambles in the production worker", async ({page}) => {
         const pageErrors: Error[] = [];
         page.on("pageerror", (error) => pageErrors.push(error));

@@ -585,7 +585,7 @@ textarea:focus-visible,
 .mode-option,
 .stage-tab,
 .speed-option,
-.cube-comparison-buttons button {
+.playback-speed-select select {
     border-radius: var(--radius-sm);
 }
 
@@ -641,8 +641,7 @@ textarea:focus-visible,
 
 .solution-summary-strip,
 .solution-stage-rail,
-.solution-pair-card,
-.cube-comparison-debug {
+.solution-pair-card {
     border-color: var(--border);
     border-radius: var(--radius-sm);
     background: var(--panel-muted);
@@ -655,18 +654,13 @@ textarea:focus-visible,
 }
 
 .solution-pair-select,
-.solution-stage-row > button,
-.cube-comparison-buttons button {
+.solution-stage-row > button {
     color: var(--text);
 }
 
 .cube-player-shell {
     border-radius: var(--radius-sm);
     background-image: none;
-}
-
-.cube-comparison-debug {
-    border-style: dashed;
 }
 
 .algorithm-preview-dialog {
@@ -962,8 +956,7 @@ textarea:focus-visible,
 .speed-option,
 .tool-button,
 .icon-button,
-.mode-option,
-.cube-comparison-buttons button {
+.mode-option {
     min-height: 32px;
     border-radius: var(--radius-sm);
     padding-inline: 8px;

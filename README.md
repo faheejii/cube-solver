@@ -65,7 +65,6 @@ Implemented:
 - Java HTTP API and Vite/React frontend
 - browser-local Settings for the solver processing deadline, inspection behavior, deep color-neutral optimization, and theme
 - application-owned Three.js cube previews and playback driven by one authoritative cubie/sticker model, with WCA/cubing.js-compatible face, wide, slice, and rotation notation, fixed-camera rendering, setup-state reconstruction, sequential animation, and a WebGL fallback
-- a development-only, lazy-loaded cubing.js 2D reference with deterministic prefix stepping for comparing setup and stage playback; production renders only the custom Three.js player
 
 Known limitations:
 
@@ -137,6 +136,12 @@ checks the Spring health and metrics endpoints, exercises authentication,
 authorization, solve jobs, history, statistics, and static frontend serving,
 then removes only that isolated project. It does not use or remove the normal
 development database volume.
+
+The frontend production build keeps Three.js and cubing.js WASM in separate
+cached assets. Three.js is loaded only when a cube preview is within 120 pixels
+of the viewport; tab views and solution playback are also loaded on demand.
+The cubing.js WASM asset remains separate and may exceed Vite's 500 KB
+post-minification warning threshold.
 
 Compile the Java project:
 
@@ -337,7 +342,9 @@ npm run dev
 The Vite app proxies `/api` to `http://localhost:8080`, so run the Java API server at the same time.
 The cube visualization uses an application-owned Three.js renderer backed by one logical cubie/sticker model. Setup algorithms are applied from solved state before meshes are built, completed moves snap back to the logical model, and facelets are derived from that same state. Backend and frontend notation follows the WCA/cubing.js convention for face, prime, double, wide, `M/E/S`, and `x/y/z` moves. The fixed camera, sequential animation, responsive sizing, and graceful WebGL fallback remain application-owned.
 
-In development builds, solution playback also exposes a lazy-loaded cubing.js 2D reference. Reset/Previous/Next compare an identical setup plus algorithm prefix without autoplay ambiguity, while **Play custom** exercises the normal animation path. The reference panel is excluded from production; cubing.js remains a production dependency only for scramble generation and worker-safe scramble support.
+Solution playback uses the application-owned Three.js cube renderer. Its code is
+deferred until a preview approaches the viewport. cubing.js is used for
+production scramble generation and worker support, not playback rendering.
 
 Run the deterministic browser authentication tests with:
 

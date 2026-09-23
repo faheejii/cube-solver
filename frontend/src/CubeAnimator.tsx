@@ -1,11 +1,7 @@
-import {lazy, Suspense, useEffect, useState} from "react";
+import {useEffect, useState} from "react";
 import {Pause, Play, RotateCcw, SkipBack, SkipForward} from "lucide-react";
 import type {SolveResponse, SolveStage} from "./types";
-import CubePreview from "./CubePreview";
-
-const ReferenceCubePlayer = import.meta.env.DEV
-    ? lazy(() => import("./ReferenceCubePlayer"))
-    : null;
+import DeferredCubePreview from "./DeferredCubePreview";
 
 export type PlaybackStageId = "full" | "cross" | "f2l" | "oll" | "pll";
 
@@ -42,26 +38,15 @@ export default function CubeAnimator({
         ? f2lPairOption(result, selectedF2LPair) ?? options.find((option) => option.id === selectedId)
         : options.find((option) => option.id === selectedId);
     const activeOption = selected ?? options[0];
-    const debugMoves = splitAlgorithm(activeOption.algorithm);
-    const [debugMoveIndex, setDebugMoveIndex] = useState(0);
-    const [debugPlayback, setDebugPlayback] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [playbackComplete, setPlaybackComplete] = useState(false);
     const [playerKey, setPlayerKey] = useState(0);
 
     useEffect(() => {
-        setDebugMoveIndex(0);
-        setDebugPlayback(false);
         setIsPlaying(false);
         setPlaybackComplete(false);
         setPlayerKey((key) => key + 1);
     }, [activeOption.id, activeOption.pairOrder, activeOption.setupAlgorithm, activeOption.algorithm]);
-
-    const effectiveSetup = import.meta.env.DEV && !debugPlayback
-        ? combineRawAlgorithms(activeOption.setupAlgorithm, ...debugMoves.slice(0, debugMoveIndex))
-        : activeOption.setupAlgorithm;
-    const effectiveAlgorithm = import.meta.env.DEV && !debugPlayback ? "" : activeOption.algorithm;
-    const currentDebugMove = debugMoveIndex === 0 ? "Setup" : debugMoves[debugMoveIndex - 1];
 
     function selectStage(stage: PlaybackStageId) {
         resetPlayback();
@@ -78,14 +63,10 @@ export default function CubeAnimator({
 
     function togglePlayback() {
         if (playbackComplete) {
-            setDebugPlayback(true);
             setPlaybackComplete(false);
             setPlayerKey((key) => key + 1);
             setIsPlaying(true);
             return;
-        }
-        if (!isPlaying) {
-            setDebugPlayback(true);
         }
         setIsPlaying((playing) => !playing);
     }
@@ -114,10 +95,10 @@ export default function CubeAnimator({
             </div>
 
             <div className="cube-player-shell">
-                <CubePreview
-                    key={`${activeOption.id}-${activeOption.pairOrder ?? ""}-${effectiveSetup}-${effectiveAlgorithm}-${playbackSpeed}-${playerKey}`}
-                    setupAlgorithm={effectiveSetup}
-                    algorithm={effectiveAlgorithm}
+                <DeferredCubePreview
+                    key={`${activeOption.id}-${activeOption.pairOrder ?? ""}-${activeOption.setupAlgorithm}-${activeOption.algorithm}-${playbackSpeed}-${playerKey}`}
+                    setupAlgorithm={activeOption.setupAlgorithm}
+                    algorithm={activeOption.algorithm}
                     stage={activeOption.id}
                     playbackSpeed={playbackSpeed}
                     isPlaying={isPlaying}
@@ -182,50 +163,6 @@ export default function CubeAnimator({
                     </select>
                 </label>
             </div>
-
-            {import.meta.env.DEV && ReferenceCubePlayer ? (
-                <div
-                    className="cube-comparison-debug"
-                    data-comparison-stage={activeOption.id}
-                    data-comparison-source-setup={activeOption.setupAlgorithm}
-                    data-comparison-source-alg={activeOption.algorithm}
-                    data-comparison-effective-setup={effectiveSetup}
-                    data-comparison-effective-alg={effectiveAlgorithm}
-                    data-comparison-move-index={debugMoveIndex}
-                    data-comparison-move-count={debugMoves.length}
-                    data-comparison-mode={debugPlayback ? "playback" : "step"}
-                >
-                    <div className="cube-comparison-controls" aria-label="Cube comparison step controls">
-                        <div>
-                            <strong>Notation comparison</strong>
-                            <span>Move {debugMoveIndex} / {debugMoves.length}: {currentDebugMove}</span>
-                        </div>
-                        <div className="cube-comparison-buttons">
-                            <button type="button" onClick={() => { resetPlayback(); setDebugPlayback(false); setDebugMoveIndex(0); }} disabled={!debugPlayback && debugMoveIndex === 0}>Reset</button>
-                            <button type="button" onClick={() => setDebugMoveIndex((index) => Math.max(0, index - 1))} disabled={debugPlayback || debugMoveIndex === 0}>Previous</button>
-                            <button type="button" onClick={() => setDebugMoveIndex((index) => Math.min(debugMoves.length, index + 1))} disabled={debugPlayback || debugMoveIndex === debugMoves.length}>Next</button>
-                            <button type="button" onClick={() => { resetPlayback(); setDebugMoveIndex(0); setDebugPlayback((playing) => !playing); }}>
-                                {debugPlayback ? "Return to steps" : "Play custom"}
-                            </button>
-                        </div>
-                    </div>
-                    <div className="cube-comparison-notation">
-                        <span>Original setup: {activeOption.setupAlgorithm || "Solved cube"}</span>
-                        <span>Original algorithm: {activeOption.algorithm || "No moves"}</span>
-                        <span>Effective setup: {effectiveSetup || "Solved cube"}</span>
-                    </div>
-                    <Suspense fallback={<div className="reference-cube-loading">Loading cubing.js reference...</div>}>
-                        <ReferenceCubePlayer
-                            setupAlgorithm={effectiveSetup}
-                            algorithm={effectiveAlgorithm}
-                            stage={activeOption.id}
-                            playbackSpeed={playbackSpeed}
-                            moveIndex={debugMoveIndex}
-                            moveCount={debugMoves.length}
-                        />
-                    </Suspense>
-                </div>
-            ) : null}
 
             {!compact ? (
                 <div className="visualizer-footer">
@@ -309,8 +246,4 @@ function combineRawAlgorithms(...algorithms: string[]): string {
         .map((algorithm) => algorithm.trim())
         .filter(Boolean)
         .join(" ");
-}
-
-function splitAlgorithm(algorithm: string): string[] {
-    return algorithm.trim() ? algorithm.trim().split(/\s+/) : [];
 }
