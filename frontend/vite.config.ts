@@ -46,6 +46,18 @@ export default defineConfig({
     target: "es2022",
     // cubing's generated module worker must not use Vite's DOM-only preload helper.
     modulePreload: false,
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: "three-vendor",
+              test: /[\\/]node_modules[\\/]three[\\/]/,
+            },
+          ],
+        },
+      },
+    },
   },
   worker: {
     format: "es",
