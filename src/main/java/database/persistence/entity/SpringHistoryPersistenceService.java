@@ -21,7 +21,6 @@ import statistics.SolveStatisticsCalculator;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.List;
 
 /** JPA-backed history and statistics operations for the Spring API adapters. */
 @Service

@@ -3,11 +3,7 @@ package algorithms;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
-import cfop.F2LCaseSignature;
 import cfop.F2LSlot;
-import cfop.OLLCaseSignature;
-import cfop.PLLCaseSignature;
-import cube.Algorithm;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -16,7 +12,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 /** Loads and validates the versioned canonical algorithm corpora shared by solver and catalog API. */
@@ -276,7 +271,7 @@ public final class AlgorithmCaseCatalog {
 
     private static String optionalText(JsonNode node, String field) {
         var value = node == null ? null : node.get(field);
-        return value != null && value.isTextual() ? value.textValue() : null;
+        return value != null && value.isString() ? value.stringValue() : null;
     }
 
     private static String baseName(String expandedName) {
