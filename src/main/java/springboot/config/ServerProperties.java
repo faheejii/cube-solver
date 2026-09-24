@@ -1,10 +1,8 @@
 package springboot.config;
 
 import config.Dotenv;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** Spring-bound server settings. */
-@ConfigurationProperties(prefix = "server")
 public class ServerProperties {
     private int port = 8080;
     private int authRequestsPerMinute = 20;

@@ -1,10 +1,8 @@
 package springboot.config;
 
 import config.Dotenv;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** Spring-bound administrator bootstrap setting. */
-@ConfigurationProperties(prefix = "admin")
 public class AdminProperties {
     private String email;
 

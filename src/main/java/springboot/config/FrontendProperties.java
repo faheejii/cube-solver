@@ -1,12 +1,10 @@
 package springboot.config;
 
 import config.Dotenv;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.nio.file.Path;
 
 /** Spring-bound location of the built frontend served by the application. */
-@ConfigurationProperties(prefix = "frontend")
 public class FrontendProperties {
     private String dist = "frontend/dist";
 
