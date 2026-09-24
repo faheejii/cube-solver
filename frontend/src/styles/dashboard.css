@@ -261,14 +261,6 @@
     white-space: nowrap;
 }
 
-.solver-state.state-ready {
-    color: var(--green);
-}
-
-.solver-state.state-loading {
-    color: var(--blue-bright);
-}
-
 .dashboard-scramble-card {
     position: relative;
     display: grid;
@@ -470,12 +462,6 @@
 .timer-start-capsule span {
     color: var(--muted);
     font-size: 0.73rem;
-}
-
-.workspace-actions {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
 }
 
 .timer-notices {

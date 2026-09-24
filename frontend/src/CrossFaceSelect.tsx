@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState} from "react";
+import {useEffect, useRef, useState, type KeyboardEvent} from "react";
 import {ChevronDown} from "lucide-react";
 import {CUBE_FACE_COLORS} from "./cubeFaceColors";
 
@@ -59,7 +59,7 @@ export default function CrossFaceSelect({value, options, onChange, disabled = fa
         setHighlightedIndex((current) => (current + direction + options.length) % options.length);
     }
 
-    function handleTriggerKeyDown(event: React.KeyboardEvent<HTMLButtonElement>) {
+    function handleTriggerKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
             event.preventDefault();
             setHighlightedIndex(selectedIndex(options, value));
@@ -67,7 +67,7 @@ export default function CrossFaceSelect({value, options, onChange, disabled = fa
         }
     }
 
-    function handleOptionKeyDown(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
+    function handleOptionKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
         if (event.key === "ArrowDown") {
             event.preventDefault();
             moveHighlight(1);

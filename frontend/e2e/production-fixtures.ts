@@ -119,7 +119,7 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
     await page.route("**/api/**", async (route) => {
         const request = route.request();
         const url = new URL(request.url());
-        let body: unknown = null;
+        let body: unknown;
         try {
             body = request.postDataJSON();
         } catch {

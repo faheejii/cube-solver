@@ -381,12 +381,6 @@ textarea:focus-visible,
     letter-spacing: 0.12em;
 }
 
-.workspace-actions {
-    justify-content: flex-start;
-    border-top: 1px solid var(--border);
-    padding: 10px 0 0;
-}
-
 .dashboard-primary-button,
 .dashboard-secondary-button,
 .history-load-more {
@@ -582,9 +576,6 @@ textarea:focus-visible,
 .algorithm-row-actions button,
 .tool-button,
 .icon-button,
-.mode-option,
-.stage-tab,
-.speed-option,
 .playback-speed-select select {
     border-radius: var(--radius-sm);
 }
@@ -607,9 +598,6 @@ textarea:focus-visible,
 
 .settings-theme-options button.active,
 .settings-theme-options button:hover,
-.stage-tab.active,
-.speed-option.active,
-.mode-option.active,
 .tool-button.primary,
 .icon-button.primary {
     border-color: var(--blue);
@@ -626,15 +614,11 @@ textarea:focus-visible,
 .solution-modal-controls,
 .visualizer-toolbar,
 .playback-controls,
-.compact-control,
-.mode-toggle,
-.speed-control {
+.compact-control {
     border-color: var(--border);
 }
 
-.compact-control,
-.mode-toggle,
-.speed-control {
+.compact-control {
     border-radius: var(--radius-sm);
     background: var(--panel-muted);
 }
@@ -747,9 +731,6 @@ textarea:focus-visible,
     .dashboard-timer-stage { padding-inline: 10px; }
     .dashboard-timer-number { font-size: clamp(3.5rem, 20vw, 7rem); }
     .scramble-cube { height: clamp(115px, 20vh, 190px); }
-    .workspace-actions { justify-content: stretch; }
-    .workspace-actions { padding-top: 8px; }
-    .workspace-actions .dashboard-primary-button { width: 100%; }
 }
 
 /* Solution dialogs: a compact utility inspector rather than nested cards. */
@@ -827,7 +808,6 @@ textarea:focus-visible,
     padding: 8px 16px;
 }
 
-.solution-modal-controls .mode-toggle,
 .solution-modal-controls .compact-control {
     padding: 2px 5px;
 }
@@ -952,11 +932,8 @@ textarea:focus-visible,
     font-size: 0.92rem;
 }
 
-.stage-tab,
-.speed-option,
 .tool-button,
-.icon-button,
-.mode-option {
+.icon-button {
     min-height: 32px;
     border-radius: var(--radius-sm);
     padding-inline: 8px;
@@ -966,10 +943,6 @@ textarea:focus-visible,
 .icon-button {
     width: 34px;
     padding: 0;
-}
-
-.speed-control {
-    padding: 2px;
 }
 
 .cube-player-shell {

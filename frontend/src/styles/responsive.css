@@ -276,10 +276,6 @@
         flex-direction: column;
     }
 
-    .workspace-actions {
-        display: flex;
-    }
-
     .timer-notices {
         width: 100%;
     }
@@ -327,15 +323,9 @@
     }
 
     .visualizer-toolbar,
-    .playback-controls,
-    .speed-control {
+    .playback-controls {
         align-items: stretch;
         flex-direction: column;
-    }
-
-    .stage-tabs,
-    .speed-options {
-        flex-wrap: wrap;
     }
 
     .visualizer-footer {

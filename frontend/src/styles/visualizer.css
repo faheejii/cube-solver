@@ -15,10 +15,7 @@
 }
 
 .visualizer-toolbar,
-.playback-controls,
-.stage-tabs,
-.speed-options,
-.speed-control {
+.playback-controls {
     display: flex;
     align-items: center;
 }
@@ -37,18 +34,12 @@
     font-size: 1rem;
 }
 
-.playback-controls,
-.stage-tabs,
-.speed-options,
-.speed-control {
+.playback-controls {
     gap: 5px;
 }
 
-.stage-tab,
-.speed-option,
 .tool-button,
-.icon-button,
-.mode-option {
+.icon-button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -68,27 +59,11 @@
     padding: 0;
 }
 
-.stage-tab.active,
-.speed-option.active,
-.mode-option.active,
 .tool-button.primary,
 .icon-button.primary {
     border-color: rgba(68, 140, 255, 0.45);
     background: rgba(49, 119, 232, 0.2);
     color: var(--blue-bright);
-}
-
-.speed-control {
-    border: 1px solid var(--border);
-    border-radius: 11px;
-    padding: 3px;
-}
-
-.speed-control > span {
-    color: var(--muted);
-    padding: 0 5px;
-    font-size: 0.65rem;
-    text-transform: uppercase;
 }
 
 .cube-player-shell {
@@ -117,8 +92,7 @@
     font-size: 0.67rem;
 }
 
-.compact-control,
-.mode-toggle {
+.compact-control {
     display: inline-flex;
     align-items: center;
     gap: 7px;

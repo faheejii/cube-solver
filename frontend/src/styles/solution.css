@@ -270,7 +270,7 @@
 }
 
 .solution-pair-card.selected {
-    border-color: var(--accent);
+    border-color: var(--blue-bright);
     box-shadow: none;
 }
 
