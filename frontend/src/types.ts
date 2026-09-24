@@ -158,7 +158,6 @@ export type AlgorithmCatalogResponse = {
     items: AlgorithmCatalogEntry[];
 };
 
-export type F2LAlgorithmCatalogResponse = AlgorithmCatalogResponse;
 
 export type SolveJobRequest = SolveRequest & {
     deadlineSeconds?: number;

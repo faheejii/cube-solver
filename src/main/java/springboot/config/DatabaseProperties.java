@@ -1,10 +1,8 @@
 package springboot.config;
 
 import config.Dotenv;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /** Spring-bound view of the existing database settings. */
-@ConfigurationProperties(prefix = "database")
 public class DatabaseProperties {
     private String url;
     private String user;

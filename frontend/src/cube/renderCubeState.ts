@@ -5,13 +5,11 @@ import {
     solvedCubeModel,
     type CubeCubie,
     type CubeModel,
-    type CubeSticker,
     type Face,
 } from "./cubeState";
 import type {Move} from "./notation";
 import type {Vector} from "./moveGeometry";
 
-export type RenderSticker = CubeSticker;
 export type RenderCubie = CubeCubie;
 export type RenderCubeState = CubeModel;
 

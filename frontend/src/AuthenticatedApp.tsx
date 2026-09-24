@@ -1,4 +1,4 @@
-import {useEffect, useState, type FormEvent} from "react";
+import {useEffect, useState, type SubmitEvent} from "react";
 import App from "./App";
 import {fetchCurrentUser, login, logout, register, SESSION_EXPIRED_EVENT} from "./api";
 import type {AuthUser} from "./types";
@@ -83,7 +83,7 @@ function AuthScreen({sessionExpired, initialError, onAuthenticated}: {
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(initialError);
 
-    async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault();
         setSubmitting(true);
         setError(null);

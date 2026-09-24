@@ -17,7 +17,6 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 public class F2LSetupCaseDatabase {
     private final Map<String, F2LSetupCase> cases = new LinkedHashMap<>();

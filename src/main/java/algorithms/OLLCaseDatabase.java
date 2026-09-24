@@ -7,7 +7,6 @@ import cfop.OLLCaseSignature;
 import cube.Algorithm;
 import cube.CubeOrientationKey;
 import cube.CubeState;
-import cube.Move;
 import cube.OrientedCube;
 import util.NotationNormalizer;
 

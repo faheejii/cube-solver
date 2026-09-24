@@ -30,7 +30,7 @@ final class JsonSupport {
 
     static String readString(String json, String fieldName) {
         var field = field(json, fieldName);
-        return field != null && field.isTextual() ? field.textValue() : null;
+        return field != null && field.isString() ? field.stringValue() : null;
     }
 
     static String readRawField(String json, String fieldName) {
@@ -38,7 +38,7 @@ final class JsonSupport {
         if (field == null || field.isNull()) {
             return null;
         }
-        return field.isTextual() ? field.textValue() : field.toString();
+        return field.isString() ? field.stringValue() : field.toString();
     }
 
     static String solveResultJson(CfopSolveResult result) {
@@ -131,7 +131,7 @@ final class JsonSupport {
         try {
             var root = JSON.readTree(json);
             var error = root == null ? null : root.get("error");
-            return error != null && error.isTextual() ? error.textValue() : null;
+            return error != null && error.isString() ? error.stringValue() : null;
         } catch (JacksonException exception) {
             return null;
         }

@@ -5,7 +5,6 @@ import cube.Algorithm;
 import cube.CubeOrientation;
 import cube.CubeState;
 import cube.Face;
-import cube.Move;
 
 import java.util.ArrayList;
 import java.util.Arrays;
