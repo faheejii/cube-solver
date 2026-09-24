@@ -101,6 +101,12 @@ class SpringJpaApiIntegrationTest {
     }
 
     @Test
+    void synchronousSolveRoute_isNoLongerRegistered() throws Exception {
+        mockMvc.perform(post("/api/solve"))
+                .andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
     void registrationLoginSessionAndLogout_shouldUseJpaAuthentication() throws Exception {
         var email = uniqueEmail("auth");
         var registration = mockMvc.perform(post("/api/auth/register")

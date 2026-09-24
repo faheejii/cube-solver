@@ -176,7 +176,6 @@ the project.
 
 The server exposes:
 
-- `POST /api/solve`
 - `POST /api/solve-jobs`
 - `GET /api/solve-jobs/{id}`
 - `DELETE /api/solve-jobs/{id}`
@@ -518,7 +517,6 @@ API and server:
 - [`src/main/java/server/SpringAuthController.java`](src/main/java/server/SpringAuthController.java)
 - [`src/main/java/server/SpringHistoryController.java`](src/main/java/server/SpringHistoryController.java)
 - [`src/main/java/server/SpringSolveJobController.java`](src/main/java/server/SpringSolveJobController.java)
-- [`src/main/java/server/SpringSolveController.java`](src/main/java/server/SpringSolveController.java)
 - [`src/main/java/server/SpringStatisticsController.java`](src/main/java/server/SpringStatisticsController.java)
 - [`src/main/java/server/SpringAlgorithmController.java`](src/main/java/server/SpringAlgorithmController.java)
 - [`src/main/java/server/SpringSecurityConfiguration.java`](src/main/java/server/SpringSecurityConfiguration.java)

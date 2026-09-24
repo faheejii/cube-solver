@@ -56,7 +56,6 @@ class SpringSecurityConfiguration {
                                 "/api/health/**",
                                 "/api/metrics",
                                 "/api/auth/**",
-                                "/api/solve",
                                 "/api/solve-jobs/**",
                                 "/assets/**",
                                 "/favicon.ico",
