@@ -1,12 +1,15 @@
 import {Component, lazy, Suspense, useEffect, useRef, useState, type ComponentProps, type ErrorInfo, type ReactNode, type Ref} from "react";
 import type CubePreview from "./CubePreview";
+import {useCubePreviewMode} from "./CubePreviewModeContext";
 
 const CubePreviewRenderer = lazy(() => import("./CubePreview"));
+const CubeNetPreviewRenderer = lazy(() => import("./CubeNetPreview"));
 const VIEWPORT_ROOT_MARGIN = "120px 0px";
 
 type Props = ComponentProps<typeof CubePreview>;
 
 export default function DeferredCubePreview(props: Props) {
+    const previewMode = useCubePreviewMode();
     const placeholderRef = useRef<HTMLDivElement>(null);
     const [nearViewport, setNearViewport] = useState(false);
 
@@ -33,32 +36,33 @@ export default function DeferredCubePreview(props: Props) {
         }, {rootMargin: VIEWPORT_ROOT_MARGIN});
         observer.observe(element);
         return () => observer.disconnect();
-    }, [nearViewport]);
+    }, [nearViewport, previewMode]);
 
     if (nearViewport) {
         return (
             <CubePreviewErrorBoundary>
-                <Suspense fallback={<PreviewPlaceholder {...props} loading/>}>
-                    <CubePreviewRenderer {...props}/>
+                <Suspense fallback={<PreviewPlaceholder {...props} mode={previewMode} loading/>}>
+                    {previewMode === "2d" ? <CubeNetPreviewRenderer {...props}/> : <CubePreviewRenderer {...props}/>}
                 </Suspense>
             </CubePreviewErrorBoundary>
         );
     }
 
-    return <PreviewPlaceholder {...props} ref={placeholderRef} loading={false}/>;
+    return <PreviewPlaceholder {...props} ref={placeholderRef} mode={previewMode} loading={false}/>;
 }
 
-type PlaceholderProps = Props & {loading: boolean; ref?: Ref<HTMLDivElement>};
+type PlaceholderProps = Props & {loading: boolean; mode: "2d" | "3d"; ref?: Ref<HTMLDivElement>};
 
 function PreviewPlaceholder({
     compact = false,
     interactiveView = false,
     loading,
+    mode,
     ...props
 }: PlaceholderProps) {
     const label = interactiveView
-        ? "Interactive cube preview. Drag to rotate the cube view."
-        : "Cube preview";
+        ? mode === "3d" ? "Interactive cube preview. Drag to rotate the cube view." : "2D interactive cube net preview"
+        : mode === "3d" ? "Cube preview" : "2D cube net preview";
     return (
         <div
             ref={props.ref}
@@ -72,7 +76,7 @@ function PreviewPlaceholder({
             data-playback-alg={props["data-playback-alg"] ?? props.algorithm ?? ""}
             data-interactive-view={interactiveView ? "true" : "false"}
         >
-            {loading ? <span className="cube-preview-loading-indicator">Loading 3D preview…</span> : null}
+            {loading ? <span className="cube-preview-loading-indicator">Loading {mode.toUpperCase()} preview…</span> : null}
         </div>
     );
 }
@@ -92,7 +96,7 @@ class CubePreviewErrorBoundary extends Component<{children: ReactNode}, {failed:
         if (this.state.failed) {
             return (
                 <div className="custom-cube-preview deferred-cube-preview" role="status">
-                    3D preview failed to load.
+                    Cube preview failed to load.
                 </div>
             );
         }

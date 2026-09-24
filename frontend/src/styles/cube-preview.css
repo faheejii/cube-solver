@@ -43,6 +43,23 @@
     min-height: 160px;
 }
 
+.cube-net-preview {
+    padding: 18px;
+}
+
+.cube-net-svg {
+    display: block;
+    width: min(100%, 420px);
+    max-height: 100%;
+    overflow: visible;
+}
+
+.cube-net-svg rect {
+    stroke: color-mix(in srgb, var(--panel) 84%, black);
+    stroke-width: 0.055;
+    vector-effect: non-scaling-stroke;
+}
+
 .deferred-cube-preview {
     box-sizing: border-box;
 }

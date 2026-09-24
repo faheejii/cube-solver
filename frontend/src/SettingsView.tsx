@@ -38,6 +38,11 @@ export default function SettingsView({settings, onChange}: Props) {
                         <button className={settings.theme === "dark" ? "active" : ""} type="button" onClick={() => onChange({theme: "dark"})}><Moon size={17}/> Dark</button>
                         <button className={settings.theme === "light" ? "active" : ""} type="button" onClick={() => onChange({theme: "light"})}><Sun size={17}/> Light</button>
                     </div>
+                    <h2 id="cube-preview-settings-title">Cube preview</h2>
+                    <div className="settings-theme-options" role="group" aria-labelledby="cube-preview-settings-title">
+                        <button className={settings.cubePreviewMode === "3d" ? "active" : ""} type="button" aria-pressed={settings.cubePreviewMode === "3d"} onClick={() => onChange({cubePreviewMode: "3d"})}>3D</button>
+                        <button className={settings.cubePreviewMode === "2d" ? "active" : ""} type="button" aria-pressed={settings.cubePreviewMode === "2d"} onClick={() => onChange({cubePreviewMode: "2d"})}>2D</button>
+                    </div>
                 </section>
             </div>
         </section>

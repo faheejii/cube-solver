@@ -12,7 +12,7 @@ The project includes:
 - a Java cube solver and HTTP API
 - a Vite + React frontend
 - solve history stored in Postgres
-- a 3D cube animation in the browser
+- browser cube previews in either 3D or a project-owned 2D six-face net
 
 ## What the solver does
 
@@ -63,8 +63,8 @@ Implemented:
 - versioned PostgreSQL schema migrations through Flyway
 - pooled PostgreSQL connections and aggregate-based solve statistics
 - Java HTTP API and Vite/React frontend
-- browser-local Settings for the solver processing deadline, inspection behavior, deep color-neutral optimization, and theme
-- application-owned Three.js cube previews and playback driven by one authoritative cubie/sticker model, with WCA/cubing.js-compatible face, wide, slice, and rotation notation, fixed-camera rendering, setup-state reconstruction, sequential animation, and a WebGL fallback
+- browser-local Settings for the solver processing deadline, inspection behavior, deep color-neutral optimization, theme, and 2D/3D cube preview mode
+- application-owned cube previews and playback driven by one authoritative cubie/sticker model, with WCA/cubing.js-compatible face, wide, slice, and rotation notation; previews can use the interactive Three.js renderer or a lightweight project-owned six-face SVG net
 
 Known limitations:
 
@@ -138,8 +138,9 @@ then removes only that isolated project. It does not use or remove the normal
 development database volume.
 
 The frontend production build keeps Three.js and cubing.js WASM in separate
-cached assets. Three.js is loaded only when a cube preview is within 120 pixels
-of the viewport; tab views and solution playback are also loaded on demand.
+cached assets. Three.js is loaded only when 3D preview mode is selected and a
+cube preview is within 120 pixels of the viewport; the project-owned 2D net is
+loaded separately. Tab views and solution playback are also loaded on demand.
 The cubing.js WASM asset remains separate and may exceed Vite's 500 KB
 post-minification warning threshold.
 
@@ -374,8 +375,8 @@ Current frontend behavior:
 - optionally evaluates all six cross colors for Optimized + Color Neutral solves; this deep mode is disabled by default and uses a fixed two-minute budget
 - includes a timer with inspection behavior similar to common cube timers
 - presents solution dialogs as near-full-screen utility inspectors with joined cube/stage panes, bottom playback controls, stage navigation, and a speed dropdown
-- includes a Settings view where the processing deadline can be set from 5 to 120 seconds, inspection can be enabled or disabled, and deep color-neutral optimization can be enabled; settings apply to new solve requests and are stored in the current browser
-- displays the current scramble on a 3D cube
+- includes a Settings view where the processing deadline can be set from 5 to 120 seconds, inspection can be enabled or disabled, deep color-neutral optimization can be enabled, and cube previews can be switched between 3D and a 2D six-face net; preferences are stored in the current browser
+- displays the current scramble and solution playback using the selected 3D or 2D cube preview
 - calculates best time, average of 5, average of 12, solve count, and DNF count from saved attempts; the same compact statistics summary is available above the History solve list
 - saves completed attempts to Postgres and advances to the next scramble automatically
 - includes cursor-paginated solve history with Fast/Optimized and cross-specific solution review; Recent solves entries in the right rail open the same saved-solution modal

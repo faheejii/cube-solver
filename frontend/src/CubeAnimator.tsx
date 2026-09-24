@@ -2,6 +2,7 @@ import {useEffect, useState} from "react";
 import {Pause, Play, RotateCcw, SkipBack, SkipForward} from "lucide-react";
 import type {SolveResponse, SolveStage} from "./types";
 import DeferredCubePreview from "./DeferredCubePreview";
+import {useCubePreviewMode} from "./CubePreviewModeContext";
 
 export type PlaybackStageId = "full" | "cross" | "f2l" | "oll" | "pll";
 
@@ -31,6 +32,7 @@ export default function CubeAnimator({
                                          compact = false,
                                      }: Props) {
     const options = stageOptions(result, selectedF2LPair);
+    const previewMode = useCubePreviewMode();
     const [internalSelectedId, setInternalSelectedId] = useState<PlaybackStageId>("full");
     const [playbackSpeed, setPlaybackSpeed] = useState<(typeof PLAYBACK_SPEEDS)[number]>(1);
     const selectedId = selectedStage ?? internalSelectedId;
@@ -90,7 +92,7 @@ export default function CubeAnimator({
         <section className={compact ? "visualizer-section compact" : "visualizer-section"} aria-label="Cube animation">
             <div className="visualizer-toolbar">
                 <div>
-                    <h2>3D Playback</h2>
+                    <h2>{previewMode === "2d" ? "2D Playback" : "3D Playback"}</h2>
                 </div>
             </div>
 

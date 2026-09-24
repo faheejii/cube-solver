@@ -2,6 +2,7 @@ import {lazy, startTransition, Suspense, useEffect, useRef, useState} from "reac
 import {randomScrambleForEvent} from "cubing/scramble";
 import {setSearchDebug} from "cubing/search";
 import {LoaderCircle, Save, Trash2, X} from "lucide-react";
+import {CubePreviewModeContext} from "./CubePreviewModeContext";
 import CrossFaceSelect from "./CrossFaceSelect";
 import DashboardSidebar, {type DashboardView} from "./DashboardSidebar";
 import SaveToast from "./SaveToast";
@@ -633,6 +634,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const deepModalOptimization = isDeepColorNeutralOptimization(modalCrossFace, modalMode, settings.deepColorNeutralOptimization);
 
     return (
+        <CubePreviewModeContext.Provider value={settings.cubePreviewMode}>
         <main className={`dashboard-shell view-${activeView}`}>
             <DashboardSidebar
                 activeView={activeView}
@@ -944,6 +946,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 </div>
             ) : null}
         </main>
+        </CubePreviewModeContext.Provider>
     );
 }
 

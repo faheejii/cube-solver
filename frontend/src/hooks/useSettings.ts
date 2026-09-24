@@ -1,4 +1,5 @@
 import {useCallback, useEffect, useState} from "react";
+import type {CubePreviewMode} from "../CubePreviewModeContext";
 
 export const SETTINGS_STORAGE_KEY = "cube-solver-settings";
 export const DEFAULT_SOLVE_DEADLINE_SECONDS = 15;
@@ -11,6 +12,7 @@ export type AppSettings = {
     inspectionEnabled: boolean;
     deepColorNeutralOptimization: boolean;
     theme: Theme;
+    cubePreviewMode: CubePreviewMode;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -18,6 +20,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     inspectionEnabled: true,
     deepColorNeutralOptimization: false,
     theme: "dark",
+    cubePreviewMode: "3d",
 };
 
 export function clampDeadline(seconds: number): number {
@@ -41,6 +44,9 @@ export function normalizeSettings(value: unknown): AppSettings {
         theme: candidate.theme === "light" || candidate.theme === "dark"
             ? candidate.theme
             : DEFAULT_SETTINGS.theme,
+        cubePreviewMode: candidate.cubePreviewMode === "2d" || candidate.cubePreviewMode === "3d"
+            ? candidate.cubePreviewMode
+            : DEFAULT_SETTINGS.cubePreviewMode,
     };
 }
 

@@ -1,5 +1,6 @@
 import {act, render, screen} from "@testing-library/react";
 import {afterEach, beforeEach, describe, expect, it, vi} from "vitest";
+import {CubePreviewModeContext} from "../CubePreviewModeContext";
 
 const observerInstances = vi.hoisted(() => ({items: [] as MockIntersectionObserver[]}));
 
@@ -93,5 +94,39 @@ describe("DeferredCubePreview", () => {
         render(<DeferredCubePreview algorithm="F R U"/>);
 
         expect(await screen.findByTestId("loaded-cube-preview")).toHaveAttribute("data-preview-alg", "F R U");
+    });
+
+    it("loads the project-owned 2D net renderer when that mode is selected", async () => {
+        render(
+            <CubePreviewModeContext.Provider value="2d">
+                <DeferredCubePreview setupAlgorithm="R U" isPlaying={false}/>
+            </CubePreviewModeContext.Provider>,
+        );
+
+        await act(async () => {
+            MockIntersectionObserver.instances[0].notify(true);
+        });
+
+        expect(await screen.findByRole("img", {name: "2D cube net preview"})).toBeInTheDocument();
+    });
+
+    it("observes the replacement placeholder when the mode changes before entering the viewport", async () => {
+        const {rerender} = render(
+            <CubePreviewModeContext.Provider value="3d">
+                <DeferredCubePreview isPlaying={false}/>
+            </CubePreviewModeContext.Provider>,
+        );
+        const oldObserver = MockIntersectionObserver.instances[0];
+
+        rerender(
+            <CubePreviewModeContext.Provider value="2d">
+                <DeferredCubePreview isPlaying={false}/>
+            </CubePreviewModeContext.Provider>,
+        );
+
+        expect(oldObserver.disconnected).toBe(true);
+        expect(MockIntersectionObserver.instances).toHaveLength(2);
+        await act(async () => MockIntersectionObserver.instances[1].notify(true));
+        expect(await screen.findByRole("img", {name: "2D cube net preview"})).toBeInTheDocument();
     });
 });
