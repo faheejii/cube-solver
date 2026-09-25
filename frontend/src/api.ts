@@ -13,6 +13,7 @@ import type {
     RegisterRequest,
     AlgorithmCatalogResponse,
 } from "./types";
+import type {TimerPenalty} from "./hooks/useTimer";
 
 const REQUEST_TIMEOUT_MS = 12_000;
 
@@ -131,6 +132,10 @@ export async function createSolveAttempt(request: CreateSolveAttemptRequest): Pr
         },
         body: JSON.stringify(request),
     });
+}
+
+export async function updateSolvePenalty(solveId: number, penalty: TimerPenalty): Promise<SolveHistoryEntry> {
+    return requestJson<SolveHistoryEntry>(`/api/solves/${solveId}/penalty`, jsonRequest("PATCH", {penalty}));
 }
 
 export async function fetchSolveHistory(

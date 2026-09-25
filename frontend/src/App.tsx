@@ -2,10 +2,11 @@ import {lazy, startTransition, Suspense, useEffect, useRef, useState} from "reac
 import {randomScrambleForEvent} from "cubing/scramble";
 import {setSearchDebug} from "cubing/search";
 import {LoaderCircle, Save, Trash2, X} from "lucide-react";
-import {CubePreviewModeContext} from "./CubePreviewModeContext";
+import {CubePlaybackModeContext, CubePreviewModeContext} from "./CubePreviewModeContext";
 import CrossFaceSelect from "./CrossFaceSelect";
 import DashboardSidebar, {type DashboardView} from "./DashboardSidebar";
 import SaveToast from "./SaveToast";
+import SolvePenaltyControl from "./SolvePenaltyControl";
 import StatisticsRail from "./StatisticsRail";
 import TimerWorkspace from "./TimerWorkspace";
 import {
@@ -13,6 +14,7 @@ import {
     cancelSolveJob,
     fetchSolveHistoryDetail,
     saveSolveSolution,
+    updateSolvePenalty,
 } from "./api";
 import {
     crossFaceLabel,
@@ -75,6 +77,9 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const [processPreview, setProcessPreview] = useState<SolutionProcess | null>(null);
     const [attemptSaveStatus, setAttemptSaveStatus] = useState<AttemptSaveStatus>("idle");
     const [attemptSaveError, setAttemptSaveError] = useState<string | null>(null);
+    const [latestSavedAttempt, setLatestSavedAttempt] = useState<SolveHistoryEntry | null>(null);
+    const [penaltySaving, setPenaltySaving] = useState(false);
+    const [penaltyError, setPenaltyError] = useState<string | null>(null);
     const [saveNotice, setSaveNotice] = useState<string | null>(null);
     const [modalStatus, setModalStatus] = useState<ModalStatus>("idle");
     const [modalError, setModalError] = useState<string | null>(null);
@@ -125,6 +130,11 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         setHistoryStatus,
         setHistoryError,
     } = useHistoryData({activeView, onNotice: setSaveNotice});
+    useEffect(() => {
+        if (!latestSavedAttempt && statistics?.recentSolves[0]) {
+            setLatestSavedAttempt(statistics.recentSolves[0]);
+        }
+    }, [latestSavedAttempt, statistics]);
     const timer = useTimer({
         activeView,
         overlayOpen: modalStatus !== "idle" || processPreview !== null || timerSolutionOpen,
@@ -290,6 +300,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     async function openHistorySolution(entry: SolveHistoryEntry) {
         setModalStatus("loading");
         setModalError(null);
+        setPenaltyError(null);
         setModalDirty(false);
         setModalDetail(null);
         setModalEntry(entry);
@@ -490,10 +501,10 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     }
 
     async function deleteModalSolve() {
-        if (!modalEntry || !modalDetail || deletingSolveId !== null || modalComputing || modalSaving) {
+        if (!modalEntry || !modalDetail || deletingSolveId !== null || modalComputing || modalSaving || penaltySaving) {
             return;
         }
-        const deleted = await handleDeleteSolve(modalEntry);
+        const deleted = await handleHistoryDelete(modalEntry);
         if (deleted) {
             closeSolutionModal(true);
         }
@@ -540,6 +551,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 ...current.filter((entry) => entry.id !== savedAttempt.id),
             ].slice(0, 20));
             setHistoryStatus("ready");
+            setLatestSavedAttempt(savedAttempt);
+            setPenaltyError(null);
             if (clientAttemptId === snapshot.clientAttemptId) {
                 setAttemptSaveStatus("saved");
             }
@@ -579,6 +592,36 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
             }
             attemptSavingRef.current = null;
         }
+    }
+
+    async function handlePenaltyChange(penalty: TimerPenalty, attempt: SolveHistoryEntry | null = latestSavedAttempt) {
+        if (!attempt || attempt.penalty === penalty || penaltySaving) {
+            return;
+        }
+        setPenaltyError(null);
+        setPenaltySaving(true);
+        try {
+            const updated = await updateSolvePenalty(attempt.id, penalty);
+            setLatestSavedAttempt((current) => current?.id === updated.id ? updated : current);
+            setModalEntry((current) => current?.id === updated.id ? updated : current);
+            setModalDetail((current) => current?.id === updated.id
+                ? {...current, penalty: updated.penalty, officialMs: updated.officialMs, dnf: updated.dnf}
+                : current);
+            setHistoryEntries((current) => current.map((entry) => entry.id === updated.id ? updated : entry));
+            await loadStatistics();
+        } catch (updateError) {
+            setPenaltyError(updateError instanceof Error ? updateError.message : "Could not update solve penalty");
+        } finally {
+            setPenaltySaving(false);
+        }
+    }
+
+    async function handleHistoryDelete(entry: SolveHistoryEntry): Promise<boolean> {
+        const deleted = await handleDeleteSolve(entry);
+        if (deleted && latestSavedAttempt?.id === entry.id) {
+            setLatestSavedAttempt(null);
+        }
+        return deleted;
     }
 
     async function handleGenerateScramble() {
@@ -630,9 +673,13 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     }
 
     const deepModalOptimization = isDeepColorNeutralOptimization(modalCrossFace, modalMode, settings.deepColorNeutralOptimization);
+    const lastSavedTimerValue = latestSavedAttempt
+        ? formatHistoryTime(latestSavedAttempt.officialMs, latestSavedAttempt.penalty, latestSavedAttempt.dnf)
+        : null;
 
     return (
         <CubePreviewModeContext.Provider value={settings.cubePreviewMode}>
+        <CubePlaybackModeContext.Provider value={settings.cubePlaybackMode}>
         <main className={`dashboard-shell view-${activeView}`}>
             <DashboardSidebar
                 activeView={activeView}
@@ -658,12 +705,18 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                             result={result}
                             statistics={statistics}
                             timerPhase={timerPhase}
+                            latestSavedAttempt={latestSavedAttempt}
+                            showPenaltyControl={timerPhase === "idle" && latestSavedAttempt !== null && completedAttemptRef.current === null}
+                            penaltySaving={penaltySaving}
+                            penaltyError={penaltyError}
+                            onPenaltyChange={(penalty) => void handlePenaltyChange(penalty)}
                             timerValue={timerText(
                                 timerPhase,
                                 inspectionElapsedMs,
                                 runningElapsedMs,
                                 stoppedElapsedMs,
                                 finalPenalty,
+                                lastSavedTimerValue,
                             )}
                             timerHint={timerHint(timerPhase, inspectionPenalty, finalPenalty)}
                             timerDetail={
@@ -716,7 +769,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                 onRefresh={() => void loadHistory()}
                                 onLoadMore={() => void loadMoreHistory()}
                                 onOpenSolve={(entry) => void openHistorySolution(entry)}
-                                onDeleteSolve={(entry) => void handleDeleteSolve(entry)}
+                                onDeleteSolve={(entry) => void handleHistoryDelete(entry)}
                             />
                         ) : activeView === "settings" ? (
                             <SettingsView settings={settings} onChange={updateSettings}/>
@@ -757,8 +810,17 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                         onMouseDown={(event) => event.stopPropagation()}
                     >
                         <div className="solution-modal-header">
-                            <div>
+                            <div className="solution-modal-time-controls">
                                 <h2>{modalDetail ? formatHistoryTime(modalDetail.officialMs, modalDetail.penalty, modalDetail.dnf) : "Loading"}</h2>
+                                {modalDetail && modalEntry ? (
+                                    <SolvePenaltyControl
+                                        value={modalDetail.penalty as TimerPenalty}
+                                        saving={penaltySaving}
+                                        error={penaltyError}
+                                        onChange={(penalty) => void handlePenaltyChange(penalty, modalEntry)}
+                                        label="Penalty for this solve"
+                                    />
+                                ) : null}
                             </div>
                             <div className="solution-modal-actions">
                                 <button className="icon-button" type="button" onClick={() => closeSolutionModal()}
@@ -769,7 +831,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                     className="history-delete-button"
                                     type="button"
                                     onClick={() => void deleteModalSolve()}
-                                    disabled={modalStatus !== "ready" || deletingSolveId !== null || modalComputing || modalSaving}
+                                    disabled={modalStatus !== "ready" || deletingSolveId !== null || modalComputing || modalSaving || penaltySaving}
                                     aria-label="Delete solve"
                                     title="Delete solve"
                                 >
@@ -942,6 +1004,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 </div>
             ) : null}
         </main>
+        </CubePlaybackModeContext.Provider>
         </CubePreviewModeContext.Provider>
     );
 }
@@ -1067,7 +1130,11 @@ function timerText(
     runningElapsedMs: number,
     stoppedElapsedMs: number | null,
     finalPenalty: TimerPenalty,
+    lastSavedTimerValue: string | null,
 ): string {
+    if (timerPhase === "armed") {
+        return "0.00";
+    }
     if (timerPhase === "inspection") {
         return inspectionText(inspectionElapsedMs);
     }
@@ -1077,7 +1144,7 @@ function timerText(
     if (timerPhase === "stopped") {
         return formatStoppedTime(stoppedElapsedMs ?? 0, finalPenalty);
     }
-    return "0.00";
+    return lastSavedTimerValue ?? "0.00";
 }
 
 function timerHint(

@@ -5,6 +5,7 @@ import {
     login,
     SESSION_EXPIRED_EVENT,
     startSolveJob,
+    updateSolvePenalty,
 } from "../api";
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -88,6 +89,21 @@ describe("API session handling", () => {
                 deadlineSeconds: 15,
                 deepColorNeutral: true,
             }),
+        }));
+    });
+
+    it("updates a saved solve penalty through the owner-scoped API route", async () => {
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({id: 12, penalty: "+2"}), {
+            status: 200,
+            headers: {"Content-Type": "application/json"},
+        }));
+
+        await updateSolvePenalty(12, "+2");
+
+        expect(fetchMock).toHaveBeenCalledWith("/api/solves/12/penalty", expect.objectContaining({
+            credentials: "include",
+            method: "PATCH",
+            body: JSON.stringify({penalty: "+2"}),
         }));
     });
 });

@@ -54,6 +54,14 @@
     margin-top: 14px;
 }
 
+.solution-modal-time-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    min-width: 0;
+}
+
 .modal-scramble {
     color: var(--text-soft);
     font-family: "Space Mono", monospace;

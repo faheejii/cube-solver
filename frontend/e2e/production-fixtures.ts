@@ -96,6 +96,7 @@ export type MockApiOptions = {
     user?: typeof normalUser | typeof adminUser;
     historyEntries?: typeof historyEntry[];
     algorithms?: typeof catalogEntries;
+    penaltyUpdateFailure?: boolean;
 };
 
 export type MockApiHandle = {
@@ -142,11 +143,12 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
             return;
         }
         if (url.pathname === "/api/stats") {
+            const timed = entries.filter((entry) => !entry.dnf && entry.officialMs !== null).map((entry) => entry.officialMs!);
             await json(route, {
                 solveCount: entries.length,
-                dnfCount: 0,
-                bestMs: 12_340,
-                averageMs: 12_340,
+                dnfCount: entries.filter((entry) => entry.dnf).length,
+                bestMs: timed.length ? Math.min(...timed) : null,
+                averageMs: timed.length ? Math.round(timed.reduce((sum, time) => sum + time, 0) / timed.length) : null,
                 ao5: {status: "insufficient", valueMs: null},
                 ao12: {status: "insufficient", valueMs: null},
                 recentSolves: entries.slice(0, 5),
@@ -175,6 +177,31 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
             };
             entries = [created, ...entries];
             await json(route, created);
+            return;
+        }
+        const penaltyMatch = url.pathname.match(/^\/api\/solves\/(\d+)\/penalty$/);
+        if (penaltyMatch && request.method() === "PATCH") {
+            if (options.penaltyUpdateFailure) {
+                await json(route, {error: "Penalty update failed"}, 500);
+                return;
+            }
+            const id = Number(penaltyMatch[1]);
+            const requestBody = (body ?? {}) as Record<string, unknown>;
+            const penalty = String(requestBody.penalty);
+            const existing = entries.find((entry) => entry.id === id);
+            if (!existing || existing.timerMs === null || !["none", "+2", "dnf"].includes(penalty)) {
+                await json(route, {error: "Solve not found or penalty cannot be updated"}, 400);
+                return;
+            }
+            const dnf = penalty === "dnf";
+            const updated = {
+                ...existing,
+                penalty,
+                dnf,
+                officialMs: dnf ? null : existing.timerMs + (penalty === "+2" ? 2000 : 0),
+            };
+            entries = entries.map((entry) => entry.id === id ? updated : entry);
+            await json(route, updated);
             return;
         }
         const solveMatch = url.pathname.match(/^\/api\/solves\/(\d+)$/);

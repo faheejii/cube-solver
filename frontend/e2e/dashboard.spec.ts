@@ -116,7 +116,9 @@ test.describe("authenticated dashboard production flow", () => {
         const inspection = page.getByRole("switch", {name: "Inspection time"});
         const deepColorNeutral = page.getByRole("switch", {name: "Deep color-neutral optimization"});
         const deadline = page.getByLabel("Solution computation time limit in seconds");
-        const twoDimensionalPreview = page.getByRole("button", {name: "2D"});
+        const previewGroup = page.getByRole("group", {name: "Cube preview"});
+        const playbackGroup = page.getByRole("group", {name: "Cube playback"});
+        const twoDimensionalPreview = previewGroup.getByRole("button", {name: "2D"});
         await inspection.uncheck();
         await deepColorNeutral.check();
         await deadline.fill("45");
@@ -124,13 +126,20 @@ test.describe("authenticated dashboard production flow", () => {
         await expect(inspection).not.toBeChecked();
         await expect(deepColorNeutral).toBeChecked();
         await expect(deadline).toHaveValue("45");
+        await expect(playbackGroup.getByRole("button", {name: "3D"})).toHaveAttribute("aria-pressed", "true");
 
         await page.getByRole("button", {name: "Timer"}).click();
         await page.getByRole("button", {name: "Settings"}).click();
         await expect(page.getByRole("switch", {name: "Inspection time"})).not.toBeChecked();
         await expect(page.getByRole("switch", {name: "Deep color-neutral optimization"})).toBeChecked();
         await expect(page.getByLabel("Solution computation time limit in seconds")).toHaveValue("45");
-        await expect(page.getByRole("button", {name: "2D"})).toHaveClass(/active/);
+        await expect(previewGroup.getByRole("button", {name: "2D"})).toHaveAttribute("aria-pressed", "true");
+        await expect(playbackGroup.getByRole("button", {name: "3D"})).toHaveAttribute("aria-pressed", "true");
+
+        await page.getByRole("button", {name: "Timer"}).click();
+        await page.getByRole("button", {name: "Show solution"}).click();
+        await expect(page.getByRole("heading", {name: "3D Playback"})).toBeVisible();
+        await expect(page.getByLabel("Interactive cube preview. Drag to rotate the cube view.")).toBeVisible();
     });
 
     test("sends deep optimization only for optimized color-neutral solves", async ({page}) => {

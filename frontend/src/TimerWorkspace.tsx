@@ -7,8 +7,10 @@ import {
 } from "lucide-react";
 import ScrambleCube from "./ScrambleCube";
 import CrossFaceSelect from "./CrossFaceSelect";
+import SolvePenaltyControl from "./SolvePenaltyControl";
 import {formatMetricTime, formatRollingAverage} from "./format";
-import type {SolveResponse, SolveStatistics} from "./types";
+import type {TimerPenalty} from "./hooks/useTimer";
+import type {SolveHistoryEntry, SolveResponse, SolveStatistics} from "./types";
 
 type FaceOption = {
     value: string;
@@ -31,6 +33,10 @@ type Props = {
     timerValue: string;
     timerHint: string;
     timerDetail: string;
+    latestSavedAttempt: SolveHistoryEntry | null;
+    showPenaltyControl: boolean;
+    penaltySaving: boolean;
+    penaltyError: string | null;
     onDraftChange: (value: string) => void;
     onCrossFaceChange: (value: string) => void;
     onF2LModeChange: (value: "greedy" | "optimized") => void;
@@ -39,6 +45,7 @@ type Props = {
     onCancelEdit: () => void;
     onSaveEdit: () => void;
     onShowSolution: () => void;
+    onPenaltyChange: (penalty: TimerPenalty) => void;
 };
 
 export default function TimerWorkspace({
@@ -57,6 +64,10 @@ export default function TimerWorkspace({
                                            timerValue,
                                            timerHint,
                                            timerDetail,
+                                           latestSavedAttempt,
+                                           showPenaltyControl,
+                                           penaltySaving,
+                                           penaltyError,
                                            onDraftChange,
                                            onCrossFaceChange,
                                            onF2LModeChange,
@@ -65,6 +76,7 @@ export default function TimerWorkspace({
                                            onCancelEdit,
                                            onSaveEdit,
                                            onShowSolution,
+                                           onPenaltyChange,
                                        }: Props) {
     const scrambleTextRef = useRef<HTMLParagraphElement>(null);
     const [scrambleFontSize, setScrambleFontSize] = useState<number | null>(null);
@@ -201,6 +213,14 @@ export default function TimerWorkspace({
             >
                 <div className="timer-display-group">
                     <div className="dashboard-timer-number">{timerValue}</div>
+                    {showPenaltyControl && latestSavedAttempt ? (
+                        <SolvePenaltyControl
+                            value={latestSavedAttempt.penalty as TimerPenalty}
+                            saving={penaltySaving}
+                            error={penaltyError}
+                            onChange={onPenaltyChange}
+                        />
+                    ) : null}
                     <div className="dashboard-inline-stats">
                         <InlineStat label="Best" value={formatMetricTime(statistics?.bestMs ?? null)} accent="blue"/>
                         <InlineStat label="Ao5" value={formatRollingAverage(statistics?.ao5 ?? null)} accent="violet"/>

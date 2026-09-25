@@ -313,6 +313,52 @@ textarea:focus-visible,
     letter-spacing: -0.08em;
 }
 
+.solve-penalty-control {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    justify-items: center;
+    gap: 5px;
+}
+
+.solve-penalty-options {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.solve-penalty-options button {
+    min-height: 32px;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.74rem;
+    padding: 0 9px;
+}
+
+.solve-penalty-options button[aria-pressed="true"] {
+    background: var(--blue);
+    color: #fff;
+}
+
+.solve-penalty-options button:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.solve-penalty-status,
+.solve-penalty-error {
+    color: var(--muted);
+    font-size: 0.68rem;
+}
+
+.solve-penalty-error {
+    color: var(--danger, #e46b6b);
+}
+
 .dashboard-inline-stats {
     width: min(420px, 90%);
 }

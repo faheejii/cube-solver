@@ -13,6 +13,7 @@ export type AppSettings = {
     deepColorNeutralOptimization: boolean;
     theme: Theme;
     cubePreviewMode: CubePreviewMode;
+    cubePlaybackMode: CubePreviewMode;
 };
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -21,6 +22,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     deepColorNeutralOptimization: false,
     theme: "dark",
     cubePreviewMode: "3d",
+    cubePlaybackMode: "3d",
 };
 
 export function clampDeadline(seconds: number): number {
@@ -47,6 +49,9 @@ export function normalizeSettings(value: unknown): AppSettings {
         cubePreviewMode: candidate.cubePreviewMode === "2d" || candidate.cubePreviewMode === "3d"
             ? candidate.cubePreviewMode
             : DEFAULT_SETTINGS.cubePreviewMode,
+        cubePlaybackMode: candidate.cubePlaybackMode === "2d" || candidate.cubePlaybackMode === "3d"
+            ? candidate.cubePlaybackMode
+            : DEFAULT_SETTINGS.cubePlaybackMode,
     };
 }
 

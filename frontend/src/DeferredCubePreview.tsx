@@ -1,15 +1,16 @@
 import {Component, lazy, Suspense, useEffect, useRef, useState, type ComponentProps, type ErrorInfo, type ReactNode, type Ref} from "react";
 import type CubePreview from "./CubePreview";
-import {useCubePreviewMode} from "./CubePreviewModeContext";
+import {useCubePreviewMode, type CubePreviewMode} from "./CubePreviewModeContext";
 
 const CubePreviewRenderer = lazy(() => import("./CubePreview"));
 const CubeNetPreviewRenderer = lazy(() => import("./CubeNetPreview"));
 const VIEWPORT_ROOT_MARGIN = "120px 0px";
 
-type Props = ComponentProps<typeof CubePreview>;
+type Props = ComponentProps<typeof CubePreview> & {displayMode?: CubePreviewMode};
 
-export default function DeferredCubePreview(props: Props) {
-    const previewMode = useCubePreviewMode();
+export default function DeferredCubePreview({displayMode, ...props}: Props) {
+    const contextMode = useCubePreviewMode();
+    const previewMode = displayMode ?? contextMode;
     const placeholderRef = useRef<HTMLDivElement>(null);
     const [nearViewport, setNearViewport] = useState(false);
 

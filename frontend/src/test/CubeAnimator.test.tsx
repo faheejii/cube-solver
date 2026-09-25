@@ -1,6 +1,7 @@
 import {fireEvent, render, screen} from "@testing-library/react";
 import {describe, expect, it, vi} from "vitest";
 import type {SolveResponse} from "../types";
+import {CubePlaybackModeContext, CubePreviewModeContext} from "../CubePreviewModeContext";
 
 vi.mock("../DeferredCubePreview", () => ({
     default: ({
@@ -10,6 +11,7 @@ vi.mock("../DeferredCubePreview", () => ({
                   isPlaying,
                   onPlaybackComplete,
                   interactiveView,
+                  displayMode,
                   "data-playback-alg": playbackAlgorithm,
               }: {
         setupAlgorithm: string;
@@ -18,9 +20,10 @@ vi.mock("../DeferredCubePreview", () => ({
         isPlaying?: boolean;
         onPlaybackComplete?: () => void;
         interactiveView?: boolean;
+        displayMode?: "2d" | "3d";
         "data-playback-alg": string;
     }) => (
-        <div data-testid="custom-preview" data-setup={setupAlgorithm} data-algorithm={algorithm} data-stage={stage} data-is-playing={String(isPlaying)} data-interactive-view={String(interactiveView)} data-playback-alg={playbackAlgorithm}>
+        <div data-testid="custom-preview" data-setup={setupAlgorithm} data-algorithm={algorithm} data-stage={stage} data-is-playing={String(isPlaying)} data-interactive-view={String(interactiveView)} data-playback-alg={playbackAlgorithm} data-display-mode={displayMode}>
             <button type="button" onClick={onPlaybackComplete}>Complete custom playback</button>
         </div>
     ),
@@ -51,6 +54,26 @@ const result = {
 } as SolveResponse;
 
 describe("CubeAnimator", () => {
+    it("uses the playback setting independently of the timer preview mode", () => {
+        const {unmount} = render(
+            <CubePreviewModeContext.Provider value="2d">
+                <CubeAnimator result={result}/>
+            </CubePreviewModeContext.Provider>,
+        );
+
+        expect(screen.getByRole("heading", {name: "3D Playback"})).toBeInTheDocument();
+        expect(screen.getByTestId("custom-preview")).toHaveAttribute("data-display-mode", "3d");
+        unmount();
+
+        render(
+            <CubePlaybackModeContext.Provider value="2d">
+                <CubeAnimator result={result}/>
+            </CubePlaybackModeContext.Provider>,
+        );
+        expect(screen.getByRole("heading", {name: "2D Playback"})).toBeInTheDocument();
+        expect(screen.getByTestId("custom-preview")).toHaveAttribute("data-display-mode", "2d");
+    });
+
     it("starts with the complete custom solution ready to play", () => {
         render(<CubeAnimator result={result}/>);
 

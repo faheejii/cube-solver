@@ -39,9 +39,16 @@ export default function SettingsView({settings, onChange}: Props) {
                         <button className={settings.theme === "light" ? "active" : ""} type="button" onClick={() => onChange({theme: "light"})}><Sun size={17}/> Light</button>
                     </div>
                     <h2 id="cube-preview-settings-title">Cube preview</h2>
+                    <p className="settings-note">Timer scramble preview.</p>
                     <div className="settings-theme-options" role="group" aria-labelledby="cube-preview-settings-title">
                         <button className={settings.cubePreviewMode === "3d" ? "active" : ""} type="button" aria-pressed={settings.cubePreviewMode === "3d"} onClick={() => onChange({cubePreviewMode: "3d"})}>3D</button>
                         <button className={settings.cubePreviewMode === "2d" ? "active" : ""} type="button" aria-pressed={settings.cubePreviewMode === "2d"} onClick={() => onChange({cubePreviewMode: "2d"})}>2D</button>
+                    </div>
+                    <h2 id="cube-playback-settings-title">Cube playback</h2>
+                    <p className="settings-note">Solution playback in History and solution views.</p>
+                    <div className="settings-theme-options" role="group" aria-labelledby="cube-playback-settings-title">
+                        <button className={settings.cubePlaybackMode === "3d" ? "active" : ""} type="button" aria-pressed={settings.cubePlaybackMode === "3d"} onClick={() => onChange({cubePlaybackMode: "3d"})}>3D</button>
+                        <button className={settings.cubePlaybackMode === "2d" ? "active" : ""} type="button" aria-pressed={settings.cubePlaybackMode === "2d"} onClick={() => onChange({cubePlaybackMode: "2d"})}>2D</button>
                     </div>
                 </section>
             </div>
