@@ -1052,12 +1052,12 @@ function buildSaveSolutionRequest(
         pllMoves: result.pll.moveCount,
         pllSolved: result.pll.solved,
         pllStatus: result.pll.status,
-        f2lTraceJson: JSON.stringify({
+        f2lTraceJson: {
             traceComplete: result.f2l.traceComplete,
             pairAlgorithmMatchesStage: result.f2l.pairAlgorithmMatchesStage,
             pairs: result.f2l.pairs,
-        }),
-        comparisonJson: result.comparison ? JSON.stringify(result.comparison) : null,
+        },
+        comparisonJson: result.comparison ?? null,
     };
 }
 

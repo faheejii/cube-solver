@@ -322,6 +322,10 @@ export type SaveSolutionRequest = {
     pllMoves: number;
     pllSolved: boolean;
     pllStatus: string;
-    f2lTraceJson: string;
-    comparisonJson?: string | null;
+    f2lTraceJson: {
+        traceComplete: boolean;
+        pairAlgorithmMatchesStage: boolean;
+        pairs: F2LPair[];
+    };
+    comparisonJson?: F2LModeComparison | null;
 };

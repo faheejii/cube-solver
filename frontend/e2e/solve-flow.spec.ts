@@ -44,6 +44,14 @@ test.describe("timer, solve, history, and playback production flows", () => {
         ]);
         expect(api.requests.some((request) => request.pathname === "/api/solves" && request.method === "POST")).toBe(true);
         await expect.poll(() => api.requests.some((request) => request.pathname.endsWith("/solutions/greedy") && request.method === "PUT")).toBe(true);
+        const solutionSave = api.requests.find((request) => request.pathname.endsWith("/solutions/greedy") && request.method === "PUT");
+        expect(solutionSave?.body).toMatchObject({
+            f2lTraceJson: {
+                traceComplete: expect.any(Boolean),
+                pairAlgorithmMatchesStage: expect.any(Boolean),
+                pairs: expect.any(Array),
+            },
+        });
 
         await page.getByRole("button", {name: "History"}).click();
         await expect(page.getByRole("heading", {name: "History"})).toBeVisible();
