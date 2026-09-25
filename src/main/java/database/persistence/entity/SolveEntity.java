@@ -88,4 +88,10 @@ public class SolveEntity {
     public Integer getOfficialMs() { return officialMs; }
     public boolean isDnf() { return dnf; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
+
+    public void updatePenalty(String penalty, Integer officialMs, boolean dnf) {
+        this.penalty = penalty;
+        this.officialMs = officialMs;
+        this.dnf = dnf;
+    }
 }

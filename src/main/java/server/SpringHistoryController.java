@@ -3,6 +3,7 @@ package server;
 import api.CreateSolveAttemptRequest;
 import api.SaveSolutionApiRequest;
 import api.SpringSaveSolutionRequest;
+import api.UpdateSolvePenaltyRequest;
 import database.CreateSolveAttemptCommand;
 import database.SaveSolutionCommand;
 import database.persistence.entity.SpringHistoryPersistenceService;
@@ -11,6 +12,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -71,6 +73,17 @@ final class SpringHistoryController {
         var user = SpringRequestSupport.requireUser();
         return SpringRequestSupport.json(200, JsonSupport.solveHistoryDetailJson(
                 history.findDetail(user.externalId(), parseSolveId(solveId))));
+    }
+
+    @PatchMapping("/{solveId}/penalty")
+    ResponseEntity<String> updatePenalty(
+            @PathVariable("solveId") String solveId,
+            @RequestBody UpdateSolvePenaltyRequest request
+    ) throws Exception {
+        ensureDatabase();
+        var user = SpringRequestSupport.requireUser();
+        var updated = history.updatePenalty(user.externalId(), parseSolveId(solveId), request.penalty());
+        return SpringRequestSupport.json(200, JsonSupport.solveHistoryEntryJson(updated));
     }
 
     @DeleteMapping("/{solveId}")

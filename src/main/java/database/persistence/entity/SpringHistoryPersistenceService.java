@@ -94,6 +94,33 @@ public class SpringHistoryPersistenceService {
     }
 
     @Transactional
+    public SolveHistoryEntry updatePenalty(String userExternalId, long solveId, String penalty) {
+        var user = requireUser(userExternalId);
+        var solve = solves.findOwnedById(solveId, user.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Solve not found"));
+        var timerMs = solve.getTimerMs();
+        if (timerMs == null) {
+            throw new IllegalArgumentException("Cannot update the penalty of an untimed solve");
+        }
+
+        var dnf = penalty.equals("dnf");
+        var officialMs = switch (penalty) {
+            case "none" -> timerMs;
+            case "+2" -> {
+                if (timerMs > Integer.MAX_VALUE - 2_000) {
+                    throw new IllegalArgumentException("Solve time is too large to apply a +2 penalty");
+                }
+                yield timerMs + 2_000;
+            }
+            case "dnf" -> null;
+            default -> throw new IllegalArgumentException("penalty must be none, +2, or dnf");
+        };
+        solve.updatePenalty(penalty, officialMs, dnf);
+        userStats.rebuild(user.getId());
+        return toEntry(solve);
+    }
+
+    @Transactional
     public void deleteSolve(String userExternalId, long solveId) {
         var user = requireUser(userExternalId);
         if (solves.deleteOwnedById(solveId, user.getId()) == 0) {

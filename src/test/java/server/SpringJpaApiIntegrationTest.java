@@ -24,12 +24,14 @@ import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -260,6 +262,114 @@ class SpringJpaApiIntegrationTest {
         mockMvc.perform(get("/api/solves").cookie(sessionCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items", hasSize(0)));
+    }
+
+    @Test
+    void solvePenalty_shouldUpdateOwnedAttemptAndRecalculateStatistics() throws Exception {
+        var ownerEmail = uniqueEmail("penalty-owner");
+        loginAs(ownerEmail);
+        var solve = createSolve("attempt-" + UUID.randomUUID(), 1250, false);
+        var solveId = jsonLong(solve, "id");
+        createSolve("attempt-" + UUID.randomUUID(), 2250, false);
+        var ownerSessionToken = sessionToken;
+
+        mockMvc.perform(patch("/api/solves/{solveId}/penalty", solveId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"penalty\":\"+2\"}"))
+                .andExpect(status().isUnauthorized());
+
+        loginAs(uniqueEmail("penalty-other"));
+        mockMvc.perform(patch("/api/solves/{solveId}/penalty", solveId)
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"penalty\":\"+2\"}"))
+                .andExpect(status().isNotFound());
+
+        sessionToken = ownerSessionToken;
+        mockMvc.perform(patch("/api/solves/{solveId}/penalty", solveId)
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"penalty\":\"invalid\"}"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(patch("/api/solves/{solveId}/penalty", solveId)
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"penalty\":null}"))
+                .andExpect(status().isBadRequest());
+
+        var untimedSolve = mockMvc.perform(post("/api/solves")
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clientAttemptId":"attempt-%s","scramble":"R U","crossFaceRequested":"U",
+                                 "timerMs":null,"penalty":"dnf","officialMs":null,"dnf":true}
+                                """.formatted(UUID.randomUUID())))
+                .andExpect(status().isCreated())
+                .andReturn();
+        mockMvc.perform(patch("/api/solves/{solveId}/penalty", jsonLong(untimedSolve, "id"))
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"penalty\":\"+2\"}"))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(patch("/api/solves/{solveId}/penalty", solveId)
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"penalty\":\"+2\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.penalty", is("+2")))
+                .andExpect(jsonPath("$.timerMs", is(1250)))
+                .andExpect(jsonPath("$.officialMs", is(3250)))
+                .andExpect(jsonPath("$.dnf", is(false)));
+        mockMvc.perform(get("/api/stats").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dnfCount", is(1)))
+                .andExpect(jsonPath("$.bestMs", is(2250)))
+                .andExpect(jsonPath("$.averageMs", is(2750)));
+
+        mockMvc.perform(patch("/api/solves/{solveId}/penalty", solveId)
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"penalty\":\"dnf\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.penalty", is("dnf")))
+                .andExpect(jsonPath("$.officialMs").value(nullValue()))
+                .andExpect(jsonPath("$.dnf", is(true)));
+        mockMvc.perform(get("/api/stats").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dnfCount", is(2)))
+                .andExpect(jsonPath("$.bestMs", is(2250)))
+                .andExpect(jsonPath("$.averageMs", is(2250)));
+
+        mockMvc.perform(patch("/api/solves/{solveId}/penalty", solveId)
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"penalty\":\"none\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.penalty", is("none")))
+                .andExpect(jsonPath("$.officialMs", is(1250)))
+                .andExpect(jsonPath("$.dnf", is(false)));
+        mockMvc.perform(get("/api/solves/{solveId}", solveId).cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.penalty", is("none")))
+                .andExpect(jsonPath("$.timerMs", is(1250)))
+                .andExpect(jsonPath("$.officialMs", is(1250)))
+                .andExpect(jsonPath("$.dnf", is(false)));
+        mockMvc.perform(get("/api/solves").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[?(@.id == %d)].penalty".formatted(solveId), hasSize(1)));
+        mockMvc.perform(get("/api/stats").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.dnfCount", is(1)))
+                .andExpect(jsonPath("$.bestMs", is(1250)))
+                .andExpect(jsonPath("$.averageMs", is(1750)));
+
+        var maxTimeSolve = createSolve("attempt-" + UUID.randomUUID(), Integer.MAX_VALUE, false);
+        mockMvc.perform(patch("/api/solves/{solveId}/penalty", jsonLong(maxTimeSolve, "id"))
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"penalty\":\"+2\"}"))
+                .andExpect(status().isBadRequest());
     }
 
     private void loginAs(String email) throws Exception {
