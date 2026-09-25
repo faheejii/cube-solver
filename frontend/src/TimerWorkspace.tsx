@@ -39,8 +39,6 @@ type Props = {
     onCancelEdit: () => void;
     onSaveEdit: () => void;
     onShowSolution: () => void;
-    onTimerPointerDown: () => void;
-    onTimerPointerUp: () => void;
 };
 
 export default function TimerWorkspace({
@@ -67,8 +65,6 @@ export default function TimerWorkspace({
                                            onCancelEdit,
                                            onSaveEdit,
                                            onShowSolution,
-                                           onTimerPointerDown,
-                                           onTimerPointerUp,
                                        }: Props) {
     const scrambleTextRef = useRef<HTMLParagraphElement>(null);
     const [scrambleFontSize, setScrambleFontSize] = useState<number | null>(null);
@@ -201,9 +197,6 @@ export default function TimerWorkspace({
 
             <section
                 className={`dashboard-timer-stage phase-${timerPhase}`}
-                onPointerDown={onTimerPointerDown}
-                onPointerUp={onTimerPointerUp}
-                onPointerCancel={onTimerPointerUp}
                 aria-label="Solve timer"
             >
                 <div className="timer-display-group">
@@ -218,9 +211,6 @@ export default function TimerWorkspace({
                 <button
                     className="timer-start-capsule"
                     type="button"
-                    onPointerDown={(event) => event.stopPropagation()}
-                    onPointerUp={(event) => event.stopPropagation()}
-                    onPointerCancel={(event) => event.stopPropagation()}
                     onClick={onShowSolution}
                     disabled={solutionStatus !== "ready" || result === null}
                     aria-label={solutionStatus === "ready" && result !== null ? "Show solution" : undefined}

@@ -150,8 +150,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         runningElapsedMs,
         attemptLocked,
         resetTimer,
-        handleTimerPointerDown,
-        handleTimerPointerUp,
     } = timer;
 
     useEffect(() => {
@@ -683,8 +681,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                             onCancelEdit={handleCancelEdit}
                             onSaveEdit={handleSaveEdit}
                             onShowSolution={handleShowSolution}
-                            onTimerPointerDown={handleTimerPointerDown}
-                            onTimerPointerUp={handleTimerPointerUp}
                         />
 
                         {error || attemptSaveStatus === "error" ? (

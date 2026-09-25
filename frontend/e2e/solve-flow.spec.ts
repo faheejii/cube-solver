@@ -9,11 +9,15 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await expect(page.getByRole("button", {name: "Show solution"})).toBeEnabled();
         const timer = page.getByLabel("Solve timer");
 
+        await timer.click();
+        await expect(timer).toHaveClass(/phase-idle/);
         await page.keyboard.press("Space");
         await expect(timer).toHaveClass(/phase-inspection/);
         await page.keyboard.press("Space");
         await expect(timer).toHaveClass(/phase-running/);
-        await page.keyboard.press("Space");
+        await timer.click();
+        await expect(timer).toHaveClass(/phase-running/);
+        await page.keyboard.press("a");
         await expect(timer).toHaveClass(/phase-stopped/);
 
         const saveToast = page.getByRole("status");

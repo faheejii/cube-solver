@@ -151,33 +151,6 @@ export function useTimer({
         setClockMs(now);
     }
 
-    function handleTimerPointerDown() {
-        if (
-            isEditingScramble
-            || attemptSaveStatus === "saving"
-            || attemptSaveStatus === "error"
-        ) {
-            return;
-        }
-        if (timerPhase === "idle" || timerPhase === "stopped") {
-            armTimer(timerPhase);
-            return;
-        }
-        if (timerPhase === "inspection") {
-            armTimer("inspection");
-            return;
-        }
-        if (timerPhase === "running") {
-            stopTimer();
-        }
-    }
-
-    function handleTimerPointerUp() {
-        if (timerPhase === "armed") {
-            releaseArmedTimer();
-        }
-    }
-
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (overlayOpen) {
@@ -186,34 +159,33 @@ export function useTimer({
                 }
                 return;
             }
-            if (activeView !== "timer" || isEditingScramble) {
+            if (activeView !== "timer") {
                 return;
             }
             if (attemptSaveStatus === "saving" || attemptSaveStatus === "error") {
                 return;
             }
-            if (isTextEntryTarget(event.target)) {
+
+            if (timerPhase === "running") {
+                if (event.code === "Space") {
+                    event.preventDefault();
+                }
+                stopTimer();
                 return;
             }
 
-            if (event.code === "Space") {
-                if (event.repeat) {
-                    return;
-                }
+            if (isEditingScramble || isTextEntryTarget(event.target) || event.code !== "Space" || event.repeat) {
+                return;
+            }
 
-                event.preventDefault();
-                blurFocusedButton();
-                if (timerPhase === "idle" || timerPhase === "stopped") {
-                    armTimer(timerPhase);
-                    return;
-                }
-                if (timerPhase === "inspection") {
-                    armTimer("inspection");
-                    return;
-                }
-                if (timerPhase === "running") {
-                    stopTimer();
-                }
+            event.preventDefault();
+            blurFocusedButton();
+            if (timerPhase === "idle" || timerPhase === "stopped") {
+                armTimer(timerPhase);
+                return;
+            }
+            if (timerPhase === "inspection") {
+                armTimer("inspection");
             }
         };
 
@@ -272,8 +244,6 @@ export function useTimer({
         runningElapsedMs,
         attemptLocked,
         resetTimer,
-        handleTimerPointerDown,
-        handleTimerPointerUp,
     };
 }
 

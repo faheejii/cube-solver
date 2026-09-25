@@ -391,7 +391,8 @@ Current frontend behavior:
 
 Timer controls:
 
-- `Space`: arm, start inspection, start the solve, or stop the solve
+- `Space`: begin inspection or start the solve; while a solve is running, any key stops it
+- Mouse clicks do not start or stop the timer
 - inspection over 15 seconds applies `+2`
 - inspection over 17 seconds applies `DNF`
 - when inspection is disabled, the first timer start begins the solve immediately without inspection penalties
