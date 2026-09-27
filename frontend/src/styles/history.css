@@ -28,6 +28,7 @@
 .history-statistics-header {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     min-height: 45px;
     border-bottom: 1px solid var(--border);
     padding: 0 18px;
@@ -36,6 +37,19 @@
     font-weight: 600;
     letter-spacing: 0.08em;
     text-transform: uppercase;
+}
+
+.history-statistics-header button {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 0;
+    background: transparent;
+    color: var(--blue-bright);
+    font: inherit;
+    letter-spacing: normal;
+    text-transform: none;
+    cursor: pointer;
 }
 
 .history-statistics .statistics-grid {

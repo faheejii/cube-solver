@@ -1,8 +1,11 @@
-import {Eye, LoaderCircle, RefreshCw, Trash2} from "lucide-react";
+import {lazy, Suspense, useRef, useState} from "react";
+import {ArrowUpRight, Eye, LoaderCircle, RefreshCw, Trash2} from "lucide-react";
 import {crossFaceLabel, formatHistoryTime} from "./format";
 import {CrossFaceSwatch} from "./CrossFaceSelect";
 import StatisticsSummary from "./StatisticsSummary";
 import type {SolveHistoryEntry, SolveStatistics} from "./types";
+
+const StatisticsModal = lazy(() => import("./StatisticsModal"));
 
 type Props = {
     entries: SolveHistoryEntry[];
@@ -35,6 +38,14 @@ export default function HistoryView({
                                         onOpenSolve,
                                         onDeleteSolve,
                                     }: Props) {
+    const [statisticsOpen, setStatisticsOpen] = useState(false);
+    const statisticsMoreButtonRef = useRef<HTMLButtonElement>(null);
+
+    function closeStatistics() {
+        setStatisticsOpen(false);
+        window.requestAnimationFrame(() => statisticsMoreButtonRef.current?.focus());
+    }
+
     return (
         <section className="dashboard-history-view">
             <header className="history-view-header">
@@ -49,9 +60,29 @@ export default function HistoryView({
             </header>
 
             <section className="history-statistics" aria-label="Solve statistics">
-                <div className="history-statistics-header">Statistics</div>
+                <div className="history-statistics-header">
+                    <span>Statistics</span>
+                    <button
+                        ref={statisticsMoreButtonRef}
+                        type="button"
+                        aria-label="More statistics"
+                        onClick={() => setStatisticsOpen(true)}
+                    >
+                        More <ArrowUpRight size={14}/>
+                    </button>
+                </div>
                 <StatisticsSummary statistics={statistics} loading={statisticsLoading}/>
             </section>
+
+            {statisticsOpen ? (
+                <Suspense fallback={null}>
+                    <StatisticsModal
+                        statistics={statistics}
+                        statisticsLoading={statisticsLoading}
+                        onClose={closeStatistics}
+                    />
+                </Suspense>
+            ) : null}
 
             {error ? <div className="dashboard-alert error">{error}</div> : null}
             {loading ? <div className="history-loading"><LoaderCircle size={22}/> Loading history</div> : null}

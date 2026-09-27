@@ -2,6 +2,28 @@ import {expect, test} from "@playwright/test";
 import {mockProductionApi, normalUser} from "./production-fixtures";
 
 test.describe("authenticated dashboard production flow", () => {
+    test("opens the solve-time statistics modal from Statistics More", async ({page}) => {
+        const api = await mockProductionApi(page, {user: normalUser});
+        await page.goto("/");
+
+        await page.locator(".statistics-card .rail-card-header button").click();
+        const dialog = page.getByRole("dialog", {name: "Statistics"});
+        await expect(dialog).toBeVisible();
+        await expect(dialog.getByRole("group", {name: /Solve times for 1 recent solve/})).toBeVisible();
+        await expect(dialog.getByRole("img", {name: /Solve 1:/})).toBeVisible();
+        expect(api.requests.some((request) => request.pathname === "/api/solves" && request.search.includes("limit=50"))).toBe(true);
+
+        await page.keyboard.press("Escape");
+        await expect(dialog).toHaveCount(0);
+        await page.locator(".recent-card .rail-card-header button").click();
+        await expect(page.getByRole("heading", {name: "History"})).toBeVisible();
+
+        await page.getByRole("button", {name: "More statistics"}).click();
+        await expect(page.getByRole("dialog", {name: "Statistics"})).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(page.getByRole("dialog", {name: "Statistics"})).toHaveCount(0);
+    });
+
     test("loads the Three.js chunk only when a cube preview nears the viewport", async ({page}) => {
         await page.addInitScript(() => {
             type ObserverHandle = {notify: (isIntersecting: boolean) => void};

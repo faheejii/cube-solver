@@ -1,7 +1,15 @@
-import {render, screen} from "@testing-library/react";
+import {fireEvent, render, screen} from "@testing-library/react";
 import {describe, expect, it, vi} from "vitest";
 import HistoryView from "../HistoryView";
 import type {SolveHistoryEntry, SolveStatistics} from "../types";
+
+vi.mock("../StatisticsModal", () => ({
+    default: ({onClose}: {onClose: () => void}) => (
+        <section role="dialog" aria-label="Statistics dialog">
+            <button type="button" onClick={onClose}>Close statistics dialog</button>
+        </section>
+    ),
+}));
 
 const entries: SolveHistoryEntry[] = [
     {
@@ -91,6 +99,14 @@ describe("HistoryView statistics", () => {
         expect(screen.getByText("DNFs")).toBeInTheDocument();
         expect(screen.getByText("12.00")).toBeInTheDocument();
         expect(screen.getByText("1")).toBeInTheDocument();
+    });
+
+    it("opens the statistics modal from the History summary", async () => {
+        renderHistory(8);
+
+        fireEvent.click(screen.getByRole("button", {name: "More statistics"}));
+
+        expect(await screen.findByRole("dialog", {name: "Statistics dialog"})).toBeInTheDocument();
     });
 
     it("shows loading placeholders and the empty state", () => {
