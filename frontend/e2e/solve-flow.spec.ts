@@ -92,7 +92,41 @@ test.describe("timer, solve, history, and playback production flows", () => {
 
         await page.getByRole("button", {name: "History"}).click();
         await expect(page.getByRole("heading", {name: "History"})).toBeVisible();
-        await page.getByRole("button", {name: "Solution", exact: true}).click();
+        const scramblePreview = page.locator(".history-scramble-preview").first();
+        await expect(scramblePreview.locator("[data-preview-setup]")).toHaveAttribute("data-preview-setup", historyEntry.scramble);
+        const previewRenderer = scramblePreview.locator(".custom-cube-preview.compact");
+        const previewCanvas = previewRenderer.locator("canvas");
+        await expect(previewCanvas).toBeVisible();
+        const previewBox = await scramblePreview.boundingBox();
+        const rendererBox = await previewRenderer.boundingBox();
+        const canvasBox = await previewCanvas.boundingBox();
+        const indexBox = await page.locator(".history-index").first().boundingBox();
+        const timeBox = await page.locator(".history-time-cell").first().boundingBox();
+        const rowBox = await page.locator(".history-table-row").first().boundingBox();
+        expect(indexBox).not.toBeNull();
+        expect(timeBox).not.toBeNull();
+        expect(previewBox?.x).toBeGreaterThan(indexBox!.x);
+        expect(previewBox!.x + previewBox!.width).toBeLessThan(timeBox!.x);
+        expect(previewBox?.width).toBe(36);
+        expect(previewBox?.height).toBe(36);
+        expect(rendererBox?.width).toBe(36);
+        expect(rendererBox?.height).toBe(36);
+        expect(canvasBox?.width).toBe(36);
+        expect(canvasBox?.height).toBe(36);
+        expect(rowBox?.height).toBeLessThan(100);
+
+        await page.setViewportSize({width: 390, height: 844});
+        const mobilePreviewBox = await scramblePreview.boundingBox();
+        const mobileCanvasBox = await previewCanvas.boundingBox();
+        const mobileRowBox = await page.locator(".history-table-row").first().boundingBox();
+        expect(mobilePreviewBox?.width).toBe(34);
+        expect(mobilePreviewBox?.height).toBe(34);
+        expect(mobileCanvasBox?.width).toBe(34);
+        expect(mobileCanvasBox?.height).toBe(34);
+        expect(mobileRowBox?.height).toBeLessThan(120);
+
+        await page.setViewportSize({width: 1280, height: 720});
+        await page.getByRole("button", {name: /Open solution for solve 12\.34/}).click();
 
         const dialog = page.getByRole("dialog", {name: "Solve solution"});
         await expect(dialog).toBeVisible();
@@ -145,7 +179,7 @@ test.describe("timer, solve, history, and playback production flows", () => {
         expect(api.requests.filter((request) => request.pathname.endsWith("/penalty"))).toHaveLength(1);
 
         await page.getByRole("button", {name: "History"}).click();
-        await page.getByRole("button", {name: "Solution", exact: true}).click();
+        await page.getByRole("button", {name: /Open solution for solve 12\.34/}).click();
         const dialog = page.getByRole("dialog", {name: "Solve solution"});
         const modalPenalty = dialog.getByRole("group", {name: "Penalty for this solve"});
         await modalPenalty.getByRole("button", {name: "+2"}).click();

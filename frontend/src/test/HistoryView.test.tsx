@@ -4,10 +4,22 @@ import HistoryView from "../HistoryView";
 import type {SolveHistoryEntry, SolveStatistics} from "../types";
 
 vi.mock("../StatisticsModal", () => ({
-    default: ({onClose}: {onClose: () => void}) => (
+    default: ({onClose, onOpenSolve}: {onClose: () => void; onOpenSolve: (entry: SolveHistoryEntry) => void}) => (
         <section role="dialog" aria-label="Statistics dialog">
             <button type="button" onClick={onClose}>Close statistics dialog</button>
+            <button type="button" onClick={() => onOpenSolve(entries[0])}>Open solve from statistics</button>
         </section>
+    ),
+}));
+
+vi.mock("../DeferredCubePreview", () => ({
+    default: ({setupAlgorithm, compact, displayMode}: {setupAlgorithm: string; compact: boolean; displayMode: string}) => (
+        <div
+            data-testid="history-cube-preview"
+            data-preview-setup={setupAlgorithm}
+            data-compact={String(compact)}
+            data-display-mode={displayMode}
+        />
     ),
 }));
 
@@ -51,7 +63,9 @@ const statistics: SolveStatistics = {
 };
 
 function renderHistory(solveCount: number | null) {
-    return render(
+    const onOpenSolve = vi.fn();
+    const onDeleteSolve = vi.fn();
+    const view = render(
         <HistoryView
             entries={entries}
             loading={false}
@@ -64,10 +78,11 @@ function renderHistory(solveCount: number | null) {
             deletingSolveId={null}
             onRefresh={vi.fn()}
             onLoadMore={vi.fn()}
-            onOpenSolve={vi.fn()}
-            onDeleteSolve={vi.fn()}
+            onOpenSolve={onOpenSolve}
+            onDeleteSolve={onDeleteSolve}
         />
     );
+    return {...view, onOpenSolve, onDeleteSolve};
 }
 
 describe("HistoryView numbering", () => {
@@ -83,6 +98,29 @@ describe("HistoryView numbering", () => {
 
         expect(screen.getByText("01")).toBeInTheDocument();
         expect(screen.getByText("02")).toBeInTheDocument();
+    });
+
+    it("opens the solution by activating the solve row and keeps delete separate", () => {
+        const {onOpenSolve, onDeleteSolve} = renderHistory(8);
+
+        expect(screen.queryByText(/Cross|Fast saved|Fast missing|Optimized saved|Optimized missing/)).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", {name: "Solution"})).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", {name: "Open solution for solve 15.00"}));
+        expect(onOpenSolve).toHaveBeenCalledWith(entries[0]);
+
+        fireEvent.click(screen.getByRole("button", {name: "Delete solve 15.00"}));
+        expect(onDeleteSolve).toHaveBeenCalledWith(entries[0]);
+        expect(onOpenSolve).toHaveBeenCalledTimes(1);
+    });
+
+    it("renders a compact static 3D cube in each solve's scramble state", () => {
+        renderHistory(8);
+
+        const preview = screen.getAllByTestId("history-cube-preview")[0];
+        expect(preview).toHaveAttribute("data-preview-setup", entries[0].scramble);
+        expect(preview).toHaveAttribute("data-compact", "true");
+        expect(preview).toHaveAttribute("data-display-mode", "3d");
+        expect(preview.parentElement).toHaveAttribute("aria-hidden", "true");
     });
 });
 

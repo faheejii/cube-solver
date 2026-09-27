@@ -1,7 +1,7 @@
 import {lazy, Suspense, useRef, useState} from "react";
-import {ArrowUpRight, Eye, LoaderCircle, RefreshCw, Trash2} from "lucide-react";
-import {crossFaceLabel, formatHistoryTime} from "./format";
-import {CrossFaceSwatch} from "./CrossFaceSelect";
+import {ArrowUpRight, LoaderCircle, RefreshCw, Trash2} from "lucide-react";
+import DeferredCubePreview from "./DeferredCubePreview";
+import {formatHistoryTime} from "./format";
 import StatisticsSummary from "./StatisticsSummary";
 import type {SolveHistoryEntry, SolveStatistics} from "./types";
 
@@ -96,33 +96,37 @@ export default function HistoryView({
             <div className="history-table">
                 {entries.map((entry, index) => (
                     <article className="history-table-row" key={entry.id}>
-                        <span className="history-index">
-                            {String(solveCount === null ? index + 1 : solveCount - index).padStart(2, "0")}
-                        </span>
-                        <div className="history-time-cell">
-                            <strong>{formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}</strong>
-                            <small>{new Date(entry.createdAt).toLocaleString()}</small>
-                        </div>
-                        <p>{entry.scramble}</p>
-                        <div className="history-variants">
-                            <span className="cross-face-meta">Cross <CrossFaceSwatch face={entry.crossFaceRequested}/>{crossFaceLabel(entry.crossFaceRequested)}</span>
-                            <span>{entry.fastCrossFaceRequested ? "Fast saved" : "Fast missing"}</span>
-                            <span>{entry.optimizedCrossFaceRequested ? "Optimized saved" : "Optimized missing"}</span>
-                        </div>
+                        <button
+                            className="history-row-open"
+                            type="button"
+                            onClick={() => onOpenSolve(entry)}
+                            disabled={deletingSolveId === entry.id}
+                            aria-label={`Open solution for solve ${formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}`}
+                        >
+                            <span className="history-index">
+                                {String(solveCount === null ? index + 1 : solveCount - index).padStart(2, "0")}
+                            </span>
+                            <span className="history-scramble-preview" aria-hidden="true">
+                                <DeferredCubePreview
+                                    displayMode="3d"
+                                    setupAlgorithm={entry.scramble}
+                                    compact
+                                />
+                            </span>
+                            <span className="history-time-cell">
+                                <strong>{formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}</strong>
+                                <small>{new Date(entry.createdAt).toLocaleString()}</small>
+                            </span>
+                            <span className="history-scramble">{entry.scramble}</span>
+                        </button>
                         <div className="history-row-actions">
-                            <button
-                                className="dashboard-secondary-button compact"
-                                type="button"
-                                onClick={() => onOpenSolve(entry)}
-                                disabled={deletingSolveId === entry.id}
-                            >
-                                <Eye size={15}/>
-                                Solution
-                            </button>
                             <button
                                 className="history-delete-button"
                                 type="button"
-                                onClick={() => onDeleteSolve(entry)}
+                                onClick={(event) => {
+                                    event.stopPropagation();
+                                    onDeleteSolve(entry);
+                                }}
                                 disabled={deletingSolveId !== null}
                                 aria-label={`Delete solve ${formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}`}
                                 title="Delete solve"
