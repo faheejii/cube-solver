@@ -78,7 +78,6 @@ export default function HistoryView({
                 <Suspense fallback={null}>
                     <StatisticsModal
                         statistics={statistics}
-                        statisticsLoading={statisticsLoading}
                         onClose={closeStatistics}
                     />
                 </Suspense>

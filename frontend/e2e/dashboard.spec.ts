@@ -13,6 +13,10 @@ test.describe("authenticated dashboard production flow", () => {
         await expect(dialog.getByRole("img", {name: /Solve 1:/})).toBeVisible();
         expect(api.requests.some((request) => request.pathname === "/api/solves" && request.search.includes("limit=50"))).toBe(true);
 
+        await dialog.getByRole("button", {name: "All solves"}).click();
+        await expect(dialog.getByRole("group", {name: /Solve times for 1 total solve/})).toBeVisible();
+        expect(api.requests.some((request) => request.pathname === "/api/solves" && request.search.includes("limit=100"))).toBe(true);
+
         await page.keyboard.press("Escape");
         await expect(dialog).toHaveCount(0);
         await page.locator(".recent-card .rail-card-header button").click();

@@ -121,7 +121,7 @@ export default function StatisticsRail({
             </section>
             {statisticsOpen ? (
                 <Suspense fallback={null}>
-                    <StatisticsModal statistics={statistics} statisticsLoading={loading} onClose={closeStatistics}/>
+                    <StatisticsModal statistics={statistics} onClose={closeStatistics}/>
                 </Suspense>
             ) : null}
         </aside>

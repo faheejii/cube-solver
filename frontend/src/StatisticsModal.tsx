@@ -3,12 +3,12 @@ import {createPortal} from "react-dom";
 import {LoaderCircle, X} from "lucide-react";
 import {fetchSolveHistory} from "./api";
 import {formatHistoryTime, formatSolveTime} from "./format";
+import {calculateWindowStatistics} from "./solveStatistics";
 import StatisticsSummary from "./StatisticsSummary";
 import type {SolveHistoryEntry, SolveStatistics} from "./types";
 
 type Props = {
     statistics: SolveStatistics | null;
-    statisticsLoading: boolean;
     onClose: () => void;
 };
 
@@ -20,36 +20,53 @@ type ChartPoint = {
     y: number | null;
 };
 
+type Range = "last50" | "all";
 const HISTORY_WINDOW = 50;
+const HISTORY_PAGE_SIZE = 100;
 const CHART_WIDTH = 840;
 const CHART_HEIGHT = 380;
 const PLOT = {left: 76, right: 24, top: 58, bottom: 322};
 
-export default function StatisticsModal({statistics, statisticsLoading, onClose}: Props) {
-    const [entries, setEntries] = useState<SolveHistoryEntry[] | null>(null);
-    const [error, setError] = useState<string | null>(null);
+export default function StatisticsModal({statistics, onClose}: Props) {
+    const [range, setRange] = useState<Range>("last50");
+    const [last50Entries, setLast50Entries] = useState<SolveHistoryEntry[] | null>(null);
+    const [allEntries, setAllEntries] = useState<SolveHistoryEntry[] | null>(null);
+    const [errors, setErrors] = useState<Partial<Record<Range, string>>>({});
     const [retryKey, setRetryKey] = useState(0);
     const [activePoint, setActivePoint] = useState<number | null>(null);
     const titleId = useId();
     const descriptionId = useId();
+    const entries = range === "last50" ? last50Entries : allEntries;
+    const error = errors[range] ?? null;
 
     useEffect(() => {
         let cancelled = false;
-        setEntries(null);
-        setError(null);
-        fetchSolveHistory(HISTORY_WINDOW)
-            .then((page) => {
-                if (!cancelled) setEntries([...page.items].reverse());
-            })
-            .catch((loadError: unknown) => {
-                if (!cancelled) {
-                    setError(loadError instanceof Error ? loadError.message : "Could not load solve history.");
-                }
-            });
+        const cached = range === "last50" ? last50Entries : allEntries;
+        if (cached !== null) return;
+
+        setErrors((current) => {
+            const next = {...current};
+            delete next[range];
+            return next;
+        });
+        const load = range === "last50" ? loadLast50() : loadAll(() => cancelled);
+        load.then((loaded) => {
+            if (!cancelled && loaded !== null) {
+                if (range === "last50") setLast50Entries(loaded);
+                else setAllEntries(loaded);
+            }
+        }).catch((loadError: unknown) => {
+            if (!cancelled) {
+                setErrors((current) => ({
+                    ...current,
+                    [range]: loadError instanceof Error ? loadError.message : "Could not load solve history.",
+                }));
+            }
+        });
         return () => {
             cancelled = true;
         };
-    }, [retryKey]);
+    }, [allEntries, last50Entries, range, retryKey]);
 
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
@@ -62,13 +79,16 @@ export default function StatisticsModal({statistics, statisticsLoading, onClose}
         return () => window.removeEventListener("keydown", onKeyDown);
     }, [onClose]);
 
-    const points = makeChartPoints(entries ?? [], statistics?.solveCount ?? null);
+    const newestFirst = entries ?? [];
+    const chronologicalEntries = [...newestFirst].reverse();
+    const points = makeChartPoints(chronologicalEntries, statistics?.solveCount ?? newestFirst.length);
     const validPoints = points.filter((point): point is ChartPoint & {y: number} => point.y !== null);
     const yDomain = getYDomain(validPoints.map((point) => point.y));
     const yTicks = createTicks(yDomain.min, yDomain.max, 4);
     const chartLines = makeLineSegments(points, yDomain.min, yDomain.max);
     const selected = activePoint === null ? null : points[activePoint] ?? null;
     const showing = entries?.length ?? 0;
+    const windowStatistics = entries === null ? null : calculateWindowStatistics(entries);
 
     return createPortal((
         <div
@@ -89,14 +109,35 @@ export default function StatisticsModal({statistics, statisticsLoading, onClose}
                 <header className="statistics-modal-header">
                     <div>
                         <h2 id={titleId}>Statistics</h2>
-                        <p id={descriptionId}>Solve-time trend for the latest {HISTORY_WINDOW} solves.</p>
+                        <p id={descriptionId}>
+                            {range === "last50" ? `Solve-time trend for the latest ${HISTORY_WINDOW} solves.` : "Solve-time trend across all saved solves."}
+                        </p>
                     </div>
                     <button className="icon-button" type="button" onClick={onClose} aria-label="Close statistics" autoFocus>
                         <X size={18}/>
                     </button>
                 </header>
 
-                <StatisticsSummary statistics={statistics} loading={statisticsLoading}/>
+                <div className="statistics-range-control" role="group" aria-label="Statistics range">
+                    <button
+                        type="button"
+                        className={range === "last50" ? "active" : ""}
+                        aria-pressed={range === "last50"}
+                        onClick={() => { setActivePoint(null); setRange("last50"); }}
+                    >
+                        Last 50
+                    </button>
+                    <button
+                        type="button"
+                        className={range === "all" ? "active" : ""}
+                        aria-pressed={range === "all"}
+                        onClick={() => { setActivePoint(null); setRange("all"); }}
+                    >
+                        All solves
+                    </button>
+                </div>
+
+                <StatisticsSummary statistics={windowStatistics} loading={entries === null}/>
 
                 <section className="statistics-chart-section" aria-label="Solve time chart">
                     <div className="statistics-chart-heading">
@@ -111,7 +152,7 @@ export default function StatisticsModal({statistics, statisticsLoading, onClose}
                     ) : entries === null ? (
                         <div className="statistics-chart-message" role="status">
                             <LoaderCircle size={20}/>
-                            Loading solve history…
+                            {range === "all" ? "Loading all solves…" : "Loading solve history…"}
                         </div>
                     ) : entries.length === 0 ? (
                         <div className="statistics-chart-message" role="status">No solves yet</div>
@@ -121,7 +162,7 @@ export default function StatisticsModal({statistics, statisticsLoading, onClose}
                                 className="statistics-chart"
                                 viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
                                 role="group"
-                                aria-label={`Solve times for ${showing} recent ${showing === 1 ? "solve" : "solves"}, oldest to newest`}
+                                aria-label={`Solve times for ${showing} ${range === "all" ? "total" : "recent"} ${showing === 1 ? "solve" : "solves"}, oldest to newest`}
                                 preserveAspectRatio="xMidYMid meet"
                             >
                                 <text className="chart-axis-title" x="0" y="20">DNF</text>
@@ -185,6 +226,37 @@ export default function StatisticsModal({statistics, statisticsLoading, onClose}
             </section>
         </div>
     ), document.body);
+}
+
+async function loadLast50(): Promise<SolveHistoryEntry[]> {
+    const page = await fetchSolveHistory(HISTORY_WINDOW);
+    return page.items;
+}
+
+async function loadAll(isCancelled: () => boolean): Promise<SolveHistoryEntry[] | null> {
+    const entries: SolveHistoryEntry[] = [];
+    const seenIds = new Set<number>();
+    const seenCursors = new Set<string>();
+    let cursor: string | null = null;
+
+    do {
+        if (isCancelled()) return null;
+        const page = await fetchSolveHistory(HISTORY_PAGE_SIZE, cursor);
+        if (isCancelled()) return null;
+        for (const entry of page.items) {
+            if (!seenIds.has(entry.id)) {
+                seenIds.add(entry.id);
+                entries.push(entry);
+            }
+        }
+        cursor = page.nextCursor;
+        if (cursor && seenCursors.has(cursor)) {
+            throw new Error("History pagination did not advance. Please retry.");
+        }
+        if (cursor) seenCursors.add(cursor);
+    } while (cursor !== null);
+
+    return entries;
 }
 
 function makeChartPoints(entries: SolveHistoryEntry[], solveCount: number | null): ChartPoint[] {
