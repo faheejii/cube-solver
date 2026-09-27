@@ -1,6 +1,6 @@
 import {lazy, Suspense, useRef, useState} from "react";
 import {ArrowUpRight, LoaderCircle, RefreshCw, Trash2} from "lucide-react";
-import DeferredCubePreview from "./DeferredCubePreview";
+import HistoryCubeThumbnail from "./HistoryCubeThumbnail";
 import {formatHistoryTime} from "./format";
 import StatisticsSummary from "./StatisticsSummary";
 import type {SolveHistoryEntry, SolveStatistics} from "./types";
@@ -116,13 +116,7 @@ export default function HistoryView({
                                 {String(solveCount === null ? index + 1 : solveCount - index).padStart(2, "0")}
                             </span>
                             <span className="history-scramble-preview" aria-hidden="true">
-                                <DeferredCubePreview
-                                    displayMode="3d"
-                                    setupAlgorithm={entry.scramble}
-                                    compact
-                                    staticPreview
-                                    unloadWhenOutOfView
-                                />
+                                <HistoryCubeThumbnail scramble={entry.scramble}/>
                             </span>
                             <span className="history-time-cell">
                                 <strong>{formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}</strong>

@@ -1,4 +1,4 @@
-import {Component, lazy, Suspense, useEffect, useRef, useState, type ComponentProps, type ErrorInfo, type ReactNode} from "react";
+import {Component, lazy, Suspense, useEffect, useRef, useState, type ComponentProps, type ErrorInfo, type ReactNode, type Ref} from "react";
 import type CubePreview from "./CubePreview";
 import {useCubePreviewMode, type CubePreviewMode} from "./CubePreviewModeContext";
 
@@ -6,53 +6,51 @@ const CubePreviewRenderer = lazy(() => import("./CubePreview"));
 const CubeNetPreviewRenderer = lazy(() => import("./CubeNetPreview"));
 const VIEWPORT_ROOT_MARGIN = "120px 0px";
 
-type Props = ComponentProps<typeof CubePreview> & {
-    displayMode?: CubePreviewMode;
-    unloadWhenOutOfView?: boolean;
-};
+type Props = ComponentProps<typeof CubePreview> & {displayMode?: CubePreviewMode};
 
-export default function DeferredCubePreview({displayMode, unloadWhenOutOfView = false, ...props}: Props) {
+export default function DeferredCubePreview({displayMode, ...props}: Props) {
     const contextMode = useCubePreviewMode();
     const previewMode = displayMode ?? contextMode;
-    const hostRef = useRef<HTMLDivElement>(null);
-    const [shouldRender, setShouldRender] = useState(false);
+    const placeholderRef = useRef<HTMLDivElement>(null);
+    const [nearViewport, setNearViewport] = useState(false);
 
     useEffect(() => {
-        const element = hostRef.current;
+        if (nearViewport) return;
+
+        const element = placeholderRef.current;
         if (!element) {
             return;
         }
 
         if (typeof IntersectionObserver === "undefined") {
-            setShouldRender(true);
+            setNearViewport(true);
             return;
         }
 
         const observer = new IntersectionObserver(([entry]) => {
-            const isNearViewport = Boolean(entry?.isIntersecting);
-            setShouldRender(isNearViewport);
-            if (isNearViewport && !unloadWhenOutOfView) {
+            if (entry?.isIntersecting) {
+                setNearViewport(true);
                 observer.disconnect();
             }
         }, {rootMargin: VIEWPORT_ROOT_MARGIN});
         observer.observe(element);
         return () => observer.disconnect();
-    }, [unloadWhenOutOfView]);
+    }, [nearViewport, previewMode]);
 
-    return (
-        <div ref={hostRef} className={props.compact ? "deferred-cube-preview-host compact" : "deferred-cube-preview-host"}>
-            {shouldRender ? (
-                <CubePreviewErrorBoundary compact={props.compact}>
-                    <Suspense fallback={<PreviewPlaceholder {...props} mode={previewMode} loading/>}>
-                        {previewMode === "2d" ? <CubeNetPreviewRenderer {...props}/> : <CubePreviewRenderer {...props}/>}
-                    </Suspense>
-                </CubePreviewErrorBoundary>
-            ) : <PreviewPlaceholder {...props} mode={previewMode} loading={false}/>}
-        </div>
-    );
+    if (nearViewport) {
+        return (
+            <CubePreviewErrorBoundary compact={props.compact}>
+                <Suspense fallback={<PreviewPlaceholder {...props} mode={previewMode} loading/>}>
+                    {previewMode === "2d" ? <CubeNetPreviewRenderer {...props}/> : <CubePreviewRenderer {...props}/>}
+                </Suspense>
+            </CubePreviewErrorBoundary>
+        );
+    }
+
+    return <PreviewPlaceholder {...props} ref={placeholderRef} mode={previewMode} loading={false}/>;
 }
 
-type PlaceholderProps = Omit<Props, "unloadWhenOutOfView"> & {loading: boolean; mode: "2d" | "3d"};
+type PlaceholderProps = Props & {loading: boolean; mode: "2d" | "3d"; ref?: Ref<HTMLDivElement>};
 
 function PreviewPlaceholder({
     compact = false,
@@ -66,6 +64,7 @@ function PreviewPlaceholder({
         : mode === "3d" ? "Cube preview" : "2D cube net preview";
     return (
         <div
+            ref={props.ref}
             className={compact ? "custom-cube-preview compact deferred-cube-preview" : "custom-cube-preview deferred-cube-preview"}
             role="img"
             aria-label={loading ? `Loading ${label.toLowerCase()}` : label}
