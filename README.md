@@ -380,7 +380,7 @@ Current frontend behavior:
 - presents solution dialogs as near-full-screen utility inspectors with joined cube/stage panes, bottom playback controls, stage navigation, and a speed dropdown
 - includes a Settings view where the processing deadline can be set from 5 to 120 seconds, inspection can be enabled or disabled, deep color-neutral optimization can be enabled, and the timer preview and solution playback can each be switched between 3D and a 2D six-face net; preferences are stored in the current browser
 - displays the current scramble and solution playback using their independently selected 3D or 2D cube modes
-- calculates best time, average of 5, average of 12, mean time, solve count, and DNF count from saved attempts; the global summary is shown above History, while the Statistics modal charts the latest 50 or all solves with metrics scoped to the selected range
+- calculates best time, Ao5, Ao12, mean time, solve count, and DNF count from saved attempts; the global summary is shown above History, while the Statistics modal charts the latest 50 or all solves with metrics scoped to the selected range
 - saves completed attempts to Postgres and advances to the next scramble automatically
 - includes cursor-paginated solve history in 20-entry pages; the Timer's scrollable Solves rail reuses the same history data and opens the saved-solution modal
 - supports permanent deletion of owned solves from the History tab or saved-solution modal, including the saved Fast and Optimized solutions
@@ -394,7 +394,7 @@ Current frontend behavior:
 
 Timer controls:
 
-- `Space`: begin inspection or start the solve; while a solve is running, any key stops it
+- `Space`: begin inspection or start the solve; while a solve is running, any key stops it. Timer hotkeys are suspended while a modal dialog is open.
 - Mouse clicks do not start or stop the timer
 - inspection over 15 seconds applies `+2`
 - inspection over 17 seconds applies `DNF`

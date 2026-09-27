@@ -83,4 +83,33 @@ describe("useTimer keyboard controls", () => {
 
         expect(screen.getByText("running")).toBeInTheDocument();
     });
+
+    it("does not stop a running solve while an accessible modal is open", () => {
+        render(<TimerHarness inspectionEnabled={false}/>);
+        pressSpace();
+        const modal = document.createElement("div");
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        document.body.append(modal);
+
+        fireEvent.keyDown(window, {code: "KeyA", key: "a"});
+
+        expect(screen.getByText("running")).toBeInTheDocument();
+        modal.remove();
+    });
+
+    it("does not start an armed timer on Space keyup while an accessible modal is open", () => {
+        render(<TimerHarness inspectionEnabled={false}/>);
+        fireEvent.keyDown(window, {code: "Space", key: " "});
+        expect(screen.getByText("armed")).toBeInTheDocument();
+        const modal = document.createElement("div");
+        modal.setAttribute("role", "dialog");
+        modal.setAttribute("aria-modal", "true");
+        document.body.append(modal);
+
+        fireEvent.keyUp(window, {code: "Space", key: " "});
+
+        expect(screen.getByText("armed")).toBeInTheDocument();
+        modal.remove();
+    });
 });

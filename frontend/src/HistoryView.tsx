@@ -96,12 +96,21 @@ export default function HistoryView({
             <div className="history-table">
                 {entries.map((entry, index) => (
                     <article className="history-table-row" key={entry.id}>
-                        <button
+                        <div
                             className="history-row-open"
-                            type="button"
-                            onClick={() => onOpenSolve(entry)}
-                            disabled={deletingSolveId === entry.id}
+                            role="button"
+                            tabIndex={deletingSolveId === entry.id ? -1 : 0}
+                            aria-disabled={deletingSolveId === entry.id}
                             aria-label={`Open solution for solve ${formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}`}
+                            onClick={() => {
+                                if (deletingSolveId !== entry.id) onOpenSolve(entry);
+                            }}
+                            onKeyDown={(event) => {
+                                if ((event.key === "Enter" || event.key === " ") && deletingSolveId !== entry.id) {
+                                    event.preventDefault();
+                                    onOpenSolve(entry);
+                                }
+                            }}
                         >
                             <span className="history-index">
                                 {String(solveCount === null ? index + 1 : solveCount - index).padStart(2, "0")}
@@ -118,15 +127,12 @@ export default function HistoryView({
                                 <small>{new Date(entry.createdAt).toLocaleString()}</small>
                             </span>
                             <span className="history-scramble">{entry.scramble}</span>
-                        </button>
+                        </div>
                         <div className="history-row-actions">
                             <button
                                 className="history-delete-button"
                                 type="button"
-                                onClick={(event) => {
-                                    event.stopPropagation();
-                                    onDeleteSolve(entry);
-                                }}
+                                onClick={() => onDeleteSolve(entry)}
                                 disabled={deletingSolveId !== null}
                                 aria-label={`Delete solve ${formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}`}
                                 title="Delete solve"

@@ -73,7 +73,6 @@
 .history-table-row {
     --history-preview-size: 36px;
     display: grid;
-    position: relative;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
     gap: 12px;
@@ -104,7 +103,7 @@
     outline-offset: 4px;
 }
 
-.history-row-open:disabled {
+.history-row-open[aria-disabled="true"] {
     cursor: wait;
 }
 
@@ -154,7 +153,6 @@
 .history-scramble-preview {
     width: var(--history-preview-size);
     height: var(--history-preview-size);
-    overflow: visible;
     pointer-events: none;
 }
 

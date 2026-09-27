@@ -153,7 +153,7 @@ export function useTimer({
 
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
-            if (overlayOpen) {
+            if (overlayOpen || hasModalDialog()) {
                 if (event.code === "Space") {
                     event.preventDefault();
                 }
@@ -190,7 +190,7 @@ export function useTimer({
         };
 
         const handleKeyUp = (event: KeyboardEvent) => {
-            if (overlayOpen) {
+            if (overlayOpen || hasModalDialog()) {
                 if (event.code === "Space") {
                     event.preventDefault();
                 }
@@ -262,6 +262,10 @@ function isTextEntryTarget(target: EventTarget | null): boolean {
         return false;
     }
     return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
+}
+
+function hasModalDialog(): boolean {
+    return document.querySelector('[role="dialog"][aria-modal="true"]') !== null;
 }
 
 function blurFocusedButton() {

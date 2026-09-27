@@ -113,6 +113,17 @@ describe("HistoryView numbering", () => {
         expect(onOpenSolve).toHaveBeenCalledTimes(1);
     });
 
+    it("opens the solution from the keyboard-accessible row control", () => {
+        const {onOpenSolve} = renderHistory(8);
+        const row = screen.getByRole("button", {name: "Open solution for solve 15.00"});
+
+        fireEvent.keyDown(row, {key: "Enter"});
+        fireEvent.keyDown(row, {key: " "});
+
+        expect(onOpenSolve).toHaveBeenNthCalledWith(1, entries[0]);
+        expect(onOpenSolve).toHaveBeenNthCalledWith(2, entries[0]);
+    });
+
     it("renders a compact static 3D cube in each solve's scramble state", () => {
         renderHistory(8);
 

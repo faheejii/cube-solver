@@ -116,7 +116,7 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
                     <div>
                         <h2 id={titleId}>Statistics</h2>
                         <p id={descriptionId}>
-                            {range === "last50" ? `Solve-time trend for the latest ${HISTORY_WINDOW} solves.` : "Solve-time trend across all saved solves."}
+                            {range === "last50" ? `Solve-time trend for up to the latest ${HISTORY_WINDOW} solves.` : "Solve-time trend across all saved solves."}
                         </p>
                     </div>
                     <button className="icon-button" type="button" onClick={onClose} aria-label="Close statistics" autoFocus>
@@ -244,7 +244,7 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
                                 <span><i className="chart-legend-dnf"/> DNF</span>
                             </div>
                             <p className="statistics-chart-detail" role="status" aria-live="polite">
-                                {selected ? describePoint(selected) : "Hover over or focus a point to inspect a solve."}
+                                {selected ? describePoint(selected) : "Hover over or focus a point to inspect it; select a point to open its solution."}
                             </p>
                         </>
                     )}
