@@ -16,6 +16,7 @@ type Props = {
     isPlaying?: boolean;
     onPlaybackComplete?: () => void;
     interactiveView?: boolean;
+    staticPreview?: boolean;
     "data-playback-alg"?: string;
 };
 type VisualCubie = {mesh: THREE.Mesh; id: string};
@@ -29,6 +30,7 @@ export default function CubePreview({
     isPlaying,
     onPlaybackComplete,
     interactiveView = false,
+    staticPreview = false,
     "data-playback-alg": playbackAttribute,
 }: Props) {
     const hostRef = useRef<HTMLDivElement>(null);
@@ -97,6 +99,7 @@ export default function CubePreview({
         syncMeshes(visualCubies, logicalState, cubeGroup);
 
         const moves = parseNotation(algorithm);
+        const renderStaticFrame = staticPreview && moves.length === 0 && !interactiveView;
         let frame = 0;
         let index = 0;
         let playbackComplete = false;
@@ -107,6 +110,7 @@ export default function CubePreview({
             renderer.setSize(size, size, false);
             camera.aspect = 1;
             camera.updateProjectionMatrix();
+            if (renderStaticFrame) renderer.render(scene, camera);
         };
         const begin = () => {
             if (index >= moves.length) return;
@@ -164,19 +168,20 @@ export default function CubePreview({
 
         resize();
         window.addEventListener("resize", resize);
-        frame = requestAnimationFrame(tick);
+        if (!renderStaticFrame) frame = requestAnimationFrame(tick);
         return () => {
             cancelAnimationFrame(frame);
             window.removeEventListener("resize", resize);
             orbitControls?.dispose();
             renderer.dispose();
+            renderer.forceContextLoss();
             host.replaceChildren();
             visualCubies.forEach(({mesh}) => {
                 mesh.geometry.dispose();
                 (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).forEach((material) => material.dispose());
             });
         };
-    }, [setupAlgorithm, algorithm, playbackSpeed, stage, interactiveView]);
+    }, [setupAlgorithm, algorithm, playbackSpeed, stage, interactiveView, staticPreview]);
 
     return <div ref={hostRef} className={compact ? "custom-cube-preview compact" : "custom-cube-preview"} aria-label={interactiveView ? "Interactive cube preview. Drag to rotate the cube view." : "Cube preview"} data-preview-setup={setupAlgorithm} data-preview-alg={algorithm} data-preview-stage={stage} data-playback-alg={playbackAttribute ?? algorithm} data-playback-state={isPlaying ?? true ? "playing" : "paused"} data-interactive-view={interactiveView ? "true" : "false"}>{unsupported && <span className="cube-preview-fallback">3D preview unavailable in this browser.</span>}</div>;
 }

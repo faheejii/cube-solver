@@ -13,12 +13,20 @@ vi.mock("../StatisticsModal", () => ({
 }));
 
 vi.mock("../DeferredCubePreview", () => ({
-    default: ({setupAlgorithm, compact, displayMode}: {setupAlgorithm: string; compact: boolean; displayMode: string}) => (
+    default: ({setupAlgorithm, compact, displayMode, staticPreview, unloadWhenOutOfView}: {
+        setupAlgorithm: string;
+        compact: boolean;
+        displayMode: string;
+        staticPreview: boolean;
+        unloadWhenOutOfView: boolean;
+    }) => (
         <div
             data-testid="history-cube-preview"
             data-preview-setup={setupAlgorithm}
             data-compact={String(compact)}
             data-display-mode={displayMode}
+            data-static-preview={String(staticPreview)}
+            data-unload-when-out-of-view={String(unloadWhenOutOfView)}
         />
     ),
 }));
@@ -131,6 +139,8 @@ describe("HistoryView numbering", () => {
         expect(preview).toHaveAttribute("data-preview-setup", entries[0].scramble);
         expect(preview).toHaveAttribute("data-compact", "true");
         expect(preview).toHaveAttribute("data-display-mode", "3d");
+        expect(preview).toHaveAttribute("data-static-preview", "true");
+        expect(preview).toHaveAttribute("data-unload-when-out-of-view", "true");
         expect(preview.parentElement).toHaveAttribute("aria-hidden", "true");
     });
 });

@@ -1,4 +1,4 @@
-import {Component, lazy, Suspense, useEffect, useRef, useState, type ComponentProps, type ErrorInfo, type ReactNode, type Ref} from "react";
+import {Component, lazy, Suspense, useEffect, useRef, useState, type ComponentProps, type ErrorInfo, type ReactNode} from "react";
 import type CubePreview from "./CubePreview";
 import {useCubePreviewMode, type CubePreviewMode} from "./CubePreviewModeContext";
 
@@ -6,53 +6,53 @@ const CubePreviewRenderer = lazy(() => import("./CubePreview"));
 const CubeNetPreviewRenderer = lazy(() => import("./CubeNetPreview"));
 const VIEWPORT_ROOT_MARGIN = "120px 0px";
 
-type Props = ComponentProps<typeof CubePreview> & {displayMode?: CubePreviewMode};
+type Props = ComponentProps<typeof CubePreview> & {
+    displayMode?: CubePreviewMode;
+    unloadWhenOutOfView?: boolean;
+};
 
-export default function DeferredCubePreview({displayMode, ...props}: Props) {
+export default function DeferredCubePreview({displayMode, unloadWhenOutOfView = false, ...props}: Props) {
     const contextMode = useCubePreviewMode();
     const previewMode = displayMode ?? contextMode;
-    const placeholderRef = useRef<HTMLDivElement>(null);
-    const [nearViewport, setNearViewport] = useState(false);
+    const hostRef = useRef<HTMLDivElement>(null);
+    const [shouldRender, setShouldRender] = useState(false);
 
     useEffect(() => {
-        if (nearViewport) {
-            return;
-        }
-
-        const element = placeholderRef.current;
+        const element = hostRef.current;
         if (!element) {
             return;
         }
 
         if (typeof IntersectionObserver === "undefined") {
-            setNearViewport(true);
+            setShouldRender(true);
             return;
         }
 
         const observer = new IntersectionObserver(([entry]) => {
-            if (entry?.isIntersecting) {
-                setNearViewport(true);
+            const isNearViewport = Boolean(entry?.isIntersecting);
+            setShouldRender(isNearViewport);
+            if (isNearViewport && !unloadWhenOutOfView) {
                 observer.disconnect();
             }
         }, {rootMargin: VIEWPORT_ROOT_MARGIN});
         observer.observe(element);
         return () => observer.disconnect();
-    }, [nearViewport, previewMode]);
+    }, [unloadWhenOutOfView]);
 
-    if (nearViewport) {
-        return (
-            <CubePreviewErrorBoundary>
-                <Suspense fallback={<PreviewPlaceholder {...props} mode={previewMode} loading/>}>
-                    {previewMode === "2d" ? <CubeNetPreviewRenderer {...props}/> : <CubePreviewRenderer {...props}/>}
-                </Suspense>
-            </CubePreviewErrorBoundary>
-        );
-    }
-
-    return <PreviewPlaceholder {...props} ref={placeholderRef} mode={previewMode} loading={false}/>;
+    return (
+        <div ref={hostRef} className={props.compact ? "deferred-cube-preview-host compact" : "deferred-cube-preview-host"}>
+            {shouldRender ? (
+                <CubePreviewErrorBoundary compact={props.compact}>
+                    <Suspense fallback={<PreviewPlaceholder {...props} mode={previewMode} loading/>}>
+                        {previewMode === "2d" ? <CubeNetPreviewRenderer {...props}/> : <CubePreviewRenderer {...props}/>}
+                    </Suspense>
+                </CubePreviewErrorBoundary>
+            ) : <PreviewPlaceholder {...props} mode={previewMode} loading={false}/>}
+        </div>
+    );
 }
 
-type PlaceholderProps = Props & {loading: boolean; mode: "2d" | "3d"; ref?: Ref<HTMLDivElement>};
+type PlaceholderProps = Omit<Props, "unloadWhenOutOfView"> & {loading: boolean; mode: "2d" | "3d"};
 
 function PreviewPlaceholder({
     compact = false,
@@ -66,7 +66,6 @@ function PreviewPlaceholder({
         : mode === "3d" ? "Cube preview" : "2D cube net preview";
     return (
         <div
-            ref={props.ref}
             className={compact ? "custom-cube-preview compact deferred-cube-preview" : "custom-cube-preview deferred-cube-preview"}
             role="img"
             aria-label={loading ? `Loading ${label.toLowerCase()}` : label}
@@ -82,7 +81,7 @@ function PreviewPlaceholder({
     );
 }
 
-class CubePreviewErrorBoundary extends Component<{children: ReactNode}, {failed: boolean}> {
+class CubePreviewErrorBoundary extends Component<{children: ReactNode; compact?: boolean}, {failed: boolean}> {
     state = {failed: false};
 
     static getDerivedStateFromError() {
@@ -96,7 +95,7 @@ class CubePreviewErrorBoundary extends Component<{children: ReactNode}, {failed:
     render() {
         if (this.state.failed) {
             return (
-                <div className="custom-cube-preview deferred-cube-preview" role="status">
+                <div className={this.props.compact ? "custom-cube-preview compact deferred-cube-preview" : "custom-cube-preview deferred-cube-preview"} role="status">
                     Cube preview failed to load.
                 </div>
             );

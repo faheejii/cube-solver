@@ -155,6 +155,38 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await expect(page.locator(".history-table-row").first().locator(".history-time-cell strong")).toHaveText("12.34");
     });
 
+    test("recreates static history cube previews after scrolling them offscreen and back", async ({page}) => {
+        const pageErrors: string[] = [];
+        page.on("pageerror", (error) => pageErrors.push(error.message));
+        const historyEntries = Array.from({length: 20}, (_, index) => ({
+            ...historyEntry,
+            id: 20 - index,
+            clientAttemptId: `attempt-${20 - index}`,
+            createdAt: new Date(Date.UTC(2026, 6, 26, 10, 0, index)).toISOString(),
+        }));
+        await mockProductionApi(page, {user: normalUser, historyEntries});
+        await page.goto("/");
+        await page.getByRole("button", {name: "History"}).click();
+
+        const rows = page.locator(".history-table-row");
+        const firstRow = rows.first();
+        const firstPreview = firstRow.locator(".history-scramble-preview");
+        const firstCanvas = firstPreview.locator("canvas");
+        await expect(rows).toHaveCount(20);
+        await expect(firstCanvas).toBeVisible();
+        const initialRowBox = await firstRow.boundingBox();
+        expect(initialRowBox).not.toBeNull();
+
+        await rows.last().scrollIntoViewIfNeeded();
+        await expect(firstCanvas).toHaveCount(0);
+
+        await firstRow.scrollIntoViewIfNeeded();
+        await expect(firstCanvas).toBeVisible();
+        const returnedRowBox = await firstRow.boundingBox();
+        expect(returnedRowBox?.height).toBe(initialRowBox?.height);
+        expect(pageErrors).toEqual([]);
+    });
+
     test("keeps the saved penalty and timer unchanged when a penalty update fails", async ({page}) => {
         const api = await mockProductionApi(page, {
             user: normalUser,

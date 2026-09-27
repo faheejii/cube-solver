@@ -120,6 +120,8 @@ export default function HistoryView({
                                     displayMode="3d"
                                     setupAlgorithm={entry.scramble}
                                     compact
+                                    staticPreview
+                                    unloadWhenOutOfView
                                 />
                             </span>
                             <span className="history-time-cell">
