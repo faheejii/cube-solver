@@ -129,7 +129,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         setHistoryEntries,
         setHistoryStatus,
         setHistoryError,
-    } = useHistoryData({activeView, onNotice: setSaveNotice});
+    } = useHistoryData({onNotice: setSaveNotice});
     useEffect(() => {
         if (!latestSavedAttempt && statistics?.recentSolves[0]) {
             setLatestSavedAttempt(statistics.recentSolves[0]);
@@ -793,6 +793,14 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 <StatisticsRail
                     statistics={statistics}
                     loading={statisticsLoading}
+                    entries={historyEntries}
+                    historyStatus={historyStatus}
+                    historyError={historyError}
+                    loadingMore={historyLoadingMore}
+                    hasMore={historyCursor !== null}
+                    solveCount={statistics?.solveCount ?? null}
+                    onLoadMore={() => void loadMoreHistory()}
+                    onRetry={() => void (historyStatus === "error" ? loadHistory() : loadMoreHistory())}
                     onOpenHistory={() => setActiveView("history")}
                     onOpenSolve={(entry) => void openHistorySolution(entry)}
                 />
