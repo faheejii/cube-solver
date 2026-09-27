@@ -10,6 +10,7 @@ import type {SolveHistoryEntry, SolveStatistics} from "./types";
 type Props = {
     statistics: SolveStatistics | null;
     onClose: () => void;
+    onOpenSolve: (entry: SolveHistoryEntry) => void;
 };
 
 type ChartPoint = {
@@ -27,7 +28,7 @@ const CHART_WIDTH = 840;
 const CHART_HEIGHT = 380;
 const PLOT = {left: 76, right: 24, top: 58, bottom: 322};
 
-export default function StatisticsModal({statistics, onClose}: Props) {
+export default function StatisticsModal({statistics, onClose, onOpenSolve}: Props) {
     const [range, setRange] = useState<Range>("last50");
     const [last50Entries, setLast50Entries] = useState<SolveHistoryEntry[] | null>(null);
     const [allEntries, setAllEntries] = useState<SolveHistoryEntry[] | null>(null);
@@ -71,6 +72,8 @@ export default function StatisticsModal({statistics, onClose}: Props) {
     useEffect(() => {
         const onKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
+                // Let a solution dialog opened from the chart handle Escape first.
+                if (document.querySelector(".solution-modal-backdrop")) return;
                 event.preventDefault();
                 onClose();
             }
@@ -89,6 +92,9 @@ export default function StatisticsModal({statistics, onClose}: Props) {
     const selected = activePoint === null ? null : points[activePoint] ?? null;
     const showing = entries?.length ?? 0;
     const windowStatistics = entries === null ? null : calculateWindowStatistics(entries);
+    const meanY = windowStatistics?.averageMs === null || windowStatistics?.averageMs === undefined
+        ? null
+        : scaleY(windowStatistics.averageMs / 1000, yDomain.min, yDomain.max);
 
     return createPortal((
         <div
@@ -178,6 +184,16 @@ export default function StatisticsModal({statistics, onClose}: Props) {
                                         </g>
                                     );
                                 }) : null}
+                                {meanY === null ? null : (
+                                    <line
+                                        className="chart-mean-guide"
+                                        x1={PLOT.left}
+                                        x2={CHART_WIDTH - PLOT.right}
+                                        y1={meanY}
+                                        y2={meanY}
+                                        aria-label={`Mean ${formatHistoryTime(windowStatistics?.averageMs ?? null, "none", false)}`}
+                                    />
+                                )}
                                 {chartLines.map((line, index) => (
                                     <path key={index} className="chart-time-line" d={line}/>
                                 ))}
@@ -188,14 +204,22 @@ export default function StatisticsModal({statistics, onClose}: Props) {
                                     const label = isDnf
                                         ? `Solve ${point.solveNumber}: DNF, ${date}`
                                         : `Solve ${point.solveNumber}: ${formatHistoryTime(point.entry.officialMs, point.entry.penalty, point.entry.dnf)}, ${date}`;
+                                    const isBest = !isDnf && point.entry.officialMs === windowStatistics?.bestMs;
                                     return (
                                         <g
                                             key={point.entry.id}
-                                            className={`chart-point${isDnf ? " dnf" : ""}${activePoint === point.index ? " active" : ""}`}
+                                            className={`chart-point${isDnf ? " dnf" : ""}${isBest ? " best" : ""}${activePoint === point.index ? " active" : ""}`}
                                             transform={`translate(${point.x} ${y})`}
-                                            role="img"
+                                            role="button"
                                             tabIndex={0}
-                                            aria-label={label}
+                                            aria-label={`${label}${isBest ? ", Best" : ""}. Open solution`}
+                                            onClick={() => onOpenSolve(point.entry)}
+                                            onKeyDown={(event) => {
+                                                if (event.key === "Enter" || event.key === " ") {
+                                                    event.preventDefault();
+                                                    onOpenSolve(point.entry);
+                                                }
+                                            }}
                                             onMouseEnter={() => setActivePoint(point.index)}
                                             onMouseLeave={() => setActivePoint((current) => current === point.index ? null : current)}
                                             onFocus={() => setActivePoint(point.index)}
@@ -215,6 +239,8 @@ export default function StatisticsModal({statistics, onClose}: Props) {
                             </svg>
                             <div className="statistics-chart-legend" aria-label="Chart legend">
                                 <span><i className="chart-legend-time"/> Solve time</span>
+                                <span><i className="chart-legend-mean"/> Mean</span>
+                                <span><i className="chart-legend-best"/> Best</span>
                                 <span><i className="chart-legend-dnf"/> DNF</span>
                             </div>
                             <p className="statistics-chart-detail" role="status" aria-live="polite">

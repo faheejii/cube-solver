@@ -94,7 +94,7 @@ describe("HistoryView statistics", () => {
         expect(screen.getByText("Best")).toBeInTheDocument();
         expect(screen.getByText("Ao5")).toBeInTheDocument();
         expect(screen.getByText("Ao12")).toBeInTheDocument();
-        expect(screen.getByText("Average")).toBeInTheDocument();
+        expect(screen.getByText("Mean")).toBeInTheDocument();
         expect(screen.getByText("Solves")).toBeInTheDocument();
         expect(screen.getByText("DNFs")).toBeInTheDocument();
         expect(screen.getByText("12.00")).toBeInTheDocument();

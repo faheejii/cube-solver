@@ -79,6 +79,7 @@ export default function HistoryView({
                     <StatisticsModal
                         statistics={statistics}
                         onClose={closeStatistics}
+                        onOpenSolve={onOpenSolve}
                     />
                 </Suspense>
             ) : null}

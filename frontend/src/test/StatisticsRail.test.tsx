@@ -5,9 +5,10 @@ import StatisticsRail from "../StatisticsRail";
 import type {SolveHistoryEntry, SolveStatistics} from "../types";
 
 vi.mock("../StatisticsModal", () => ({
-    default: ({onClose}: {onClose: () => void}) => (
+    default: ({onClose, onOpenSolve}: {onClose: () => void; onOpenSolve: (entry: SolveHistoryEntry) => void}) => (
         <section role="dialog" aria-label="Statistics dialog">
             <button type="button" onClick={onClose}>Close statistics dialog</button>
+            <button type="button" onClick={() => onOpenSolve(entry)}>Open solve from statistics</button>
         </section>
     ),
 }));
@@ -61,6 +62,9 @@ describe("StatisticsRail solves list", () => {
         const {props} = renderRail();
         fireEvent.click(screen.getByRole("button", {name: "More statistics"}));
         expect(await screen.findByRole("dialog", {name: "Statistics dialog"})).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole("button", {name: "Open solve from statistics"}));
+        expect(props.onOpenSolve).toHaveBeenCalledWith(entry);
 
         fireEvent.click(document.querySelector(".recent-card .rail-card-header button")!);
         expect(props.onOpenHistory).toHaveBeenCalledOnce();

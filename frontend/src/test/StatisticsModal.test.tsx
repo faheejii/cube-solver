@@ -34,8 +34,8 @@ function makeEntry(id: number, values: Partial<SolveHistoryEntry> = {}): SolveHi
     };
 }
 
-function renderModal(onClose = vi.fn()) {
-    return render(<StatisticsModal statistics={statistics} onClose={onClose}/>);
+function renderModal(onClose = vi.fn(), onOpenSolve = vi.fn()) {
+    return render(<StatisticsModal statistics={statistics} onClose={onClose} onOpenSolve={onOpenSolve}/>);
 }
 
 function summaryValue(label: string): string {
@@ -63,20 +63,42 @@ describe("StatisticsModal", () => {
         expect(screen.getByRole("button", {name: "Last 50"})).toHaveAttribute("aria-pressed", "true");
         expect(screen.getByRole("button", {name: "All solves"})).toHaveAttribute("aria-pressed", "false");
 
-        expect(await screen.findByRole("img", {name: /Solve 1: 10\.00/})).toBeInTheDocument();
-        expect(screen.getByRole("img", {name: /Solve 2: 12\.00\+/})).toBeInTheDocument();
-        expect(screen.getByRole("img", {name: /Solve 3: DNF/})).toBeInTheDocument();
+        expect(await screen.findByRole("button", {name: /Solve 1: 10\.00/})).toBeInTheDocument();
+        expect(screen.getByRole("button", {name: /Solve 2: 12\.00\+/})).toBeInTheDocument();
+        expect(screen.getByRole("button", {name: /Solve 3: DNF/})).toBeInTheDocument();
         expect(api.fetchSolveHistory).toHaveBeenCalledWith(50);
         expect(screen.getByText("Showing 3 solves")).toBeInTheDocument();
         expect(summaryValue("Solves")).toBe("3");
         expect(summaryValue("DNFs")).toBe("1");
         expect(summaryValue("Best")).toBe("10.00");
-        expect(summaryValue("Average")).toBe("11.00");
+        expect(summaryValue("Mean")).toBe("11.00");
 
-        fireEvent.focus(screen.getByRole("img", {name: /Solve 2:/}));
+        fireEvent.focus(screen.getByRole("button", {name: /Solve 2:/}));
         expect(screen.getByRole("status")).toHaveTextContent("Solve 2 · 12.00+");
         expect(document.querySelectorAll(".chart-time-line")).toHaveLength(1);
         expect(document.querySelector(".chart-point.dnf path")).toBeInTheDocument();
+        expect(document.querySelector(".chart-point.best")?.getAttribute("aria-label")).toContain("Best");
+        expect(document.querySelector(".chart-mean-guide")).toBeInTheDocument();
+        expect(screen.getByText("Mean", {selector: ".statistics-chart-legend span"})).toBeInTheDocument();
+        expect(screen.getByText("Best", {selector: ".statistics-chart-legend span"})).toBeInTheDocument();
+    });
+
+    it("opens the selected solve from a chart point by click, Enter, or Space", async () => {
+        const entry = makeEntry(1);
+        const onOpenSolve = vi.fn();
+        api.fetchSolveHistory.mockResolvedValue({items: [entry], nextCursor: null});
+
+        renderModal(vi.fn(), onOpenSolve);
+        const point = await screen.findByRole("button", {name: /Solve \d+:.*Open solution/});
+
+        fireEvent.click(point);
+        fireEvent.keyDown(point, {key: "Enter"});
+        fireEvent.keyDown(point, {key: " "});
+
+        expect(onOpenSolve).toHaveBeenCalledTimes(3);
+        expect(onOpenSolve).toHaveBeenNthCalledWith(1, entry);
+        expect(onOpenSolve).toHaveBeenNthCalledWith(2, entry);
+        expect(onOpenSolve).toHaveBeenNthCalledWith(3, entry);
     });
 
     it("loads all cursor pages, deduplicates entries, updates the selected-range summary, and reuses cached ranges", async () => {
@@ -90,7 +112,7 @@ describe("StatisticsModal", () => {
             .mockResolvedValueOnce({items: [newest[49], ...newest.slice(50)], nextCursor: null});
 
         renderModal();
-        expect(await screen.findByRole("img", {name: /Solve 1:/})).toBeInTheDocument();
+        expect(await screen.findByRole("button", {name: /Solve 1:/})).toBeInTheDocument();
         expect(summaryValue("Solves")).toBe("50");
 
         fireEvent.click(screen.getByRole("button", {name: "All solves"}));
@@ -98,7 +120,7 @@ describe("StatisticsModal", () => {
         expect(summaryValue("Solves")).toBe("55");
         expect(api.fetchSolveHistory).toHaveBeenNthCalledWith(2, 100, null);
         expect(api.fetchSolveHistory).toHaveBeenNthCalledWith(3, 100, "cursor-50");
-        expect(screen.getAllByRole("img", {name: /^Solve \d+:/})).toHaveLength(55);
+        expect(screen.getAllByRole("button", {name: /^Solve \d+:/})).toHaveLength(55);
 
         fireEvent.click(screen.getByRole("button", {name: "Last 50"}));
         expect(screen.getByText("Showing 50 solves")).toBeInTheDocument();
@@ -114,7 +136,7 @@ describe("StatisticsModal", () => {
             .mockResolvedValueOnce({items: [makeEntry(2)], nextCursor: "next"})
             .mockResolvedValueOnce({items: [makeEntry(1)], nextCursor: null});
         renderModal();
-        await screen.findByRole("img", {name: /Solve 3:/});
+        await screen.findByRole("button", {name: /Solve 3:/});
 
         fireEvent.click(screen.getByRole("button", {name: "All solves"}));
         expect(screen.getByText("Loading all solves…")).toBeInTheDocument();
@@ -143,7 +165,7 @@ describe("StatisticsModal", () => {
 
         expect(await screen.findByRole("alert")).toHaveTextContent("History unavailable");
         fireEvent.click(screen.getByRole("button", {name: "Retry"}));
-        expect(await screen.findByRole("img", {name: /Solve 3:/})).toBeInTheDocument();
+        expect(await screen.findByRole("button", {name: /Solve 3:/})).toBeInTheDocument();
         expect(api.fetchSolveHistory).toHaveBeenCalledTimes(2);
     });
 

@@ -12,7 +12,7 @@ export default function StatisticsSummary({statistics, loading}: Props) {
             <Stat label="Best" value={formatMetricTime(statistics?.bestMs ?? null)} accent="blue"/>
             <Stat label="Ao5" value={formatRollingAverage(statistics?.ao5 ?? null)} accent="violet"/>
             <Stat label="Ao12" value={formatRollingAverage(statistics?.ao12 ?? null)} accent="cyan"/>
-            <Stat label="Average" value={formatMetricTime(statistics?.averageMs ?? null)}/>
+            <Stat label="Mean" value={formatMetricTime(statistics?.averageMs ?? null)}/>
             <Stat label="Solves" value={loading ? "…" : String(statistics?.solveCount ?? 0)}/>
             <Stat label="DNFs" value={loading ? "…" : String(statistics?.dnfCount ?? 0)} accent="amber"/>
         </div>

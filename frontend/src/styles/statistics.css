@@ -266,13 +266,21 @@
 }
 
 .chart-grid-line,
-.chart-dnf-guide {
+.chart-dnf-guide,
+.chart-mean-guide {
     stroke: var(--border);
     stroke-width: 1;
 }
 
 .chart-dnf-guide {
     stroke-dasharray: 3 5;
+}
+
+.chart-mean-guide {
+    stroke: var(--cyan);
+    stroke-dasharray: 8 5;
+    stroke-width: 2;
+    vector-effect: non-scaling-stroke;
 }
 
 .chart-axis-label,
@@ -297,7 +305,7 @@
 }
 
 .chart-point {
-    cursor: crosshair;
+    cursor: pointer;
     outline: none;
 }
 
@@ -306,6 +314,13 @@
     stroke: var(--blue-bright);
     stroke-width: 2.5;
     vector-effect: non-scaling-stroke;
+}
+
+.chart-point.best circle {
+    fill: var(--green);
+    stroke: var(--green);
+    stroke-width: 3;
+    r: 6px;
 }
 
 .chart-point.dnf path {
@@ -319,6 +334,14 @@
 .chart-point:focus-visible circle {
     r: 7px;
     fill: var(--blue-bright);
+}
+
+.chart-point.best.active circle,
+.chart-point.best:focus-visible circle {
+    fill: var(--green);
+    stroke: var(--text);
+    stroke-width: 3;
+    r: 8px;
 }
 
 .chart-point.dnf.active path,
@@ -348,6 +371,16 @@
 
 .chart-legend-time {
     background: var(--blue-bright);
+}
+
+.chart-legend-mean {
+    width: 18px !important;
+    height: 0 !important;
+    border-top: 2px dashed var(--cyan);
+}
+
+.chart-legend-best {
+    background: var(--green);
 }
 
 .chart-legend-dnf {
