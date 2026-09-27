@@ -1,7 +1,5 @@
-import {fireEvent, render, screen} from "@testing-library/react";
+import {render, screen} from "@testing-library/react";
 import {afterEach, describe, expect, it, vi} from "vitest";
-import {parseAlgorithm} from "../cube/notation";
-import {applyRenderMoves, renderStateSignature, solvedRenderCube} from "../cube/renderCubeState";
 
 const orbit = vi.hoisted(() => ({instances: [] as Array<Record<string, unknown>>}));
 const renderers = vi.hoisted(() => ({instances: [] as Array<Record<string, unknown>>}));
@@ -82,30 +80,6 @@ describe("CubePreview interactive view", () => {
 
         expect(screen.getByLabelText("Cube preview")).toHaveAttribute("data-interactive-view", "false");
         expect(orbit.instances).toHaveLength(0);
-    });
-
-    it("draws static scramble previews on mount and resize without an animation loop", () => {
-        const requestFrame = vi.spyOn(window, "requestAnimationFrame");
-        const {unmount} = render(<CubePreview setupAlgorithm="R U" compact staticPreview/>);
-        const renderer = renderers.instances[0] as {
-            render: ReturnType<typeof vi.fn>;
-            dispose: ReturnType<typeof vi.fn>;
-            forceContextLoss: ReturnType<typeof vi.fn>;
-        };
-
-        expect(renderer.render).toHaveBeenCalledTimes(1);
-        expect(requestFrame).not.toHaveBeenCalled();
-        const stateBeforeResize = screen.getByLabelText("Cube preview").getAttribute("data-render-state");
-        const expectedState = renderStateSignature(applyRenderMoves(solvedRenderCube(), parseAlgorithm("R U")));
-        expect(stateBeforeResize).toBe(expectedState);
-
-        fireEvent(window, new Event("resize"));
-        expect(renderer.render).toHaveBeenCalledTimes(2);
-        expect(screen.getByLabelText("Cube preview")).toHaveAttribute("data-render-state", stateBeforeResize);
-
-        unmount();
-        expect(renderer.dispose).toHaveBeenCalledOnce();
-        expect(renderer.forceContextLoss).toHaveBeenCalledOnce();
     });
 
     it("releases the renderer context whenever a preview unmounts", () => {

@@ -93,13 +93,13 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await page.getByRole("button", {name: "History"}).click();
         await expect(page.getByRole("heading", {name: "History"})).toBeVisible();
         const scramblePreview = page.locator(".history-scramble-preview").first();
-        await expect(scramblePreview.locator("[data-preview-setup]")).toHaveAttribute("data-preview-setup", historyEntry.scramble);
-        const previewRenderer = scramblePreview.locator(".custom-cube-preview.compact");
-        const previewCanvas = previewRenderer.locator("canvas");
-        await expect(previewCanvas).toBeVisible();
+        const previewSvg = scramblePreview.locator("svg.history-cube-thumbnail");
+        await expect(previewSvg).toBeVisible();
+        await expect(previewSvg).toHaveAttribute("data-preview-setup", historyEntry.scramble);
+        await expect(scramblePreview.locator("canvas")).toHaveCount(0);
+        await expect(previewSvg.locator("polygon")).toHaveCount(27);
         const previewBox = await scramblePreview.boundingBox();
-        const rendererBox = await previewRenderer.boundingBox();
-        const canvasBox = await previewCanvas.boundingBox();
+        const svgBox = await previewSvg.boundingBox();
         const indexBox = await page.locator(".history-index").first().boundingBox();
         const timeBox = await page.locator(".history-time-cell").first().boundingBox();
         const rowBox = await page.locator(".history-table-row").first().boundingBox();
@@ -109,20 +109,18 @@ test.describe("timer, solve, history, and playback production flows", () => {
         expect(previewBox!.x + previewBox!.width).toBeLessThan(timeBox!.x);
         expect(previewBox?.width).toBe(36);
         expect(previewBox?.height).toBe(36);
-        expect(rendererBox?.width).toBe(36);
-        expect(rendererBox?.height).toBe(36);
-        expect(canvasBox?.width).toBe(36);
-        expect(canvasBox?.height).toBe(36);
+        expect(svgBox?.width).toBe(36);
+        expect(svgBox?.height).toBe(36);
         expect(rowBox?.height).toBeLessThan(100);
 
         await page.setViewportSize({width: 390, height: 844});
         const mobilePreviewBox = await scramblePreview.boundingBox();
-        const mobileCanvasBox = await previewCanvas.boundingBox();
+        const mobileSvgBox = await previewSvg.boundingBox();
         const mobileRowBox = await page.locator(".history-table-row").first().boundingBox();
         expect(mobilePreviewBox?.width).toBe(34);
         expect(mobilePreviewBox?.height).toBe(34);
-        expect(mobileCanvasBox?.width).toBe(34);
-        expect(mobileCanvasBox?.height).toBe(34);
+        expect(mobileSvgBox?.width).toBe(34);
+        expect(mobileSvgBox?.height).toBe(34);
         expect(mobileRowBox?.height).toBeLessThan(120);
 
         await page.setViewportSize({width: 1280, height: 720});
@@ -155,7 +153,7 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await expect(page.locator(".history-table-row").first().locator(".history-time-cell strong")).toHaveText("12.34");
     });
 
-    test("recreates static history cube previews after scrolling them offscreen and back", async ({page}) => {
+    test("keeps SVG History cube thumbnails rendered and stable while scrolling", async ({page}) => {
         const pageErrors: string[] = [];
         page.on("pageerror", (error) => pageErrors.push(error.message));
         const historyEntries = Array.from({length: 20}, (_, index) => ({
@@ -171,17 +169,22 @@ test.describe("timer, solve, history, and playback production flows", () => {
         const rows = page.locator(".history-table-row");
         const firstRow = rows.first();
         const firstPreview = firstRow.locator(".history-scramble-preview");
-        const firstCanvas = firstPreview.locator("canvas");
+        const firstSvg = firstPreview.locator("svg.history-cube-thumbnail");
         await expect(rows).toHaveCount(20);
-        await expect(firstCanvas).toBeVisible();
+        await expect(firstSvg).toBeVisible();
+        await expect(firstPreview.locator("canvas")).toHaveCount(0);
+        await expect(firstSvg.locator("polygon")).toHaveCount(27);
+        const initialSignature = await firstSvg.getAttribute("data-render-state");
         const initialRowBox = await firstRow.boundingBox();
         expect(initialRowBox).not.toBeNull();
 
         await rows.last().scrollIntoViewIfNeeded();
-        await expect(firstCanvas).toHaveCount(0);
+        await expect(firstSvg).toHaveCount(1);
+        await expect(firstSvg.locator("polygon")).toHaveCount(27);
 
         await firstRow.scrollIntoViewIfNeeded();
-        await expect(firstCanvas).toBeVisible();
+        await expect(firstSvg).toBeVisible();
+        await expect(firstSvg).toHaveAttribute("data-render-state", initialSignature!);
         const returnedRowBox = await firstRow.boundingBox();
         expect(returnedRowBox?.height).toBe(initialRowBox?.height);
         expect(pageErrors).toEqual([]);

@@ -5,12 +5,11 @@ import {CubePreviewModeContext} from "../CubePreviewModeContext";
 const observerInstances = vi.hoisted(() => ({items: [] as MockIntersectionObserver[]}));
 
 vi.mock("../CubePreview", () => ({
-    default: ({setupAlgorithm = "", algorithm = "", stage = "", compact = false, staticPreview = false}: {
+    default: ({setupAlgorithm = "", algorithm = "", stage = "", compact = false}: {
         setupAlgorithm?: string;
         algorithm?: string;
         stage?: string;
         compact?: boolean;
-        staticPreview?: boolean;
     }) => (
         <div
             data-testid="loaded-cube-preview"
@@ -18,7 +17,6 @@ vi.mock("../CubePreview", () => ({
             data-preview-alg={algorithm}
             data-preview-stage={stage}
             data-compact={String(compact)}
-            data-static-preview={String(staticPreview)}
         />
     ),
 }));
@@ -91,29 +89,6 @@ describe("DeferredCubePreview", () => {
         expect(container.querySelector(".deferred-cube-preview")).not.toBeInTheDocument();
     });
 
-    it("unmounts history renderers outside the margin and creates a fresh one on return", async () => {
-        const {container} = render(
-            <DeferredCubePreview setupAlgorithm="R U" compact staticPreview unloadWhenOutOfView/>,
-        );
-        const host = container.querySelector(".deferred-cube-preview-host");
-        expect(host).toBeInTheDocument();
-        expect(MockIntersectionObserver.instances[0].options?.rootMargin).toBe("120px 0px");
-
-        await act(async () => MockIntersectionObserver.instances[0].notify(true));
-        const firstRenderer = await screen.findByTestId("loaded-cube-preview");
-        expect(firstRenderer).toHaveAttribute("data-preview-setup", "R U");
-        expect(firstRenderer).toHaveAttribute("data-static-preview", "true");
-
-        act(() => MockIntersectionObserver.instances[0].notify(false));
-        expect(screen.queryByTestId("loaded-cube-preview")).not.toBeInTheDocument();
-        expect(container.querySelector(".deferred-cube-preview-host")).toBe(host);
-
-        await act(async () => MockIntersectionObserver.instances[0].notify(true));
-        const secondRenderer = await screen.findByTestId("loaded-cube-preview");
-        expect(secondRenderer).not.toBe(firstRenderer);
-        expect(MockIntersectionObserver.instances[0].disconnected).toBe(false);
-    });
-
     it("loads immediately when IntersectionObserver is unavailable", async () => {
         vi.stubGlobal("IntersectionObserver", undefined);
 
@@ -136,7 +111,7 @@ describe("DeferredCubePreview", () => {
         expect(await screen.findByRole("img", {name: "2D cube net preview"})).toBeInTheDocument();
     });
 
-    it("keeps observing the stable host when the mode changes before entering the viewport", async () => {
+    it("observes the replacement placeholder when the mode changes before entering the viewport", async () => {
         const {rerender} = render(
             <CubePreviewModeContext.Provider value="3d">
                 <DeferredCubePreview isPlaying={false}/>
@@ -150,9 +125,9 @@ describe("DeferredCubePreview", () => {
             </CubePreviewModeContext.Provider>,
         );
 
-        expect(oldObserver.disconnected).toBe(false);
-        expect(MockIntersectionObserver.instances).toHaveLength(1);
-        await act(async () => oldObserver.notify(true));
+        expect(oldObserver.disconnected).toBe(true);
+        expect(MockIntersectionObserver.instances).toHaveLength(2);
+        await act(async () => MockIntersectionObserver.instances[1].notify(true));
         expect(await screen.findByRole("img", {name: "2D cube net preview"})).toBeInTheDocument();
     });
 });

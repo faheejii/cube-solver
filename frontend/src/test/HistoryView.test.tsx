@@ -12,25 +12,6 @@ vi.mock("../StatisticsModal", () => ({
     ),
 }));
 
-vi.mock("../DeferredCubePreview", () => ({
-    default: ({setupAlgorithm, compact, displayMode, staticPreview, unloadWhenOutOfView}: {
-        setupAlgorithm: string;
-        compact: boolean;
-        displayMode: string;
-        staticPreview: boolean;
-        unloadWhenOutOfView: boolean;
-    }) => (
-        <div
-            data-testid="history-cube-preview"
-            data-preview-setup={setupAlgorithm}
-            data-compact={String(compact)}
-            data-display-mode={displayMode}
-            data-static-preview={String(staticPreview)}
-            data-unload-when-out-of-view={String(unloadWhenOutOfView)}
-        />
-    ),
-}));
-
 const entries: SolveHistoryEntry[] = [
     {
         id: 8,
@@ -132,15 +113,13 @@ describe("HistoryView numbering", () => {
         expect(onOpenSolve).toHaveBeenNthCalledWith(2, entries[0]);
     });
 
-    it("renders a compact static 3D cube in each solve's scramble state", () => {
+    it("renders a decorative SVG cube in each solve's scramble state", () => {
         renderHistory(8);
 
-        const preview = screen.getAllByTestId("history-cube-preview")[0];
+        const preview = screen.getAllByTestId("history-cube-thumbnail")[0];
         expect(preview).toHaveAttribute("data-preview-setup", entries[0].scramble);
-        expect(preview).toHaveAttribute("data-compact", "true");
-        expect(preview).toHaveAttribute("data-display-mode", "3d");
-        expect(preview).toHaveAttribute("data-static-preview", "true");
-        expect(preview).toHaveAttribute("data-unload-when-out-of-view", "true");
+        expect(preview.tagName.toLowerCase()).toBe("svg");
+        expect(preview.querySelectorAll("polygon")).toHaveLength(27);
         expect(preview.parentElement).toHaveAttribute("aria-hidden", "true");
     });
 });
