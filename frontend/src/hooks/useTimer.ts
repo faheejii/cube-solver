@@ -3,6 +3,7 @@ import type {SolveResponse} from "../types";
 
 export const INSPECTION_PLUS_TWO_MS = 15_000;
 export const INSPECTION_DNF_MS = 17_000;
+export const TIMER_ARM_HOLD_MS = 500;
 
 export type TimerPhase = "idle" | "armed" | "inspection" | "running" | "stopped";
 export type ArmedSource = "idle" | "stopped" | "inspection" | null;
@@ -51,12 +52,16 @@ export function useTimer({
 }: Options) {
     const [timerPhase, setTimerPhase] = useState<TimerPhase>("idle");
     const [armedSource, setArmedSource] = useState<ArmedSource>(null);
+    const [armReady, setArmReady] = useState(false);
     const [inspectionStartedAt, setInspectionStartedAt] = useState<number | null>(null);
     const [runStartedAt, setRunStartedAt] = useState<number | null>(null);
     const [stoppedElapsedMs, setStoppedElapsedMs] = useState<number | null>(null);
     const [finalPenalty, setFinalPenalty] = useState<TimerPenalty>("none");
     const [clockMs, setClockMs] = useState(0);
     const onStoppedRef = useRef(onStopped);
+    const armStartedAtRef = useRef<number | null>(null);
+    const armedSourceRef = useRef<ArmedSource>(null);
+    const armTimeoutRef = useRef<number | null>(null);
     onStoppedRef.current = onStopped;
 
     const inspectionElapsedMs =
@@ -81,6 +86,7 @@ export function useTimer({
     }, [timerPhase]);
 
     const resetTimer = useCallback(() => {
+        clearArmHold();
         setTimerPhase("idle");
         setArmedSource(null);
         setInspectionStartedAt(null);
@@ -90,13 +96,48 @@ export function useTimer({
         setClockMs(window.performance.now());
     }, []);
 
-    function armTimer(source: Exclude<ArmedSource, null>) {
-        setTimerPhase("armed");
-        setArmedSource(source);
+    function clearArmHold() {
+        if (armTimeoutRef.current !== null) {
+            window.clearTimeout(armTimeoutRef.current);
+            armTimeoutRef.current = null;
+        }
+        armStartedAtRef.current = null;
+        armedSourceRef.current = null;
+        setArmReady(false);
+    }
+
+    function cancelArmedTimer() {
+        const source = armedSourceRef.current;
+        if (source === null) {
+            return;
+        }
+        clearArmHold();
+        setTimerPhase(source);
+        setArmedSource(null);
         setClockMs(window.performance.now());
     }
 
+    function armTimer(source: Exclude<ArmedSource, null>) {
+        if (armedSourceRef.current !== null) {
+            return;
+        }
+        const startedAt = window.performance.now();
+        armStartedAtRef.current = startedAt;
+        armedSourceRef.current = source;
+        setTimerPhase("armed");
+        setArmedSource(source);
+        setArmReady(false);
+        setClockMs(startedAt);
+        armTimeoutRef.current = window.setTimeout(() => {
+            if (armedSourceRef.current !== null) {
+                setArmReady(true);
+            }
+            armTimeoutRef.current = null;
+        }, TIMER_ARM_HOLD_MS);
+    }
+
     function beginInspection() {
+        clearArmHold();
         const now = window.performance.now();
         setTimerPhase("inspection");
         setArmedSource(null);
@@ -108,6 +149,7 @@ export function useTimer({
     }
 
     function beginRunning() {
+        clearArmHold();
         const now = window.performance.now();
         const nextPenalty = penaltyForInspectionElapsed(now - (inspectionStartedAt ?? now));
         setTimerPhase("running");
@@ -118,8 +160,9 @@ export function useTimer({
         setClockMs(now);
     }
 
-    function releaseArmedTimer() {
-        if (armedSource === "inspection") {
+    function releaseArmedTimer(source: Exclude<ArmedSource, null>) {
+        clearArmHold();
+        if (source === "inspection") {
             beginRunning();
             return;
         }
@@ -157,12 +200,15 @@ export function useTimer({
                 if (event.code === "Space") {
                     event.preventDefault();
                 }
+                cancelArmedTimer();
                 return;
             }
             if (activeView !== "timer") {
+                cancelArmedTimer();
                 return;
             }
             if (attemptSaveStatus === "saving" || attemptSaveStatus === "error") {
+                cancelArmedTimer();
                 return;
             }
 
@@ -174,7 +220,8 @@ export function useTimer({
                 return;
             }
 
-            if (isEditingScramble || isTextEntryTarget(event.target) || event.code !== "Space" || event.repeat) {
+            if (isEditingScramble || isTextEntryTarget(event.target) || event.code !== "Space" || event.repeat
+                || armedSourceRef.current !== null) {
                 return;
             }
 
@@ -194,9 +241,12 @@ export function useTimer({
                 if (event.code === "Space") {
                     event.preventDefault();
                 }
+                cancelArmedTimer();
                 return;
             }
-            if (activeView !== "timer" || isEditingScramble) {
+            if (activeView !== "timer" || isEditingScramble
+                || attemptSaveStatus === "saving" || attemptSaveStatus === "error") {
+                cancelArmedTimer();
                 return;
             }
             if (event.code !== "Space" || isTextEntryTarget(event.target)) {
@@ -205,20 +255,29 @@ export function useTimer({
 
             event.preventDefault();
             blurFocusedButton();
-            if (timerPhase === "armed") {
-                releaseArmedTimer();
+            const source = armedSourceRef.current;
+            const startedAt = armStartedAtRef.current;
+            if (source !== null && startedAt !== null) {
+                if (window.performance.now() - startedAt >= TIMER_ARM_HOLD_MS) {
+                    releaseArmedTimer(source);
+                } else {
+                    cancelArmedTimer();
+                }
             }
         };
 
+        const cancelOnWindowBlur = () => cancelArmedTimer();
+
         window.addEventListener("keydown", handleKeyDown);
         window.addEventListener("keyup", handleKeyUp);
+        window.addEventListener("blur", cancelOnWindowBlur);
         return () => {
             window.removeEventListener("keydown", handleKeyDown);
             window.removeEventListener("keyup", handleKeyUp);
+            window.removeEventListener("blur", cancelOnWindowBlur);
         };
     }, [
         activeView,
-        armedSource,
         attemptSaveStatus,
         clientAttemptId,
         committedScramble,
@@ -235,8 +294,26 @@ export function useTimer({
         timerPhase,
     ]);
 
+    useEffect(() => () => {
+        if (armTimeoutRef.current !== null) {
+            window.clearTimeout(armTimeoutRef.current);
+        }
+        armTimeoutRef.current = null;
+        armStartedAtRef.current = null;
+        armedSourceRef.current = null;
+    }, []);
+
+    useEffect(() => {
+        if (activeView !== "timer" || overlayOpen || isEditingScramble
+            || attemptSaveStatus === "saving" || attemptSaveStatus === "error") {
+            cancelArmedTimer();
+        }
+    }, [activeView, attemptSaveStatus, isEditingScramble, overlayOpen]);
+
     return {
         timerPhase,
+        armedSource,
+        armReady,
         stoppedElapsedMs,
         finalPenalty,
         inspectionPenalty,

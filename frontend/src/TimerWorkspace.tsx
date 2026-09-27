@@ -9,7 +9,7 @@ import ScrambleCube from "./ScrambleCube";
 import CrossFaceSelect from "./CrossFaceSelect";
 import SolvePenaltyControl from "./SolvePenaltyControl";
 import {formatMetricTime, formatRollingAverage} from "./format";
-import type {TimerPenalty} from "./hooks/useTimer";
+import type {ArmedSource, TimerPenalty} from "./hooks/useTimer";
 import type {SolveHistoryEntry, SolveResponse, SolveStatistics} from "./types";
 
 type FaceOption = {
@@ -30,6 +30,8 @@ type Props = {
     result: SolveResponse | null;
     statistics: SolveStatistics | null;
     timerPhase: string;
+    armReady: boolean;
+    armedSource: ArmedSource;
     timerValue: string;
     timerHint: string;
     timerDetail: string;
@@ -61,6 +63,8 @@ export default function TimerWorkspace({
                                            result,
                                            statistics,
                                            timerPhase,
+                                           armReady,
+                                           armedSource,
                                            timerValue,
                                            timerHint,
                                            timerDetail,
@@ -208,7 +212,7 @@ export default function TimerWorkspace({
             </section>
 
             <section
-                className={`dashboard-timer-stage phase-${timerPhase}`}
+                className={`dashboard-timer-stage phase-${timerPhase}${armReady ? " phase-armed-ready" : ""}`}
                 aria-label="Solve timer"
             >
                 <div className="timer-display-group">
@@ -233,6 +237,8 @@ export default function TimerWorkspace({
                     type="button"
                     onClick={onShowSolution}
                     disabled={solutionStatus !== "ready" || result === null}
+                    data-arm-ready={armReady ? "true" : "false"}
+                    data-arm-source={armedSource ?? undefined}
                     aria-label={solutionStatus === "ready" && result !== null ? "Show solution" : undefined}
                 >
                     <strong>{timerHint}</strong>

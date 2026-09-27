@@ -153,6 +153,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     });
     const {
         timerPhase,
+        armedSource,
+        armReady,
         stoppedElapsedMs,
         finalPenalty,
         inspectionPenalty,
@@ -705,6 +707,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                             result={result}
                             statistics={statistics}
                             timerPhase={timerPhase}
+                            armedSource={armedSource}
+                            armReady={armReady}
                             latestSavedAttempt={latestSavedAttempt}
                             showPenaltyControl={timerPhase === "idle" && latestSavedAttempt !== null && completedAttemptRef.current === null}
                             penaltySaving={penaltySaving}
@@ -718,9 +722,15 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                 finalPenalty,
                                 lastSavedTimerValue,
                             )}
-                            timerHint={timerHint(timerPhase, inspectionPenalty, finalPenalty)}
+                            timerHint={timerHint(timerPhase, inspectionPenalty, finalPenalty, armReady)}
                             timerDetail={
-                                timerPhase === "stopped"
+                                timerPhase === "armed"
+                                    ? armReady
+                                        ? armedSource === "inspection" || (!settings.inspectionEnabled && armedSource !== null)
+                                            ? "Release to start solve"
+                                            : "Release to inspect"
+                                        : "Hold for 0.5 seconds"
+                                    : timerPhase === "stopped"
                                     ? timerResultLabel(stoppedElapsedMs, finalPenalty)
                                     : isEditingScramble
                                         ? "Editing locked"
@@ -1159,9 +1169,10 @@ function timerHint(
     timerPhase: TimerPhase,
     inspectionPenalty: TimerPenalty,
     finalPenalty: TimerPenalty,
+    armReady: boolean,
 ): string {
     if (timerPhase === "armed") {
-        return "Release to continue";
+        return armReady ? "Ready" : "Hold Space…";
     }
     if (timerPhase === "inspection") {
         if (inspectionPenalty === "dnf") {

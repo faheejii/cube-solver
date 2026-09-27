@@ -11,9 +11,28 @@ test.describe("timer, solve, history, and playback production flows", () => {
 
         await timer.click();
         await expect(timer).toHaveClass(/phase-idle/);
-        await page.keyboard.press("Space");
+        const holdStatus = page.locator(".timer-start-capsule");
+        await page.keyboard.down("Space");
+        await page.waitForTimeout(150);
+        await expect(timer).toHaveClass(/phase-armed/);
+        await expect(timer).not.toHaveClass(/phase-armed-ready/);
+        await expect(holdStatus).toContainText("Hold Space…");
+        await page.keyboard.up("Space");
+        await expect(timer).toHaveClass(/phase-idle/);
+
+        await page.keyboard.down("Space");
+        await page.waitForTimeout(550);
+        await expect(timer).toHaveClass(/phase-armed-ready/);
+        await expect(holdStatus).toContainText("Ready");
+        await expect(holdStatus).toContainText("Release to inspect");
+        await page.keyboard.up("Space");
         await expect(timer).toHaveClass(/phase-inspection/);
-        await page.keyboard.press("Space");
+
+        await page.keyboard.down("Space");
+        await page.waitForTimeout(550);
+        await expect(timer).toHaveClass(/phase-armed-ready/);
+        await expect(holdStatus).toContainText("Release to start solve");
+        await page.keyboard.up("Space");
         await expect(timer).toHaveClass(/phase-running/);
         await timer.click();
         await expect(timer).toHaveClass(/phase-running/);

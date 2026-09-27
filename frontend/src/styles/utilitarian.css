@@ -417,6 +417,39 @@ textarea:focus-visible,
     color: #dceeff;
 }
 
+.dashboard-timer-stage.phase-armed-ready .timer-start-capsule {
+    background: linear-gradient(var(--panel-solid), var(--panel-solid)) padding-box,
+    linear-gradient(90deg, var(--green), color-mix(in srgb, var(--green) 58%, white)) border-box;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--green) 24%, transparent),
+    0 0 22px color-mix(in srgb, var(--green) 34%, transparent);
+}
+
+.dashboard-timer-stage.phase-armed-ready .timer-start-capsule strong {
+    color: var(--green);
+}
+
+.dashboard-timer-stage.phase-armed-ready .timer-start-capsule span {
+    color: color-mix(in srgb, var(--green) 72%, var(--text));
+}
+
+.dashboard-timer-stage.phase-armed-ready .timer-start-capsule:not(:disabled):hover {
+    border-color: transparent;
+    background: linear-gradient(var(--panel-solid), var(--panel-solid)) padding-box,
+    linear-gradient(90deg, var(--green), color-mix(in srgb, var(--green) 58%, white)) border-box;
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--green) 24%, transparent),
+    0 0 22px color-mix(in srgb, var(--green) 42%, transparent);
+    color: var(--text);
+    transform: translateY(-1px);
+}
+
+.dashboard-timer-stage.phase-armed-ready .timer-start-capsule:not(:disabled):hover strong {
+    color: var(--green);
+}
+
+.dashboard-timer-stage.phase-armed-ready .timer-start-capsule:not(:disabled):hover span {
+    color: color-mix(in srgb, var(--green) 72%, var(--text));
+}
+
 .timer-start-capsule:not(:disabled):active {
     box-shadow: none;
     transform: translateY(0);
