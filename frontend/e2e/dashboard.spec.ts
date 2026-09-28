@@ -97,9 +97,14 @@ test.describe("authenticated dashboard production flow", () => {
         await expect(page.locator(".scramble-cube canvas")).toBeVisible();
     });
 
-    test("generates and regenerates scrambles in the production worker", async ({page}) => {
+    test("generates scrambles through the split cubing worker", async ({page}) => {
         const pageErrors: Error[] = [];
+        const workerAssetRequests: string[] = [];
         page.on("pageerror", (error) => pageErrors.push(error));
+        page.on("request", (request) => {
+            const pathname = new URL(request.url()).pathname;
+            if (pathname.startsWith("/scramble-worker/")) workerAssetRequests.push(pathname);
+        });
 
         await mockProductionApi(page, {user: normalUser});
         await page.goto("/");
@@ -110,6 +115,9 @@ test.describe("authenticated dashboard production flow", () => {
 
         expect(initialScramble).toBeTruthy();
         expect(initialScramble).not.toBe("R D R' D2 R D' R'");
+        expect(workerAssetRequests).toContain("/scramble-worker/scramble-worker.js");
+        expect(workerAssetRequests.some((path) => path.includes("/chunks/search-worker-entry-"))).toBe(true);
+        expect(workerAssetRequests.every((path) => path.startsWith("/scramble-worker/"))).toBe(true);
 
         await page.getByRole("button", {name: "Generate new scramble"}).click();
         await expect.poll(async () => (await scramble.textContent())?.trim()).not.toBe(initialScramble);
