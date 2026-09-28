@@ -1,8 +1,11 @@
-import {Eye, LoaderCircle, RefreshCw, Trash2} from "lucide-react";
-import {crossFaceLabel, formatHistoryTime} from "./format";
-import {CrossFaceSwatch} from "./CrossFaceSelect";
+import {lazy, Suspense, useRef, useState} from "react";
+import {ArrowUpRight, LoaderCircle, RefreshCw, Trash2} from "lucide-react";
+import HistoryCubeThumbnail from "./HistoryCubeThumbnail";
+import {formatHistoryTime} from "./format";
 import StatisticsSummary from "./StatisticsSummary";
 import type {SolveHistoryEntry, SolveStatistics} from "./types";
+
+const StatisticsModal = lazy(() => import("./StatisticsModal"));
 
 type Props = {
     entries: SolveHistoryEntry[];
@@ -35,6 +38,14 @@ export default function HistoryView({
                                         onOpenSolve,
                                         onDeleteSolve,
                                     }: Props) {
+    const [statisticsOpen, setStatisticsOpen] = useState(false);
+    const statisticsMoreButtonRef = useRef<HTMLButtonElement>(null);
+
+    function closeStatistics() {
+        setStatisticsOpen(false);
+        window.requestAnimationFrame(() => statisticsMoreButtonRef.current?.focus());
+    }
+
     return (
         <section className="dashboard-history-view">
             <header className="history-view-header">
@@ -49,9 +60,29 @@ export default function HistoryView({
             </header>
 
             <section className="history-statistics" aria-label="Solve statistics">
-                <div className="history-statistics-header">Statistics</div>
+                <div className="history-statistics-header">
+                    <span>Statistics</span>
+                    <button
+                        ref={statisticsMoreButtonRef}
+                        type="button"
+                        aria-label="More statistics"
+                        onClick={() => setStatisticsOpen(true)}
+                    >
+                        More <ArrowUpRight size={14}/>
+                    </button>
+                </div>
                 <StatisticsSummary statistics={statistics} loading={statisticsLoading}/>
             </section>
+
+            {statisticsOpen ? (
+                <Suspense fallback={null}>
+                    <StatisticsModal
+                        statistics={statistics}
+                        onClose={closeStatistics}
+                        onOpenSolve={onOpenSolve}
+                    />
+                </Suspense>
+            ) : null}
 
             {error ? <div className="dashboard-alert error">{error}</div> : null}
             {loading ? <div className="history-loading"><LoaderCircle size={22}/> Loading history</div> : null}
@@ -65,29 +96,35 @@ export default function HistoryView({
             <div className="history-table">
                 {entries.map((entry, index) => (
                     <article className="history-table-row" key={entry.id}>
-                        <span className="history-index">
-                            {String(solveCount === null ? index + 1 : solveCount - index).padStart(2, "0")}
-                        </span>
-                        <div className="history-time-cell">
-                            <strong>{formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}</strong>
-                            <small>{new Date(entry.createdAt).toLocaleString()}</small>
-                        </div>
-                        <p>{entry.scramble}</p>
-                        <div className="history-variants">
-                            <span className="cross-face-meta">Cross <CrossFaceSwatch face={entry.crossFaceRequested}/>{crossFaceLabel(entry.crossFaceRequested)}</span>
-                            <span>{entry.fastCrossFaceRequested ? "Fast saved" : "Fast missing"}</span>
-                            <span>{entry.optimizedCrossFaceRequested ? "Optimized saved" : "Optimized missing"}</span>
+                        <div
+                            className="history-row-open"
+                            role="button"
+                            tabIndex={deletingSolveId === entry.id ? -1 : 0}
+                            aria-disabled={deletingSolveId === entry.id}
+                            aria-label={`Open solution for solve ${formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}`}
+                            onClick={() => {
+                                if (deletingSolveId !== entry.id) onOpenSolve(entry);
+                            }}
+                            onKeyDown={(event) => {
+                                if ((event.key === "Enter" || event.key === " ") && deletingSolveId !== entry.id) {
+                                    event.preventDefault();
+                                    onOpenSolve(entry);
+                                }
+                            }}
+                        >
+                            <span className="history-index">
+                                {String(solveCount === null ? index + 1 : solveCount - index).padStart(2, "0")}
+                            </span>
+                            <span className="history-scramble-preview" aria-hidden="true">
+                                <HistoryCubeThumbnail scramble={entry.scramble}/>
+                            </span>
+                            <span className="history-time-cell">
+                                <strong>{formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}</strong>
+                                <small>{new Date(entry.createdAt).toLocaleString()}</small>
+                            </span>
+                            <span className="history-scramble">{entry.scramble}</span>
                         </div>
                         <div className="history-row-actions">
-                            <button
-                                className="dashboard-secondary-button compact"
-                                type="button"
-                                onClick={() => onOpenSolve(entry)}
-                                disabled={deletingSolveId === entry.id}
-                            >
-                                <Eye size={15}/>
-                                Solution
-                            </button>
                             <button
                                 className="history-delete-button"
                                 type="button"

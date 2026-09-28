@@ -170,6 +170,7 @@ export default function CubePreview({
             window.removeEventListener("resize", resize);
             orbitControls?.dispose();
             renderer.dispose();
+            renderer.forceContextLoss();
             host.replaceChildren();
             visualCubies.forEach(({mesh}) => {
                 mesh.geometry.dispose();

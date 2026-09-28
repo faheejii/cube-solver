@@ -141,6 +141,8 @@ test.describe("protected history", () => {
     test("shows history only for an authenticated session", async ({page}) => {
         await mockApi(page, {authenticated: true});
         await page.goto("/");
+        await expect(page.locator(".recent-card .rail-card-header").getByText("Solves")).toBeVisible();
+        await expect(page.getByRole("region", {name: "Solves list"}).getByText("12.34")).toBeVisible();
         await page.getByRole("button", {name: "History"}).click();
 
         await expect(page.getByRole("heading", {name: "History"})).toBeVisible();
@@ -153,7 +155,6 @@ test.describe("protected history", () => {
     test("returns to login when a protected request reports session expiry", async ({page}) => {
         await mockApi(page, {authenticated: true, historyStatus: 401});
         await page.goto("/");
-        await page.getByRole("button", {name: "History"}).click();
 
         await expect(page.getByText("Your session expired. Sign in again to continue.")).toBeVisible();
         await expect(page.getByRole("heading", {name: "Welcome back"})).toBeVisible();

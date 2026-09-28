@@ -11,9 +11,28 @@ test.describe("timer, solve, history, and playback production flows", () => {
 
         await timer.click();
         await expect(timer).toHaveClass(/phase-idle/);
-        await page.keyboard.press("Space");
+        const holdStatus = page.locator(".timer-start-capsule");
+        await page.keyboard.down("Space");
+        await page.waitForTimeout(150);
+        await expect(timer).toHaveClass(/phase-armed/);
+        await expect(timer).not.toHaveClass(/phase-armed-ready/);
+        await expect(holdStatus).toContainText("Hold Space…");
+        await page.keyboard.up("Space");
+        await expect(timer).toHaveClass(/phase-idle/);
+
+        await page.keyboard.down("Space");
+        await page.waitForTimeout(550);
+        await expect(timer).toHaveClass(/phase-armed-ready/);
+        await expect(holdStatus).toContainText("Ready");
+        await expect(holdStatus).toContainText("Release to inspect");
+        await page.keyboard.up("Space");
         await expect(timer).toHaveClass(/phase-inspection/);
-        await page.keyboard.press("Space");
+
+        await page.keyboard.down("Space");
+        await page.waitForTimeout(550);
+        await expect(timer).toHaveClass(/phase-armed-ready/);
+        await expect(holdStatus).toContainText("Release to start solve");
+        await page.keyboard.up("Space");
         await expect(timer).toHaveClass(/phase-running/);
         await timer.click();
         await expect(timer).toHaveClass(/phase-running/);
@@ -92,7 +111,39 @@ test.describe("timer, solve, history, and playback production flows", () => {
 
         await page.getByRole("button", {name: "History"}).click();
         await expect(page.getByRole("heading", {name: "History"})).toBeVisible();
-        await page.getByRole("button", {name: "Solution", exact: true}).click();
+        const scramblePreview = page.locator(".history-scramble-preview").first();
+        const previewSvg = scramblePreview.locator("svg.history-cube-thumbnail");
+        await expect(previewSvg).toBeVisible();
+        await expect(previewSvg).toHaveAttribute("data-preview-setup", historyEntry.scramble);
+        await expect(scramblePreview.locator("canvas")).toHaveCount(0);
+        await expect(previewSvg.locator("polygon")).toHaveCount(27);
+        const previewBox = await scramblePreview.boundingBox();
+        const svgBox = await previewSvg.boundingBox();
+        const indexBox = await page.locator(".history-index").first().boundingBox();
+        const timeBox = await page.locator(".history-time-cell").first().boundingBox();
+        const rowBox = await page.locator(".history-table-row").first().boundingBox();
+        expect(indexBox).not.toBeNull();
+        expect(timeBox).not.toBeNull();
+        expect(previewBox?.x).toBeGreaterThan(indexBox!.x);
+        expect(previewBox!.x + previewBox!.width).toBeLessThan(timeBox!.x);
+        expect(previewBox?.width).toBe(36);
+        expect(previewBox?.height).toBe(36);
+        expect(svgBox?.width).toBe(36);
+        expect(svgBox?.height).toBe(36);
+        expect(rowBox?.height).toBeLessThan(100);
+
+        await page.setViewportSize({width: 390, height: 844});
+        const mobilePreviewBox = await scramblePreview.boundingBox();
+        const mobileSvgBox = await previewSvg.boundingBox();
+        const mobileRowBox = await page.locator(".history-table-row").first().boundingBox();
+        expect(mobilePreviewBox?.width).toBe(34);
+        expect(mobilePreviewBox?.height).toBe(34);
+        expect(mobileSvgBox?.width).toBe(34);
+        expect(mobileSvgBox?.height).toBe(34);
+        expect(mobileRowBox?.height).toBeLessThan(120);
+
+        await page.setViewportSize({width: 1280, height: 720});
+        await page.getByRole("button", {name: /Open solution for solve 12\.34/}).click();
 
         const dialog = page.getByRole("dialog", {name: "Solve solution"});
         await expect(dialog).toBeVisible();
@@ -121,6 +172,43 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await expect(page.locator(".history-table-row").first().locator(".history-time-cell strong")).toHaveText("12.34");
     });
 
+    test("keeps SVG History cube thumbnails rendered and stable while scrolling", async ({page}) => {
+        const pageErrors: string[] = [];
+        page.on("pageerror", (error) => pageErrors.push(error.message));
+        const historyEntries = Array.from({length: 20}, (_, index) => ({
+            ...historyEntry,
+            id: 20 - index,
+            clientAttemptId: `attempt-${20 - index}`,
+            createdAt: new Date(Date.UTC(2026, 6, 26, 10, 0, index)).toISOString(),
+        }));
+        await mockProductionApi(page, {user: normalUser, historyEntries});
+        await page.goto("/");
+        await page.getByRole("button", {name: "History"}).click();
+
+        const rows = page.locator(".history-table-row");
+        const firstRow = rows.first();
+        const firstPreview = firstRow.locator(".history-scramble-preview");
+        const firstSvg = firstPreview.locator("svg.history-cube-thumbnail");
+        await expect(rows).toHaveCount(20);
+        await expect(firstSvg).toBeVisible();
+        await expect(firstPreview.locator("canvas")).toHaveCount(0);
+        await expect(firstSvg.locator("polygon")).toHaveCount(27);
+        const initialSignature = await firstSvg.getAttribute("data-render-state");
+        const initialRowBox = await firstRow.boundingBox();
+        expect(initialRowBox).not.toBeNull();
+
+        await rows.last().scrollIntoViewIfNeeded();
+        await expect(firstSvg).toHaveCount(1);
+        await expect(firstSvg.locator("polygon")).toHaveCount(27);
+
+        await firstRow.scrollIntoViewIfNeeded();
+        await expect(firstSvg).toBeVisible();
+        await expect(firstSvg).toHaveAttribute("data-render-state", initialSignature!);
+        const returnedRowBox = await firstRow.boundingBox();
+        expect(returnedRowBox?.height).toBe(initialRowBox?.height);
+        expect(pageErrors).toEqual([]);
+    });
+
     test("keeps the saved penalty and timer unchanged when a penalty update fails", async ({page}) => {
         const api = await mockProductionApi(page, {
             user: normalUser,
@@ -145,7 +233,7 @@ test.describe("timer, solve, history, and playback production flows", () => {
         expect(api.requests.filter((request) => request.pathname.endsWith("/penalty"))).toHaveLength(1);
 
         await page.getByRole("button", {name: "History"}).click();
-        await page.getByRole("button", {name: "Solution", exact: true}).click();
+        await page.getByRole("button", {name: /Open solution for solve 12\.34/}).click();
         const dialog = page.getByRole("dialog", {name: "Solve solution"});
         const modalPenalty = dialog.getByRole("group", {name: "Penalty for this solve"});
         await modalPenalty.getByRole("button", {name: "+2"}).click();

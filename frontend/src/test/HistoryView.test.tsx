@@ -1,7 +1,16 @@
-import {render, screen} from "@testing-library/react";
+import {fireEvent, render, screen} from "@testing-library/react";
 import {describe, expect, it, vi} from "vitest";
 import HistoryView from "../HistoryView";
 import type {SolveHistoryEntry, SolveStatistics} from "../types";
+
+vi.mock("../StatisticsModal", () => ({
+    default: ({onClose, onOpenSolve}: {onClose: () => void; onOpenSolve: (entry: SolveHistoryEntry) => void}) => (
+        <section role="dialog" aria-label="Statistics dialog">
+            <button type="button" onClick={onClose}>Close statistics dialog</button>
+            <button type="button" onClick={() => onOpenSolve(entries[0])}>Open solve from statistics</button>
+        </section>
+    ),
+}));
 
 const entries: SolveHistoryEntry[] = [
     {
@@ -43,7 +52,9 @@ const statistics: SolveStatistics = {
 };
 
 function renderHistory(solveCount: number | null) {
-    return render(
+    const onOpenSolve = vi.fn();
+    const onDeleteSolve = vi.fn();
+    const view = render(
         <HistoryView
             entries={entries}
             loading={false}
@@ -56,10 +67,11 @@ function renderHistory(solveCount: number | null) {
             deletingSolveId={null}
             onRefresh={vi.fn()}
             onLoadMore={vi.fn()}
-            onOpenSolve={vi.fn()}
-            onDeleteSolve={vi.fn()}
+            onOpenSolve={onOpenSolve}
+            onDeleteSolve={onDeleteSolve}
         />
     );
+    return {...view, onOpenSolve, onDeleteSolve};
 }
 
 describe("HistoryView numbering", () => {
@@ -76,6 +88,40 @@ describe("HistoryView numbering", () => {
         expect(screen.getByText("01")).toBeInTheDocument();
         expect(screen.getByText("02")).toBeInTheDocument();
     });
+
+    it("opens the solution by activating the solve row and keeps delete separate", () => {
+        const {onOpenSolve, onDeleteSolve} = renderHistory(8);
+
+        expect(screen.queryByText(/Cross|Fast saved|Fast missing|Optimized saved|Optimized missing/)).not.toBeInTheDocument();
+        expect(screen.queryByRole("button", {name: "Solution"})).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", {name: "Open solution for solve 15.00"}));
+        expect(onOpenSolve).toHaveBeenCalledWith(entries[0]);
+
+        fireEvent.click(screen.getByRole("button", {name: "Delete solve 15.00"}));
+        expect(onDeleteSolve).toHaveBeenCalledWith(entries[0]);
+        expect(onOpenSolve).toHaveBeenCalledTimes(1);
+    });
+
+    it("opens the solution from the keyboard-accessible row control", () => {
+        const {onOpenSolve} = renderHistory(8);
+        const row = screen.getByRole("button", {name: "Open solution for solve 15.00"});
+
+        fireEvent.keyDown(row, {key: "Enter"});
+        fireEvent.keyDown(row, {key: " "});
+
+        expect(onOpenSolve).toHaveBeenNthCalledWith(1, entries[0]);
+        expect(onOpenSolve).toHaveBeenNthCalledWith(2, entries[0]);
+    });
+
+    it("renders a decorative SVG cube in each solve's scramble state", () => {
+        renderHistory(8);
+
+        const preview = screen.getAllByTestId("history-cube-thumbnail")[0];
+        expect(preview).toHaveAttribute("data-preview-setup", entries[0].scramble);
+        expect(preview.tagName.toLowerCase()).toBe("svg");
+        expect(preview.querySelectorAll("polygon")).toHaveLength(27);
+        expect(preview.parentElement).toHaveAttribute("aria-hidden", "true");
+    });
 });
 
 describe("HistoryView statistics", () => {
@@ -86,11 +132,19 @@ describe("HistoryView statistics", () => {
         expect(screen.getByText("Best")).toBeInTheDocument();
         expect(screen.getByText("Ao5")).toBeInTheDocument();
         expect(screen.getByText("Ao12")).toBeInTheDocument();
-        expect(screen.getByText("Average")).toBeInTheDocument();
+        expect(screen.getByText("Mean")).toBeInTheDocument();
         expect(screen.getByText("Solves")).toBeInTheDocument();
         expect(screen.getByText("DNFs")).toBeInTheDocument();
         expect(screen.getByText("12.00")).toBeInTheDocument();
         expect(screen.getByText("1")).toBeInTheDocument();
+    });
+
+    it("opens the statistics modal from the History summary", async () => {
+        renderHistory(8);
+
+        fireEvent.click(screen.getByRole("button", {name: "More statistics"}));
+
+        expect(await screen.findByRole("dialog", {name: "Statistics dialog"})).toBeInTheDocument();
     });
 
     it("shows loading placeholders and the empty state", () => {

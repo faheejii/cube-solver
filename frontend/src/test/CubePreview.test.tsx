@@ -2,6 +2,7 @@ import {render, screen} from "@testing-library/react";
 import {afterEach, describe, expect, it, vi} from "vitest";
 
 const orbit = vi.hoisted(() => ({instances: [] as Array<Record<string, unknown>>}));
+const renderers = vi.hoisted(() => ({instances: [] as Array<Record<string, unknown>>}));
 
 vi.mock("three/addons/controls/OrbitControls.js", () => ({
     OrbitControls: class {
@@ -32,6 +33,11 @@ vi.mock("three", async (importOriginal) => {
             setSize = vi.fn();
             render = vi.fn();
             dispose = vi.fn();
+            forceContextLoss = vi.fn();
+
+            constructor() {
+                renderers.instances.push(this as unknown as Record<string, unknown>);
+            }
         },
     };
 });
@@ -40,6 +46,7 @@ import CubePreview from "../CubePreview";
 
 afterEach(() => {
     orbit.instances.length = 0;
+    renderers.instances.length = 0;
 });
 
 describe("CubePreview interactive view", () => {
@@ -73,5 +80,18 @@ describe("CubePreview interactive view", () => {
 
         expect(screen.getByLabelText("Cube preview")).toHaveAttribute("data-interactive-view", "false");
         expect(orbit.instances).toHaveLength(0);
+    });
+
+    it("releases the renderer context whenever a preview unmounts", () => {
+        const {unmount} = render(<CubePreview isPlaying={false}/>);
+        const renderer = renderers.instances[0] as {
+            dispose: ReturnType<typeof vi.fn>;
+            forceContextLoss: ReturnType<typeof vi.fn>;
+        };
+
+        unmount();
+
+        expect(renderer.dispose).toHaveBeenCalledOnce();
+        expect(renderer.forceContextLoss).toHaveBeenCalledOnce();
     });
 });

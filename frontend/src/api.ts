@@ -139,7 +139,7 @@ export async function updateSolvePenalty(solveId: number, penalty: TimerPenalty)
 }
 
 export async function fetchSolveHistory(
-    limit = 25,
+    limit = 20,
     cursor?: string | null,
 ): Promise<SolveHistoryResponse> {
     const params = new URLSearchParams({

@@ -42,6 +42,7 @@ class MockIntersectionObserver {
     takeRecords = vi.fn((): IntersectionObserverEntry[] => []);
 
     notify(isIntersecting: boolean) {
+        if (this.disconnected) return;
         if (!this.target) throw new Error("Observer has no target");
         this.callback([{
             isIntersecting,

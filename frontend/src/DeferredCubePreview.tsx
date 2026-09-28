@@ -15,9 +15,7 @@ export default function DeferredCubePreview({displayMode, ...props}: Props) {
     const [nearViewport, setNearViewport] = useState(false);
 
     useEffect(() => {
-        if (nearViewport) {
-            return;
-        }
+        if (nearViewport) return;
 
         const element = placeholderRef.current;
         if (!element) {
@@ -41,7 +39,7 @@ export default function DeferredCubePreview({displayMode, ...props}: Props) {
 
     if (nearViewport) {
         return (
-            <CubePreviewErrorBoundary>
+            <CubePreviewErrorBoundary compact={props.compact}>
                 <Suspense fallback={<PreviewPlaceholder {...props} mode={previewMode} loading/>}>
                     {previewMode === "2d" ? <CubeNetPreviewRenderer {...props}/> : <CubePreviewRenderer {...props}/>}
                 </Suspense>
@@ -82,7 +80,7 @@ function PreviewPlaceholder({
     );
 }
 
-class CubePreviewErrorBoundary extends Component<{children: ReactNode}, {failed: boolean}> {
+class CubePreviewErrorBoundary extends Component<{children: ReactNode; compact?: boolean}, {failed: boolean}> {
     state = {failed: false};
 
     static getDerivedStateFromError() {
@@ -96,7 +94,7 @@ class CubePreviewErrorBoundary extends Component<{children: ReactNode}, {failed:
     render() {
         if (this.state.failed) {
             return (
-                <div className="custom-cube-preview deferred-cube-preview" role="status">
+                <div className={this.props.compact ? "custom-cube-preview compact deferred-cube-preview" : "custom-cube-preview deferred-cube-preview"} role="status">
                     Cube preview failed to load.
                 </div>
             );

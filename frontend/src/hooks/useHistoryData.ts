@@ -6,11 +6,12 @@ import type {SolveHistoryEntry, SolveStatistics} from "../types";
 type HistoryStatus = "idle" | "loading" | "ready" | "error";
 
 type Options = {
-    activeView: string;
     onNotice: (notice: string) => void;
 };
 
-export function useHistoryData({activeView, onNotice}: Options) {
+const HISTORY_PAGE_SIZE = 20;
+
+export function useHistoryData({onNotice}: Options) {
     const [historyStatus, setHistoryStatus] = useState<HistoryStatus>("idle");
     const [historyError, setHistoryError] = useState<string | null>(null);
     const [historyEntries, setHistoryEntries] = useState<SolveHistoryEntry[]>([]);
@@ -20,12 +21,13 @@ export function useHistoryData({activeView, onNotice}: Options) {
     const [statistics, setStatistics] = useState<SolveStatistics | null>(null);
     const [statisticsLoading, setStatisticsLoading] = useState(true);
     const historyLoadRequestedRef = useRef(false);
+    const historyLoadingMoreRef = useRef(false);
 
     const loadHistory = useCallback(async () => {
         setHistoryStatus("loading");
         setHistoryError(null);
         try {
-            const page = await fetchSolveHistory(25);
+            const page = await fetchSolveHistory(HISTORY_PAGE_SIZE);
             setHistoryEntries(page.items);
             setHistoryCursor(page.nextCursor);
             setHistoryStatus("ready");
@@ -37,12 +39,14 @@ export function useHistoryData({activeView, onNotice}: Options) {
     }, []);
 
     const loadMoreHistory = useCallback(async () => {
-        if (!historyCursor || historyLoadingMore) {
+        if (!historyCursor || historyLoadingMoreRef.current) {
             return;
         }
+        historyLoadingMoreRef.current = true;
         setHistoryLoadingMore(true);
+        setHistoryError(null);
         try {
-            const page = await fetchSolveHistory(25, historyCursor);
+            const page = await fetchSolveHistory(HISTORY_PAGE_SIZE, historyCursor);
             setHistoryEntries((current) => [
                 ...current,
                 ...page.items.filter((entry) => current.every((existing) => existing.id !== entry.id)),
@@ -52,9 +56,10 @@ export function useHistoryData({activeView, onNotice}: Options) {
             const message = loadError instanceof Error ? loadError.message : "History request failed";
             setHistoryError(message);
         } finally {
+            historyLoadingMoreRef.current = false;
             setHistoryLoadingMore(false);
         }
-    }, [historyCursor, historyLoadingMore]);
+    }, [historyCursor]);
 
     const loadStatistics = useCallback(async () => {
         setStatisticsLoading(true);
@@ -72,11 +77,11 @@ export function useHistoryData({activeView, onNotice}: Options) {
     }, [loadStatistics]);
 
     useEffect(() => {
-        if (activeView === "history" && !historyLoadRequestedRef.current) {
+        if (!historyLoadRequestedRef.current) {
             historyLoadRequestedRef.current = true;
             void loadHistory();
         }
-    }, [activeView, loadHistory]);
+    }, [loadHistory]);
 
     const handleDeleteSolve = useCallback(async (entry: SolveHistoryEntry): Promise<boolean> => {
         if (deletingSolveId !== null) {

@@ -156,7 +156,11 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
             return;
         }
         if (url.pathname === "/api/solves" && request.method() === "GET") {
-            await json(route, {items: entries, nextCursor: null});
+            const limit = Math.max(1, Number(url.searchParams.get("limit") ?? 20));
+            const offset = Number(url.searchParams.get("cursor") ?? 0);
+            const items = entries.slice(offset, offset + limit);
+            const nextOffset = offset + items.length;
+            await json(route, {items, nextCursor: nextOffset < entries.length ? String(nextOffset) : null});
             return;
         }
         if (url.pathname === "/api/solves" && request.method() === "POST") {
