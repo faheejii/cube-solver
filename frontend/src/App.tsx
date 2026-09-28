@@ -1,6 +1,4 @@
 import {lazy, startTransition, Suspense, useEffect, useRef, useState} from "react";
-import {randomScrambleForEvent} from "cubing/scramble";
-import {setSearchDebug} from "cubing/search";
 import {LoaderCircle, Save, Trash2, X} from "lucide-react";
 import {CubePlaybackModeContext, CubePreviewModeContext} from "./CubePreviewModeContext";
 import CrossFaceSelect from "./CrossFaceSelect";
@@ -25,6 +23,7 @@ import {
 import {useHistoryData} from "./hooks/useHistoryData";
 import {useSolveProcesses} from "./hooks/useSolveProcesses";
 import {useSettings} from "./hooks/useSettings";
+import {generateScramble} from "./scrambleGenerator";
 import {INSPECTION_DNF_MS, INSPECTION_PLUS_TWO_MS, useTimer, type CompletedAttemptSnapshot, type TimerPenalty, type TimerPhase} from "./hooks/useTimer";
 import {isTerminalProcess} from "./jobs";
 import type {
@@ -37,8 +36,6 @@ import type {
     SolveHistoryEntry,
     SolveResponse,
 } from "./types";
-
-setSearchDebug({prioritizeEsbuildWorkaroundForWorkerInstantiation: true});
 
 const SolutionResultBody = lazy(() => import("./SolutionResultBody"));
 
@@ -287,8 +284,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     async function initializeScramble() {
         setGeneratingScramble(true);
         try {
-            const nextScramble = await randomScrambleForEvent("333");
-            commitScramble(nextScramble.toString());
+            const nextScramble = await generateScramble();
+            commitScramble(nextScramble);
         } catch (scrambleError) {
             const message =
                 scrambleError instanceof Error ? scrambleError.message : "Scramble generation failed";
@@ -630,8 +627,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         setGeneratingScramble(true);
         setError(null);
         try {
-            const nextScramble = await randomScrambleForEvent("333");
-            commitScramble(nextScramble.toString());
+            const nextScramble = await generateScramble();
+            commitScramble(nextScramble);
         } catch (scrambleError) {
             const message =
                 scrambleError instanceof Error ? scrambleError.message : "Scramble generation failed";

@@ -4,14 +4,17 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build:scramble-worker && tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json && vite build",
+    "build:scramble-worker": "node scripts/build-scramble-worker.mjs",
+    "pretest": "npm run test:worker-build",
     "test": "vitest run",
+    "test:worker-build": "node --test scripts/build-scramble-worker.node.mjs",
     "test:e2e": "playwright test",
     "preview": "vite preview"
   },
   "dependencies": {
-    "cubing": "0.63.3",
+    "cubing": "0.63.6",
     "lucide-react": "^1.46.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
@@ -24,6 +27,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "esbuild": "0.28.2",
     "jsdom": "^30.0.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",
