@@ -138,13 +138,16 @@ authorization, solve jobs, history, statistics, and static frontend serving,
 then removes only that isolated project. It does not use or remove the normal
 development database volume.
 
-The frontend production build keeps Three.js and cubing.js WASM in separate
-cached assets. Three.js is loaded only when 3D mode is selected for the timer
+The frontend production build keeps Three.js and cubing.js scramble-worker
+assets separate from the initial application bundle. The cubing.js worker is
+bundled with esbuild, including its nested worker and split WASM assets; generated
+files live under `frontend/public/scramble-worker/` and are rebuilt rather than
+committed. Three.js is loaded only when 3D mode is selected for the timer
 preview or solution playback and a cube is within 120 pixels of the viewport;
 the project-owned 2D net is loaded separately. These modes are selected
 independently in Settings. Tab views and solution playback are also loaded on demand.
-The cubing.js WASM asset remains separate and may exceed Vite's 500 KB
-post-minification warning threshold.
+The cubing.js WASM-support chunks remain separate worker assets and are not
+included in Vite's application chunk-size warning.
 
 Compile the Java project:
 
@@ -342,7 +345,10 @@ Run the Vite dev server:
 npm run dev
 ```
 
-The Vite app proxies `/api` to `http://localhost:8080`, so run the Java API server at the same time.
+The Vite app proxies `/api` to `http://localhost:8080`, so run the Java API
+server at the same time. `npm run dev` watches and rebuilds the separate
+scramble worker alongside Vite; `npm run build` cleans and regenerates its
+nested worker/WASM assets before building the app.
 The cube visualization uses an application-owned Three.js renderer backed by one logical cubie/sticker model. Setup algorithms are applied from solved state before meshes are built, completed moves snap back to the logical model, and facelets are derived from that same state. Backend and frontend notation follows the WCA/cubing.js convention for face, prime, double, wide, `M/E/S`, and `x/y/z` moves. The fixed camera, sequential animation, responsive sizing, and graceful WebGL fallback remain application-owned.
 
 Solution playback uses the application-owned Three.js cube renderer. Its code is
@@ -362,7 +368,12 @@ npm run build
 PLAYWRIGHT_SERVER=preview npm run test:e2e
 ```
 
-The Playwright tests mock the API and cover registration, login errors, session restoration, logout, protected history, session expiry, catalog previews, solution/stage playback setup, and deleting a solve after opening it from the scrollable Solves rail.
+The Playwright tests mock the API and cover registration, login errors, session
+restoration, logout, protected history, session expiry, catalog previews,
+solution/stage playback setup, scramble generation and regeneration, and
+deleting a solve after opening it from the scrollable Solves rail. Production
+preview also verifies cubing.js loads its nested worker from the generated asset
+directory.
 
 Current frontend behavior:
 
