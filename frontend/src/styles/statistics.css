@@ -158,6 +158,81 @@
     backdrop-filter: blur(6px);
 }
 
+.confirmation-dialog-backdrop {
+    position: fixed;
+    z-index: 1200;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgb(3 10 16 / 88%);
+}
+
+.confirmation-dialog {
+    display: grid;
+    gap: 12px;
+    width: min(440px, 100%);
+    border: 1px solid var(--border-strong);
+    background: var(--panel);
+    padding: 22px;
+}
+
+.confirmation-dialog h2,
+.confirmation-dialog p {
+    margin: 0;
+}
+
+.confirmation-dialog > p {
+    color: var(--text-soft);
+    line-height: 1.5;
+}
+
+.confirmation-dialog .confirmation-dialog-error {
+    color: var(--red);
+}
+
+.confirmation-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.confirmation-dialog-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-soft);
+    cursor: pointer;
+    padding: 8px 12px;
+}
+
+.confirmation-dialog-actions button.primary {
+    border-color: var(--blue);
+    background: var(--blue);
+    color: #fff;
+}
+
+.confirmation-dialog-actions button.danger {
+    border-color: var(--red);
+    background: var(--red);
+    color: #fff;
+}
+
+.confirmation-dialog-actions button:focus-visible {
+    outline: 2px solid var(--blue-bright);
+    outline-offset: 2px;
+}
+
+.confirmation-dialog-actions button:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
 .statistics-modal {
     display: grid;
     gap: 18px;
@@ -195,7 +270,16 @@
     padding: 0 0 4px;
 }
 
-.statistics-range-control button {
+.statistics-metric-control {
+    display: flex;
+    justify-self: end;
+    gap: 3px;
+    border-bottom: 1px solid var(--border);
+    padding: 0 0 4px;
+}
+
+.statistics-range-control button,
+.statistics-metric-control button {
     border: 0;
     background: transparent;
     color: var(--muted);
@@ -205,12 +289,14 @@
     padding: 8px 12px;
 }
 
-.statistics-range-control button.active {
+.statistics-range-control button.active,
+.statistics-metric-control button.active {
     background: var(--blue);
     color: #fff;
 }
 
-.statistics-range-control button:focus-visible {
+.statistics-range-control button:focus-visible,
+.statistics-metric-control button:focus-visible {
     outline: 2px solid var(--blue-bright);
     outline-offset: 2px;
 }

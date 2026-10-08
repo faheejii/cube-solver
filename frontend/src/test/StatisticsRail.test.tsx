@@ -78,7 +78,7 @@ describe("StatisticsRail solves list", () => {
         expect(screen.getByText("#12")).toBeInTheDocument();
         expect(screen.getByRole("region", {name: "Solves list"})).toBeInTheDocument();
         fireEvent.click(screen.getByRole("button", {name: /12\.30/}));
-        expect(props.onOpenSolve).toHaveBeenCalledWith(entry);
+        expect(props.onOpenSolve).toHaveBeenCalledWith(entry, 12);
     });
 
     it("requests another page when the list scrolls near its end and keeps a button fallback", () => {

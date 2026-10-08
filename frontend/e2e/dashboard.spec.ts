@@ -9,17 +9,18 @@ test.describe("authenticated dashboard production flow", () => {
         await page.locator(".statistics-card .rail-card-header button").click();
         const dialog = page.getByRole("dialog", {name: "Statistics"});
         await expect(dialog).toBeVisible();
-        await expect(dialog.getByRole("group", {name: /Solve times for 1 recent solve/})).toBeVisible();
+        await expect(dialog.getByRole("group", {name: /Solve time for 1 recent solve/})).toBeVisible();
         await expect(dialog.getByRole("button", {name: /Solve 1:/})).toBeVisible();
         expect(api.requests.some((request) => request.pathname === "/api/solves" && request.search.includes("limit=50"))).toBe(true);
 
         await dialog.getByRole("button", {name: "All solves"}).click();
-        await expect(dialog.getByRole("group", {name: /Solve times for 1 total solve/})).toBeVisible();
+        await expect(dialog.getByRole("group", {name: /Solve time for 1 total solve/})).toBeVisible();
         expect(api.requests.some((request) => request.pathname === "/api/solves" && request.search.includes("limit=100"))).toBe(true);
 
         await dialog.getByRole("button", {name: /Solve 1:.*Open solution/}).click();
         const solutionDialog = page.getByRole("dialog", {name: "Solve solution"});
         await expect(solutionDialog).toBeVisible();
+        await expect(solutionDialog.locator(".solution-modal-context")).toContainText("Solve #1");
         await expect(dialog).toBeVisible();
         const solutionLayer = await page.locator(".solution-modal-backdrop").evaluate((node) => Number(getComputedStyle(node).zIndex));
         const statisticsLayer = await page.locator(".statistics-modal-backdrop").evaluate((node) => Number(getComputedStyle(node).zIndex));
@@ -27,6 +28,7 @@ test.describe("authenticated dashboard production flow", () => {
         await page.keyboard.press("Escape");
         await expect(solutionDialog).toHaveCount(0);
         await expect(dialog).toBeVisible();
+        await expect(dialog.getByRole("button", {name: /Solve 1:/})).toBeFocused();
 
         await page.keyboard.press("Escape");
         await expect(dialog).toHaveCount(0);

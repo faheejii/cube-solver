@@ -21,7 +21,7 @@ type Props = {
     onLoadMore: () => void;
     onRetry: () => void;
     onOpenHistory: () => void;
-    onOpenSolve: (entry: SolveHistoryEntry) => void;
+    onOpenSolve: (entry: SolveHistoryEntry, solveNumber?: number, filteredResult?: boolean) => void;
 };
 
 export default function StatisticsRail({
@@ -98,7 +98,7 @@ export default function StatisticsRail({
                             className="rail-recent-row"
                             type="button"
                             key={entry.id}
-                            onClick={() => onOpenSolve(entry)}
+                                           onClick={() => onOpenSolve(entry, solveCount === null ? undefined : solveCount - index)}
                         >
                             <span>#{solveCount !== null ? solveCount - index : entry.id}</span>
                             <strong>{formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf)}</strong>

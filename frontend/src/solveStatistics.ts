@@ -1,5 +1,10 @@
 import type {RollingAverage, SolveHistoryEntry, SolveStatistics} from "./types";
 
+export type RollingMetricPoint = {
+    status: RollingAverage["status"];
+    valueMs: number | null;
+};
+
 /** Calculates the same summary fields as the API, scoped to a newest-first history selection. */
 export function calculateWindowStatistics(newestFirst: SolveHistoryEntry[]): SolveStatistics {
     const times = newestFirst
@@ -14,10 +19,20 @@ export function calculateWindowStatistics(newestFirst: SolveHistoryEntry[]): Sol
         averageMs: times.length > 0
             ? Math.round(times.reduce((total, time) => total + time, 0) / times.length)
             : null,
-        ao5: calculateRollingAverage(newestFirst, 5),
-        ao12: calculateRollingAverage(newestFirst, 12),
+        ao5: calculateRollingAverage(newestFirst.slice(0, 5), 5),
+        ao12: calculateRollingAverage(newestFirst.slice(0, 12), 12),
         recentSolves: newestFirst.slice(0, 5),
     };
+}
+
+/** Returns one WCA-style rolling average for every solve, indexed newest-first by its ending solve. */
+export function calculateRollingMetricSeries(
+    newestFirst: SolveHistoryEntry[],
+    size: 5 | 12,
+): RollingMetricPoint[] {
+    return newestFirst.map((_, index) => index + size > newestFirst.length
+        ? {status: "insufficient", valueMs: null}
+        : calculateRollingAverage(newestFirst.slice(index, index + size), size));
 }
 
 function calculateRollingAverage(newestFirst: SolveHistoryEntry[], size: number): RollingAverage {

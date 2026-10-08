@@ -2,6 +2,7 @@ import {lazy, startTransition, Suspense, useEffect, useRef, useState} from "reac
 import {LoaderCircle, Save, Trash2, X} from "lucide-react";
 import {CubePlaybackModeContext, CubePreviewModeContext} from "./CubePreviewModeContext";
 import CrossFaceSelect from "./CrossFaceSelect";
+import ConfirmationDialog from "./ConfirmationDialog";
 import DashboardSidebar, {type DashboardView} from "./DashboardSidebar";
 import SaveToast from "./SaveToast";
 import SolvePenaltyControl from "./SolvePenaltyControl";
@@ -57,6 +58,7 @@ type SolutionStatus = "idle" | "loading" | "ready" | "error";
 type F2LMode = "greedy" | "optimized";
 type AttemptSaveStatus = "idle" | "saving" | "saved" | "error";
 type ModalStatus = "idle" | "loading" | "ready" | "error";
+type PendingModalAction = {type: "close"} | {type: "mode"; mode: F2LMode} | {type: "cross"; cross: string};
 
 export default function App({user, onLogout}: {user: AuthUser; onLogout: () => void}) {
     const [committedScramble, setCommittedScramble] = useState("");
@@ -82,6 +84,10 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const [modalError, setModalError] = useState<string | null>(null);
     const [modalDetail, setModalDetail] = useState<SolveHistoryDetail | null>(null);
     const [modalEntry, setModalEntry] = useState<SolveHistoryEntry | null>(null);
+    const [modalSolveNumber, setModalSolveNumber] = useState<number | null>(null);
+    const [modalSolveIsFilteredResult, setModalSolveIsFilteredResult] = useState(false);
+    const [pendingDelete, setPendingDelete] = useState<{entry: SolveHistoryEntry; modal: boolean} | null>(null);
+    const [pendingModalAction, setPendingModalAction] = useState<PendingModalAction | null>(null);
     const [modalMode, setModalMode] = useState<F2LMode>("greedy");
     const [modalCrossFace, setModalCrossFace] = useState("U");
     const [modalResult, setModalResult] = useState<SolveResponse | null>(null);
@@ -101,6 +107,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const attemptSavingRef = useRef<string | null>(null);
     const completedAttemptRef = useRef<CompletedAttemptSnapshot | null>(null);
     const modalJobRequestIdRef = useRef(0);
+    const modalReturnFocusRef = useRef<HTMLElement | null>(null);
 
     const {
         processes,
@@ -117,6 +124,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         historyCursor,
         historyLoadingMore,
         deletingSolveId,
+        deleteError,
+        clearDeleteError,
         statistics,
         statisticsLoading,
         loadHistory,
@@ -250,7 +259,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         };
         window.addEventListener("keydown", handleModalKeyDown);
         return () => window.removeEventListener("keydown", handleModalKeyDown);
-    }, [modalStatus, modalDirty]);
+    }, [modalStatus, modalDirty, pendingDelete]);
 
     useEffect(() => {
         if (!processPreview) {
@@ -296,13 +305,16 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         }
     }
 
-    async function openHistorySolution(entry: SolveHistoryEntry) {
+    async function openHistorySolution(entry: SolveHistoryEntry, solveNumber?: number, filteredResult = false) {
+        modalReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         setModalStatus("loading");
         setModalError(null);
         setPenaltyError(null);
         setModalDirty(false);
         setModalDetail(null);
         setModalEntry(entry);
+        setModalSolveNumber(solveNumber ?? null);
+        setModalSolveIsFilteredResult(filteredResult);
         setModalResult(null);
         try {
             const detail = await fetchSolveHistoryDetail(entry.id);
@@ -409,14 +421,19 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         });
     }
 
-    function confirmDiscardModalPreview(): boolean {
-        return !modalDirty || window.confirm("Discard the unsaved solution preview?");
-    }
-
     async function handleModalModeChange(nextMode: F2LMode) {
-        if (nextMode === modalMode || !modalDetail || !confirmDiscardModalPreview()) {
+        if (nextMode === modalMode || !modalDetail) {
             return;
         }
+        if (modalDirty) {
+            setPendingModalAction({type: "mode", mode: nextMode});
+            return;
+        }
+        await applyModalModeChange(nextMode);
+    }
+
+    async function applyModalModeChange(nextMode: F2LMode) {
+        if (!modalDetail) return;
         const saved = modalDetail.solutions.find((solution) => solution.mode === nextMode);
         setModalMode(nextMode);
         setModalDirty(false);
@@ -430,9 +447,18 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     }
 
     async function handleModalCrossChange(nextCross: string) {
-        if (nextCross === modalCrossFace || !modalDetail || !confirmDiscardModalPreview()) {
+        if (nextCross === modalCrossFace || !modalDetail) {
             return;
         }
+        if (modalDirty) {
+            setPendingModalAction({type: "cross", cross: nextCross});
+            return;
+        }
+        await applyModalCrossChange(nextCross);
+    }
+
+    async function applyModalCrossChange(nextCross: string) {
+        if (!modalDetail) return;
         setModalCrossFace(nextCross);
         setModalDirty(false);
         setModalError(null);
@@ -478,13 +504,17 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     }
 
     function closeSolutionModal(force = false) {
-        if (!force && !confirmDiscardModalPreview()) {
+        if (pendingDelete && !force) return;
+        if (!force && modalDirty) {
+            setPendingModalAction({type: "close"});
             return;
         }
         setModalStatus("idle");
         modalJobRequestIdRef.current++;
         setModalDetail(null);
         setModalEntry(null);
+        setModalSolveNumber(null);
+        setModalSolveIsFilteredResult(false);
         setModalResult(null);
         setModalDirty(false);
         setModalError(null);
@@ -497,15 +527,42 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         setModalCompletedCandidates(0);
         setModalCandidatesEvaluated(0);
         setModalBestTotalMoves(-1);
+        window.requestAnimationFrame(() => {
+            const target = modalReturnFocusRef.current;
+            if (target?.isConnected) target.focus();
+            modalReturnFocusRef.current = null;
+        });
+    }
+
+    async function confirmDiscardModalPreview() {
+        const action = pendingModalAction;
+        if (!action) return;
+        setPendingModalAction(null);
+        setModalDirty(false);
+        if (action.type === "close") closeSolutionModal(true);
+        else if (action.type === "mode") await applyModalModeChange(action.mode);
+        else await applyModalCrossChange(action.cross);
     }
 
     async function deleteModalSolve() {
         if (!modalEntry || !modalDetail || deletingSolveId !== null || modalComputing || modalSaving || penaltySaving) {
             return;
         }
-        const deleted = await handleHistoryDelete(modalEntry);
+        requestDeleteSolve(modalEntry, true);
+    }
+
+    function requestDeleteSolve(entry: SolveHistoryEntry, modal = false) {
+        clearDeleteError();
+        setPendingDelete({entry, modal});
+    }
+
+    async function confirmDeleteSolve() {
+        if (!pendingDelete || deletingSolveId !== null) return;
+        const request = pendingDelete;
+        const deleted = await handleHistoryDelete(request.entry);
         if (deleted) {
-            closeSolutionModal(true);
+            setPendingDelete(null);
+            if (request.modal) closeSolutionModal(true);
         }
     }
 
@@ -707,10 +764,12 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                             armedSource={armedSource}
                             armReady={armReady}
                             latestSavedAttempt={latestSavedAttempt}
+                            deletingSolveId={deletingSolveId}
                             showPenaltyControl={timerPhase === "idle" && latestSavedAttempt !== null && completedAttemptRef.current === null}
                             penaltySaving={penaltySaving}
                             penaltyError={penaltyError}
                             onPenaltyChange={(penalty) => void handlePenaltyChange(penalty)}
+                            onDeleteSavedSolve={(entry) => requestDeleteSolve(entry)}
                             timerValue={timerText(
                                 timerPhase,
                                 inspectionElapsedMs,
@@ -775,8 +834,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                 deletingSolveId={deletingSolveId}
                                 onRefresh={() => void loadHistory()}
                                 onLoadMore={() => void loadMoreHistory()}
-                                onOpenSolve={(entry) => void openHistorySolution(entry)}
-                                onDeleteSolve={(entry) => void handleHistoryDelete(entry)}
+                                onOpenSolve={(entry, solveNumber, filteredResult) => void openHistorySolution(entry, solveNumber, filteredResult)}
+                                onDeleteSolve={(entry) => requestDeleteSolve(entry)}
                             />
                         ) : activeView === "settings" ? (
                             <SettingsView settings={settings} onChange={updateSettings}/>
@@ -809,11 +868,36 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                     onLoadMore={() => void loadMoreHistory()}
                     onRetry={() => void (historyStatus === "error" ? loadHistory() : loadMoreHistory())}
                     onOpenHistory={() => setActiveView("history")}
-                    onOpenSolve={(entry) => void openHistorySolution(entry)}
+                    onOpenSolve={(entry, solveNumber, filteredResult) => void openHistorySolution(entry, solveNumber, filteredResult)}
                 />
             ) : null}
 
             <SaveToast message={saveNotice} onDismiss={() => setSaveNotice(null)}/>
+
+            {pendingDelete ? (
+                <ConfirmationDialog
+                    title="Delete solve?"
+                    description={`Delete ${formatHistoryTime(pendingDelete.entry.officialMs, pendingDelete.entry.penalty, pendingDelete.entry.dnf)} permanently? This also deletes its saved Fast and Optimized solutions. This action cannot be undone.`}
+                    confirmLabel="Delete solve"
+                    tone="danger"
+                    pending={deletingSolveId === pendingDelete.entry.id}
+                    error={deleteError}
+                    onCancel={() => setPendingDelete(null)}
+                    onConfirm={() => void confirmDeleteSolve()}
+                />
+            ) : null}
+
+            {pendingModalAction ? (
+                <ConfirmationDialog
+                    title="Discard unsaved solution?"
+                    description="Your current solution preview has not been saved. Discard it to continue?"
+                    confirmLabel="Discard preview"
+                    cancelLabel="Keep editing"
+                    tone="neutral"
+                    onCancel={() => setPendingModalAction(null)}
+                    onConfirm={() => void confirmDiscardModalPreview()}
+                />
+            ) : null}
 
             {modalStatus !== "idle" ? (
                 <div className="solution-modal-backdrop" role="presentation" onMouseDown={() => closeSolutionModal()}>
@@ -827,6 +911,13 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                         <div className="solution-modal-header">
                             <div className="solution-modal-time-controls">
                                 <h2>{modalDetail ? formatHistoryTime(modalDetail.officialMs, modalDetail.penalty, modalDetail.dnf) : "Loading"}</h2>
+                                {modalDetail ? (
+                                    <p className="solution-modal-context">
+                                        {modalSolveNumber === null
+                                            ? "Solve"
+                                            : `${modalSolveIsFilteredResult ? "Matching result" : "Solve"} #${modalSolveNumber}`} · {new Date(modalDetail.createdAt).toLocaleString()}
+                                    </p>
+                                ) : null}
                                 {modalDetail && modalEntry ? (
                                     <SolvePenaltyControl
                                         value={modalDetail.penalty as TimerPenalty}
@@ -846,7 +937,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                     className="history-delete-button"
                                     type="button"
                                     onClick={() => void deleteModalSolve()}
-                                    disabled={modalStatus !== "ready" || deletingSolveId !== null || modalComputing || modalSaving || penaltySaving}
+                                    disabled={modalStatus !== "ready" || deletingSolveId !== null || modalComputing || modalSaving || penaltySaving || modalDirty}
                                     aria-label="Delete solve"
                                     title="Delete solve"
                                 >

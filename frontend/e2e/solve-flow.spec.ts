@@ -2,10 +2,79 @@ import {expect, test} from "@playwright/test";
 import {historyEntry, mockProductionApi, normalUser} from "./production-fixtures";
 
 test.describe("timer, solve, history, and playback production flows", () => {
+    test("searches scrambles and displayed solve times, with URL-restorable queries", async ({page}) => {
+        const historyEntries = [
+            {...historyEntry, id: 3, scramble: "R U R2", penalty: "+2", timerMs: 12_340, officialMs: 14_340},
+            {...historyEntry, id: 2, scramble: "F U F2", penalty: "none", timerMs: 9_210, officialMs: 9_210},
+            {...historyEntry, id: 1, scramble: "R U F'", penalty: "dnf", dnf: true, officialMs: null},
+            {...historyEntry, id: 4, scramble: "L U L2", penalty: "none", timerMs: 210, officialMs: 210},
+            {...historyEntry, id: 5, scramble: "B U B2", penalty: "none", timerMs: 81_450, officialMs: 81_450},
+        ];
+        const api = await mockProductionApi(page, {user: normalUser, historyEntries});
+        await page.goto("/");
+        await page.getByRole("button", {name: "History"}).click();
+
+        const search = page.getByRole("searchbox", {name: "Search solves"});
+        await search.focus();
+        await expect(search).toHaveCSS("outline-style", "none");
+        await expect(page.locator(".history-search-field")).toHaveCSS("box-shadow", "none");
+        const [searchIconColor, defaultSearchColor] = await page.locator(".history-search-field").evaluate((field) => [
+            getComputedStyle(field.querySelector("svg")!).color,
+            getComputedStyle(field).color,
+        ]);
+        expect(searchIconColor).not.toBe(defaultSearchColor);
+        await search.fill("r u");
+        await expect(page.getByText("Showing 2 of 2 matching solves")).toBeVisible();
+        await expect(page.locator(".history-table-row")).toHaveCount(2);
+        await expect(page).toHaveURL(/\?q=r\+u$/);
+        await expect(page.getByRole("combobox", {name: "Filter solves by penalty"})).toHaveCount(0);
+        const filteredRequests = api.requests.filter((request) => request.pathname === "/api/solves" && request.method === "GET");
+        expect(filteredRequests.some((request) => {
+            const params = new URLSearchParams(request.search);
+            return params.get("q") === "r u" && !params.has("penalty");
+        })).toBe(true);
+
+        const help = page.getByRole("button", {name: "Search syntax help"});
+        await help.focus();
+        await expect(page.getByRole("tooltip")).toContainText("M:SS.CC");
+        await expect(page.getByRole("tooltip")).toContainText("*:21.*");
+
+        await search.fill("14.34+");
+        await expect(page.getByText("Showing 1 of 1 matching solves")).toBeVisible();
+        await expect(page.locator(".history-table-row")).toContainText("14.34+");
+        await expect(page).toHaveURL(/\?q=14\.34%2B$/);
+
+        await search.fill("*.21");
+        await expect(page.getByText("Showing 2 of 2 matching solves")).toBeVisible();
+        await expect(page.locator(".history-table-row").filter({hasText: "0.21"})).toBeVisible();
+        await search.fill("9.*");
+        await expect(page.getByText("Showing 1 of 1 matching solves")).toBeVisible();
+        await expect(page.locator(".history-table-row").filter({hasText: "9.21"})).toBeVisible();
+        await search.fill("*:21.*");
+        await expect(page.getByText("Showing 1 of 1 matching solves")).toBeVisible();
+        await expect(page.locator(".history-table-row").filter({hasText: "1:21.45"})).toBeVisible();
+        await search.fill("DNF");
+        await expect(page.getByText("Showing 1 of 1 matching solves")).toBeVisible();
+        await expect(page.locator(".history-table-row").filter({hasText: "DNF"})).toBeVisible();
+
+        await search.fill("*.2");
+        await expect(page.getByText("Use S.CC or M:SS.CC for a time")).toBeVisible();
+        await expect(page.locator(".history-table-row")).toHaveCount(0);
+
+        await search.fill("r u");
+        await expect(page.getByText("Showing 2 of 2 matching solves")).toBeVisible();
+        await expect(page).toHaveURL(/\?q=r\+u$/);
+
+        await page.locator(".history-row-open").first().click();
+        await expect(page.getByRole("dialog", {name: "Solve solution"}).locator(".solution-modal-context"))
+            .toContainText("Matching result #2");
+    });
+
     test("runs a timed solve, persists it, and opens the current solution playback", async ({page}) => {
         const api = await mockProductionApi(page, {user: normalUser});
         await page.goto("/");
 
+        await expect(page.getByRole("button", {name: "Delete most recent solve"})).toHaveCount(0);
         await expect(page.getByRole("button", {name: "Show solution"})).toBeEnabled();
         const timer = page.getByLabel("Solve timer");
 
@@ -45,6 +114,8 @@ test.describe("timer, solve, history, and playback production flows", () => {
         expect(savedTime).toBeTruthy();
         await expect(page.locator(".dashboard-timer-number")).toHaveText(savedTime!);
         await expect(saveToast).toHaveCount(1);
+        const deleteSavedSolve = page.getByRole("button", {name: "Delete most recent solve"});
+        await expect(deleteSavedSolve).toBeVisible();
 
         const penalty = page.getByRole("group", {name: "Penalty for most recent solve"});
         await expect(penalty.getByRole("button", {name: "No penalty"})).toHaveAttribute("aria-pressed", "true");
@@ -103,6 +174,14 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await expect(dialog.locator("[data-playback-alg]")).toHaveAttribute("data-playback-alg", "F R U R' U' F'");
         await dialog.getByRole("button", {name: "Close solution"}).click();
         await expect(dialog).toHaveCount(0);
+
+        await deleteSavedSolve.click();
+        const deleteConfirmation = page.getByRole("alertdialog", {name: "Delete solve?"});
+        await expect(deleteConfirmation).toContainText("This also deletes its saved Fast and Optimized solutions");
+        await deleteConfirmation.getByRole("button", {name: "Delete solve"}).click();
+        await expect(page.locator(".dashboard-timer-number")).toHaveText("12.34");
+        await expect(deleteSavedSolve).toBeVisible();
+        expect(api.requests.some((request) => request.method === "DELETE" && request.pathname === "/api/solves/2")).toBe(true);
     });
 
     test("loads a saved history solution and preserves stage playback setup", async ({page}) => {
@@ -251,10 +330,29 @@ test.describe("timer, solve, history, and playback production flows", () => {
         const dialog = page.getByRole("dialog", {name: "Solve solution"});
         await expect(dialog).toBeVisible();
 
-        page.once("dialog", (confirmation) => confirmation.accept());
         await dialog.getByRole("button", {name: "Delete solve"}).click();
+        const confirmation = page.getByRole("alertdialog", {name: "Delete solve?"});
+        await expect(confirmation).toContainText("saved Fast and Optimized solutions");
+        await confirmation.getByRole("button", {name: "Delete solve"}).click();
 
         await expect(dialog).toHaveCount(0);
         expect(api.requests.some((request) => request.pathname === "/api/solves/1" && request.method === "DELETE")).toBe(true);
+    });
+
+    test("keeps the delete confirmation open after an API failure and allows retry", async ({page}) => {
+        const api = await mockProductionApi(page, {user: normalUser, historyEntries: [historyEntry], deleteFailures: 1});
+        await page.goto("/");
+        await page.getByRole("button", {name: "History"}).click();
+
+        await page.getByRole("button", {name: "Delete solve 12.34"}).click();
+        const confirmation = page.getByRole("alertdialog", {name: "Delete solve?"});
+        await confirmation.getByRole("button", {name: "Delete solve"}).click();
+        await expect(confirmation.getByRole("alert")).toHaveText("Delete failed. Please retry.");
+        await expect(confirmation).toBeVisible();
+
+        await confirmation.getByRole("button", {name: "Delete solve"}).click();
+        await expect(confirmation).toHaveCount(0);
+        await expect(page.locator(".history-table-row")).toHaveCount(0);
+        expect(api.requests.filter((request) => request.pathname === "/api/solves/1" && request.method === "DELETE")).toHaveLength(2);
     });
 });

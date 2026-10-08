@@ -1,8 +1,10 @@
 import {useLayoutEffect, useRef, useState} from "react";
 import {
     Check,
+    LoaderCircle,
     Pencil,
     RefreshCw,
+    Trash2,
     X,
 } from "lucide-react";
 import ScrambleCube from "./ScrambleCube";
@@ -36,6 +38,7 @@ type Props = {
     timerHint: string;
     timerDetail: string;
     latestSavedAttempt: SolveHistoryEntry | null;
+    deletingSolveId: number | null;
     showPenaltyControl: boolean;
     penaltySaving: boolean;
     penaltyError: string | null;
@@ -48,6 +51,7 @@ type Props = {
     onSaveEdit: () => void;
     onShowSolution: () => void;
     onPenaltyChange: (penalty: TimerPenalty) => void;
+    onDeleteSavedSolve: (entry: SolveHistoryEntry) => void;
 };
 
 export default function TimerWorkspace({
@@ -69,6 +73,7 @@ export default function TimerWorkspace({
                                            timerHint,
                                            timerDetail,
                                            latestSavedAttempt,
+                                           deletingSolveId,
                                            showPenaltyControl,
                                            penaltySaving,
                                            penaltyError,
@@ -81,6 +86,7 @@ export default function TimerWorkspace({
                                            onSaveEdit,
                                            onShowSolution,
                                            onPenaltyChange,
+                                           onDeleteSavedSolve,
                                        }: Props) {
     const scrambleTextRef = useRef<HTMLParagraphElement>(null);
     const [scrambleFontSize, setScrambleFontSize] = useState<number | null>(null);
@@ -218,12 +224,27 @@ export default function TimerWorkspace({
                 <div className="timer-display-group">
                     <div className="dashboard-timer-number">{timerValue}</div>
                     {showPenaltyControl && latestSavedAttempt ? (
-                        <SolvePenaltyControl
-                            value={latestSavedAttempt.penalty as TimerPenalty}
-                            saving={penaltySaving}
-                            error={penaltyError}
-                            onChange={onPenaltyChange}
-                        />
+                        <div className="timer-saved-solve-controls">
+                            <SolvePenaltyControl
+                                value={latestSavedAttempt.penalty as TimerPenalty}
+                                saving={penaltySaving}
+                                error={penaltyError}
+                                onChange={onPenaltyChange}
+                            />
+                            <button
+                                className="history-delete-button timer-saved-solve-delete"
+                                type="button"
+                                onClick={() => onDeleteSavedSolve(latestSavedAttempt)}
+                                disabled={penaltySaving || deletingSolveId !== null}
+                                aria-label="Delete most recent solve"
+                                title="Delete most recent solve"
+                            >
+                                {deletingSolveId === latestSavedAttempt.id
+                                    ? <LoaderCircle size={15}/>
+                                    : <Trash2 size={15}/>
+                                }
+                            </button>
+                        </div>
                     ) : null}
                     <div className="dashboard-inline-stats">
                         <InlineStat label="Best" value={formatMetricTime(statistics?.bestMs ?? null)} accent="blue"/>

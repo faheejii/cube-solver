@@ -321,6 +321,17 @@ textarea:focus-visible,
     gap: 5px;
 }
 
+.timer-saved-solve-controls {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.timer-saved-solve-delete {
+    flex: 0 0 36px;
+    margin-top: -2px;
+}
+
 .solve-penalty-options {
     display: flex;
     align-items: center;
