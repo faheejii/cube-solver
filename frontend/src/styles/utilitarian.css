@@ -887,13 +887,13 @@ textarea:focus-visible,
 }
 
 .solution-modal-actions .history-delete-button {
-    border-color: color-mix(in srgb, var(--red) 55%, var(--border));
-    color: var(--red);
+    border-color: color-mix(in srgb, var(--danger-red) 55%, var(--border));
+    color: var(--danger-red);
 }
 
 .solution-modal-actions .history-delete-button:hover {
-    border-color: var(--red);
-    background: color-mix(in srgb, var(--red) 12%, var(--panel));
+    border-color: var(--danger-red);
+    background: color-mix(in srgb, var(--danger-red) 12%, var(--panel));
 }
 
 .solution-modal-controls {

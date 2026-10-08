@@ -17,6 +17,9 @@ test.describe("authenticated dashboard production flow", () => {
         await page.locator(".statistics-card .rail-card-header button").click();
         const statisticsDialog = page.getByRole("dialog", {name: "Statistics"});
         await expect(statisticsDialog).toBeVisible();
+        const controlRows = await statisticsDialog.locator(".statistics-range-control, .statistics-metric-control")
+            .evaluateAll((controls) => controls.map((control) => control.getBoundingClientRect().top));
+        expect(controlRows[0]).toBe(controlRows[1]);
         const summaryRadii = await statisticsDialog.locator(".statistics-grid button")
             .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderRadius));
         expect(summaryRadii.length).toBeGreaterThan(0);
@@ -29,8 +32,14 @@ test.describe("authenticated dashboard production flow", () => {
 
         await page.keyboard.press("Escape");
         await page.getByRole("button", {name: "History"}).click();
-        await page.getByRole("button", {name: "Delete solve 12.34"}).click();
+        const deleteSolveButton = page.getByRole("button", {name: "Delete solve 12.34"});
+        const deleteIconColor = await deleteSolveButton.evaluate((button) => getComputedStyle(button).color);
+        await deleteSolveButton.click();
         const confirmation = page.getByRole("alertdialog", {name: "Delete solve?"});
+        const confirmDeleteButton = confirmation.locator(".confirmation-dialog-actions button.danger");
+        const confirmationButtonColor = await confirmDeleteButton.evaluate((button) => getComputedStyle(button).backgroundColor);
+        expect(deleteIconColor).toBe("rgb(217, 75, 75)");
+        expect(confirmationButtonColor).toBe(deleteIconColor);
         const confirmationButtonRadii = await confirmation
             .locator(".confirmation-dialog-actions button")
             .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderRadius));

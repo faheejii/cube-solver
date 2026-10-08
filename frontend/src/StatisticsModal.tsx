@@ -129,37 +129,39 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
                     </button>
                 </header>
 
-                <div className="statistics-range-control" role="group" aria-label="Statistics range">
-                    <button
-                        type="button"
-                        className={range === "last50" ? "active" : ""}
-                        aria-pressed={range === "last50"}
-                        onClick={() => { setActivePoint(null); setRange("last50"); }}
-                    >
-                        Last 50
-                    </button>
-                    <button
-                        type="button"
-                        className={range === "all" ? "active" : ""}
-                        aria-pressed={range === "all"}
-                        onClick={() => { setActivePoint(null); setRange("all"); }}
-                    >
-                        All solves
-                    </button>
-                </div>
-
-                <div className="statistics-metric-control" role="group" aria-label="Chart metric">
-                    {(["time", "ao5", "ao12"] as const).map((value) => (
+                <div className="statistics-modal-controls">
+                    <div className="statistics-range-control" role="group" aria-label="Statistics range">
                         <button
-                            key={value}
                             type="button"
-                            className={metric === value ? "active" : ""}
-                            aria-pressed={metric === value}
-                            onClick={() => { setActivePoint(null); setMetric(value); }}
+                            className={range === "last50" ? "active" : ""}
+                            aria-pressed={range === "last50"}
+                            onClick={() => { setActivePoint(null); setRange("last50"); }}
                         >
-                            {value === "time" ? "Time" : value === "ao5" ? "Ao5" : "Ao12"}
+                            Last 50
                         </button>
-                    ))}
+                        <button
+                            type="button"
+                            className={range === "all" ? "active" : ""}
+                            aria-pressed={range === "all"}
+                            onClick={() => { setActivePoint(null); setRange("all"); }}
+                        >
+                            All solves
+                        </button>
+                    </div>
+
+                    <div className="statistics-metric-control" role="group" aria-label="Chart metric">
+                        {(["time", "ao5", "ao12"] as const).map((value) => (
+                            <button
+                                key={value}
+                                type="button"
+                                className={metric === value ? "active" : ""}
+                                aria-pressed={metric === value}
+                                onClick={() => { setActivePoint(null); setMetric(value); }}
+                            >
+                                {value === "time" ? "Time" : value === "ao5" ? "Ao5" : "Ao12"}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 <StatisticsSummary

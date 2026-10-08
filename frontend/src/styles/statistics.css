@@ -304,8 +304,8 @@
 }
 
 .confirmation-dialog-actions button.danger {
-    border-color: var(--red);
-    background: var(--red);
+    border-color: var(--danger-red);
+    background: var(--danger-red);
     color: #fff;
 }
 
@@ -348,9 +348,15 @@
     color: var(--muted);
 }
 
+.statistics-modal-controls {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+}
+
 .statistics-range-control {
     display: flex;
-    justify-self: end;
     gap: 3px;
     border-bottom: 1px solid var(--border);
     padding: 0 0 4px;
@@ -358,7 +364,6 @@
 
 .statistics-metric-control {
     display: flex;
-    justify-self: end;
     gap: 3px;
     border-bottom: 1px solid var(--border);
     padding: 0 0 4px;
