@@ -10,6 +10,9 @@ test.describe("authenticated dashboard production flow", () => {
             .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderRadius));
         expect(inlineStatisticsRadii.length).toBeGreaterThan(0);
         expect(new Set(inlineStatisticsRadii)).toEqual(new Set(["0px"]));
+        const inlineStatisticsDividers = await page.locator(".dashboard-inline-stats .inline-stat")
+            .evaluateAll((cells) => cells.map((cell) => getComputedStyle(cell).borderRightWidth));
+        expect(inlineStatisticsDividers).toEqual(["1px", "1px", "0px"]);
 
         await page.locator(".statistics-card .rail-card-header button").click();
         const statisticsDialog = page.getByRole("dialog", {name: "Statistics"});
