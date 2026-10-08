@@ -5,6 +5,15 @@ export type RollingMetricPoint = {
     valueMs: number | null;
 };
 
+export type RollingWindowDisposition = "counted" | "dropped-fastest" | "dropped-slowest" | "dnf" | "not-counted";
+
+export type RollingWindowBreakdown = {
+    average: RollingAverage;
+    required: 5 | 12;
+    dnfCount: number;
+    solves: Array<{entry: SolveHistoryEntry; disposition: RollingWindowDisposition}>;
+};
+
 /** Calculates the same summary fields as the API, scoped to a newest-first history selection. */
 export function calculateWindowStatistics(newestFirst: SolveHistoryEntry[]): SolveStatistics {
     const times = newestFirst
@@ -33,6 +42,68 @@ export function calculateRollingMetricSeries(
     return newestFirst.map((_, index) => index + size > newestFirst.length
         ? {status: "insufficient", valueMs: null}
         : calculateRollingAverage(newestFirst.slice(index, index + size), size));
+}
+
+/** Calculates the newest Ao5/Ao12 and identifies the exact rows contributing to it. */
+export function calculateRollingWindowBreakdown(
+    newestFirst: SolveHistoryEntry[],
+    size: 5 | 12,
+): RollingWindowBreakdown {
+    const window = newestFirst.slice(0, size);
+    const dnfs = window.filter(isDnf);
+    const average = calculateRollingAverage(window, size);
+    const solves: RollingWindowBreakdown["solves"] = window.map((entry) => ({
+        entry,
+        disposition: isDnf(entry) ? "dnf" as const : "counted" as const,
+    }));
+
+    if (window.length < size) {
+        return {
+            average,
+            required: size,
+            dnfCount: dnfs.length,
+            solves: solves.map((solve) => ({
+                ...solve,
+                disposition: (isDnf(solve.entry) ? "dnf" : "not-counted") as RollingWindowDisposition,
+            })),
+        };
+    }
+
+    if (dnfs.length >= 2) {
+        return {
+            average,
+            required: size,
+            dnfCount: dnfs.length,
+            solves: solves.map((solve) => ({
+                ...solve,
+                disposition: (isDnf(solve.entry) ? "dnf" : "not-counted") as RollingWindowDisposition,
+            })),
+        };
+    }
+
+    if (dnfs.length === 1) {
+        const dnfIndex = solves.findIndex((solve) => isDnf(solve.entry));
+        solves[dnfIndex] = {...solves[dnfIndex], disposition: "dropped-slowest"};
+    }
+
+    const valid = solves
+        .map((solve, index) => ({solve, index}))
+        .filter(({solve}) => !isDnf(solve.entry));
+    const fastest = valid.reduce((best, current) =>
+        current.solve.entry.officialMs! < best.solve.entry.officialMs! ? current : best,
+    );
+    solves[fastest.index] = {...solves[fastest.index], disposition: "dropped-fastest"};
+
+    if (dnfs.length === 0) {
+        const slowest = valid
+            .filter(({index}) => index !== fastest.index)
+            .reduce((worst, current) =>
+                current.solve.entry.officialMs! > worst.solve.entry.officialMs! ? current : worst,
+            );
+        solves[slowest.index] = {...solves[slowest.index], disposition: "dropped-slowest"};
+    }
+
+    return {average, required: size, dnfCount: dnfs.length, solves};
 }
 
 function calculateRollingAverage(newestFirst: SolveHistoryEntry[], size: number): RollingAverage {
