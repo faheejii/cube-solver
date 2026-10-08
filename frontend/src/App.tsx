@@ -11,6 +11,7 @@ import TimerWorkspace from "./TimerWorkspace";
 import {
     createSolveAttempt,
     cancelSolveJob,
+    fetchSolveHistory,
     fetchSolveHistoryDetail,
     saveSolveSolution,
     updateSolvePenalty,
@@ -107,7 +108,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const attemptSavingRef = useRef<string | null>(null);
     const completedAttemptRef = useRef<CompletedAttemptSnapshot | null>(null);
     const modalJobRequestIdRef = useRef(0);
-    const modalReturnFocusRef = useRef<HTMLElement | null>(null);
+    const modalReturnFocusRef = useRef<HTMLElement | SVGElement | null>(null);
 
     const {
         processes,
@@ -253,13 +254,18 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         }
         const handleModalKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
+                // Confirmation dialogs rendered above the solution own their dismissal.
+                if (pendingDelete || pendingModalAction) return;
                 event.preventDefault();
+                // A nested dialog can leave focus in the dialog beneath it; handle Escape
+                // at capture time so only the topmost solution layer responds.
+                event.stopPropagation();
                 closeSolutionModal();
             }
         };
-        window.addEventListener("keydown", handleModalKeyDown);
-        return () => window.removeEventListener("keydown", handleModalKeyDown);
-    }, [modalStatus, modalDirty, pendingDelete]);
+        window.addEventListener("keydown", handleModalKeyDown, true);
+        return () => window.removeEventListener("keydown", handleModalKeyDown, true);
+    }, [modalStatus, modalDirty, pendingDelete, pendingModalAction]);
 
     useEffect(() => {
         if (!processPreview) {
@@ -305,8 +311,13 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         }
     }
 
-    async function openHistorySolution(entry: SolveHistoryEntry, solveNumber?: number, filteredResult = false) {
-        modalReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    async function openHistorySolution(
+        entry: SolveHistoryEntry,
+        solveNumber?: number,
+        filteredResult = false,
+        returnFocusTo?: HTMLElement | SVGElement,
+    ) {
+        modalReturnFocusRef.current = returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
         setModalStatus("loading");
         setModalError(null);
         setPenaltyError(null);
@@ -335,6 +346,27 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
             setModalError(message);
             setModalStatus("error");
         }
+    }
+
+    async function openBestSolve(bestMs: number) {
+        const matchesBest = (entry: SolveHistoryEntry) => !entry.dnf && entry.officialMs === bestMs;
+        const cachedEntries = [...historyEntries, ...(statistics?.recentSolves ?? [])];
+        const cachedBest = cachedEntries.find(matchesBest);
+        if (cachedBest) {
+            const historyIndex = historyEntries.findIndex((entry) => entry.id === cachedBest.id);
+            const recentIndex = statistics?.recentSolves.findIndex((entry) => entry.id === cachedBest.id) ?? -1;
+            const index = historyIndex >= 0 ? historyIndex : recentIndex;
+            const solveNumber = index >= 0 && statistics ? statistics.solveCount - index : undefined;
+            void openHistorySolution(cachedBest, solveNumber);
+            return;
+        }
+
+        const page = await fetchSolveHistory(100, null, {time: formatSolveTime(bestMs)});
+        const bestEntry = page.items.find(matchesBest);
+        if (!bestEntry) {
+            throw new Error("Best solve is no longer available. Refresh statistics and try again.");
+        }
+        void openHistorySolution(bestEntry);
     }
 
     async function computeModalSolution(
@@ -800,6 +832,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                             onCancelEdit={handleCancelEdit}
                             onSaveEdit={handleSaveEdit}
                             onShowSolution={handleShowSolution}
+                            onOpenSolve={(entry, solveNumber, filteredResult, returnFocusTo) =>
+                                void openHistorySolution(entry, solveNumber, filteredResult, returnFocusTo)}
                         />
 
                         {error || attemptSaveStatus === "error" ? (
@@ -831,10 +865,12 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                                 solveCount={statistics?.solveCount ?? null}
                                 statistics={statistics}
                                 statisticsLoading={statisticsLoading}
+                                onOpenBestSolve={openBestSolve}
                                 deletingSolveId={deletingSolveId}
                                 onRefresh={() => void loadHistory()}
                                 onLoadMore={() => void loadMoreHistory()}
-                                onOpenSolve={(entry, solveNumber, filteredResult) => void openHistorySolution(entry, solveNumber, filteredResult)}
+                                onOpenSolve={(entry, solveNumber, filteredResult, returnFocusTo) =>
+                                    void openHistorySolution(entry, solveNumber, filteredResult, returnFocusTo)}
                                 onDeleteSolve={(entry) => requestDeleteSolve(entry)}
                             />
                         ) : activeView === "settings" ? (
@@ -859,6 +895,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 <StatisticsRail
                     statistics={statistics}
                     loading={statisticsLoading}
+                    onOpenBestSolve={openBestSolve}
                     entries={historyEntries}
                     historyStatus={historyStatus}
                     historyError={historyError}
@@ -868,7 +905,8 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                     onLoadMore={() => void loadMoreHistory()}
                     onRetry={() => void (historyStatus === "error" ? loadHistory() : loadMoreHistory())}
                     onOpenHistory={() => setActiveView("history")}
-                    onOpenSolve={(entry, solveNumber, filteredResult) => void openHistorySolution(entry, solveNumber, filteredResult)}
+                    onOpenSolve={(entry, solveNumber, filteredResult, returnFocusTo) =>
+                        void openHistorySolution(entry, solveNumber, filteredResult, returnFocusTo)}
                 />
             ) : null}
 
@@ -930,7 +968,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                             </div>
                             <div className="solution-modal-actions">
                                 <button className="icon-button" type="button" onClick={() => closeSolutionModal()}
-                                        aria-label="Close solution">
+                                        aria-label="Close solution" autoFocus>
                                     <X size={18}/>
                                 </button>
                                 <button

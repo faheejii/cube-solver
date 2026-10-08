@@ -232,6 +232,8 @@
 
 .history-statistics .rail-stat {
     min-height: 76px;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
 }
 
 .history-statistics .rail-stat:last-child {

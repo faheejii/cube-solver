@@ -12,6 +12,8 @@
 ## Statistics chart
 
 - Last 50 is the initial range; All solves loads the complete cursor history. Range and Time/Ao5/Ao12 metric selection remain independent while the solution dialog is open.
+- Ao5 and Ao12 values are keyboard-accessible buttons in Timer, History, and Statistics summaries. They open a breakdown of the latest 5 or 12 unfiltered solves, including official +2 times and deterministic fastest/slowest exclusions; one DNF is the dropped slowest result and multiple DNFs produce a DNF average. Partial windows explain how many solves remain. Each solve opens its solution above the breakdown, and closing overlays restores focus to the prior row or metric.
+- The Best metric in each statistics summary opens a solve that attains the displayed best. In the Statistics modal, this is scoped to the selected range; outside it, it uses all history. If several solves tie, opening any tied solve is valid.
 - The summary reports the selected range. Time uses official times; rolling metrics align each point to the solve ending its WCA-style window. A single DNF is removed as the high result; windows with multiple DNFs are DNF; incomplete windows have no plotted point.
 - Chart points are keyboard-operable and expose solve number, metric value/status, and timestamp. Activating a point opens that exact solve above the chart. Closing the solution returns focus to the selected chart point without resetting the chart.
 

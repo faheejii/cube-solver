@@ -18,15 +18,17 @@ type Props = {
     loadingMore: boolean;
     hasMore: boolean;
     solveCount: number | null;
+    onOpenBestSolve?: (bestMs: number) => Promise<void> | void;
     onLoadMore: () => void;
     onRetry: () => void;
     onOpenHistory: () => void;
-    onOpenSolve: (entry: SolveHistoryEntry, solveNumber?: number, filteredResult?: boolean) => void;
+    onOpenSolve: (entry: SolveHistoryEntry, solveNumber?: number, filteredResult?: boolean, returnFocusTo?: HTMLElement | SVGElement) => void;
 };
 
 export default function StatisticsRail({
                                            statistics,
                                            loading,
+                                           onOpenBestSolve,
                                            entries,
                                            historyStatus,
                                            historyError,
@@ -72,7 +74,12 @@ export default function StatisticsRail({
                         More <ArrowUpRight size={14}/>
                     </button>
                 </div>
-                <StatisticsSummary statistics={statistics} loading={loading}/>
+                <StatisticsSummary
+                    statistics={statistics}
+                    loading={loading}
+                    onOpenBestSolve={onOpenBestSolve}
+                    onOpenSolve={onOpenSolve}
+                />
             </section>
 
             <section className="rail-card recent-card">

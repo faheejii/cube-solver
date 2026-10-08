@@ -1,5 +1,5 @@
 import {expect, test} from "@playwright/test";
-import {mockProductionApi, normalUser} from "./production-fixtures";
+import {historyEntry, mockProductionApi, normalUser} from "./production-fixtures";
 
 test.describe("authenticated dashboard production flow", () => {
     test("opens the solve-time statistics modal from Statistics More", async ({page}) => {
@@ -39,6 +39,102 @@ test.describe("authenticated dashboard production flow", () => {
         await expect(page.getByRole("dialog", {name: "Statistics"})).toBeVisible();
         await page.keyboard.press("Escape");
         await expect(page.getByRole("dialog", {name: "Statistics"})).toHaveCount(0);
+    });
+
+    test("opens the solve behind the all-history Best statistic", async ({page}) => {
+        const historyEntries = Array.from({length: 21}, (_, index) => ({
+            ...historyEntry,
+            id: 21 - index,
+            clientAttemptId: `best-lookup-${21 - index}`,
+            scramble: index === 20 ? "BEST_ONLY R U" : `R U ${index}`,
+            timerMs: index === 20 ? 5_000 : 20_000 + index * 100,
+            officialMs: index === 20 ? 5_000 : 20_000 + index * 100,
+            createdAt: new Date(Date.now() - index * 1_000).toISOString(),
+        }));
+        const api = await mockProductionApi(page, {user: normalUser, historyEntries});
+        await page.goto("/");
+        await page.getByRole("button", {name: "History"}).click();
+
+        const bestButton = page.getByRole("button", {name: "Open best solve 5.00"});
+        await expect(bestButton).toBeVisible();
+        await bestButton.click();
+
+        const solutionDialog = page.getByRole("dialog", {name: "Solve solution"});
+        await expect(solutionDialog.locator(".modal-scramble")).toHaveText("BEST_ONLY R U");
+        expect(api.requests.some((request) => request.pathname === "/api/solves" && new URLSearchParams(request.search).get("time") === "5.00")).toBe(true);
+    });
+
+    test("opens Ao5 and Ao12 breakdowns from Timer, History, and Statistics", async ({page}) => {
+        await mockProductionApi(page, {user: normalUser});
+        await page.goto("/");
+
+        const sidebarAo5 = page.locator(".statistics-card").getByRole("button", {name: /Open Ao5 breakdown/});
+        await sidebarAo5.click();
+        const sidebarBreakdown = page.getByRole("dialog", {name: "Ao5 breakdown"});
+        await expect(sidebarBreakdown).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(sidebarBreakdown).toHaveCount(0);
+        await expect(sidebarAo5).toBeFocused();
+
+        const timerAo5 = page.locator(".dashboard-inline-stats").getByRole("button", {name: /Open Ao5 breakdown/});
+        await timerAo5.click();
+        const timerBreakdown = page.getByRole("dialog", {name: "Ao5 breakdown"});
+        await expect(timerBreakdown).toBeVisible();
+        await expect(timerBreakdown).toContainText("1 of 5 solves");
+        const solveRow = timerBreakdown.getByRole("button", {name: /Open solve 1,/});
+        await solveRow.click();
+
+        const solutionDialog = page.getByRole("dialog", {name: "Solve solution"});
+        await expect(solutionDialog).toBeVisible();
+        await expect(timerBreakdown).toBeVisible();
+        const breakdownLayer = await page.locator(".rolling-average-backdrop").evaluate((node) => Number(getComputedStyle(node).zIndex));
+        const solutionLayer = await page.locator(".solution-modal-backdrop").evaluate((node) => Number(getComputedStyle(node).zIndex));
+        expect(solutionLayer).toBeGreaterThan(breakdownLayer);
+        await page.keyboard.press("Escape");
+        await expect(solutionDialog).toHaveCount(0);
+        await expect(solveRow).toBeFocused();
+        await page.keyboard.press("Escape");
+        await expect(timerBreakdown).toHaveCount(0);
+        await expect(timerAo5).toBeFocused();
+
+        await page.getByRole("button", {name: "History"}).click();
+        const historyStats = page.locator(".history-statistics .rail-stat");
+        await expect(historyStats).toHaveCount(6);
+        expect(await historyStats.evaluateAll((cells) =>
+            cells.map((cell) => getComputedStyle(cell).borderRightWidth),
+        )).toEqual(["1px", "1px", "1px", "1px", "1px", "0px"]);
+        const historyAo12 = page.getByRole("button", {name: /Open Ao12 breakdown/});
+        await historyAo12.click();
+        const historyBreakdown = page.getByRole("dialog", {name: "Ao12 breakdown"});
+        await expect(historyBreakdown).toBeVisible();
+        await expect(historyBreakdown).toContainText("1 of 12 solves");
+        await page.keyboard.press("Escape");
+        await expect(historyBreakdown).toHaveCount(0);
+        await expect(historyAo12).toBeFocused();
+
+        await page.getByRole("button", {name: "Timer"}).click();
+        await page.getByRole("button", {name: "More statistics"}).click();
+        const statisticsDialog = page.getByRole("dialog", {name: "Statistics"});
+        await expect(statisticsDialog).toBeVisible();
+        const statisticsAo5 = statisticsDialog.getByRole("button", {name: /Open Ao5 breakdown/});
+        await statisticsAo5.click();
+        const nestedBreakdown = page.getByRole("dialog", {name: "Ao5 breakdown"});
+        await expect(nestedBreakdown).toBeVisible();
+        const statisticsSolveRow = nestedBreakdown.getByRole("button", {name: /Open solve 1,/});
+        await statisticsSolveRow.click();
+        const nestedSolution = page.getByRole("dialog", {name: "Solve solution"});
+        await expect(nestedSolution).toBeVisible();
+        await expect(nestedBreakdown).toBeVisible();
+        await expect(statisticsDialog).toBeVisible();
+        await page.keyboard.press("Escape");
+        await expect(nestedSolution).toHaveCount(0);
+        await expect(statisticsSolveRow).toBeFocused();
+        await page.keyboard.press("Escape");
+        await expect(nestedBreakdown).toHaveCount(0);
+        await expect(statisticsDialog).toBeVisible();
+        await expect(statisticsAo5).toBeFocused();
+        await page.keyboard.press("Escape");
+        await expect(statisticsDialog).toHaveCount(0);
     });
 
     test("loads the Three.js chunk only when a cube preview nears the viewport", async ({page}) => {

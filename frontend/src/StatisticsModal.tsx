@@ -10,7 +10,7 @@ import type {SolveHistoryEntry, SolveStatistics} from "./types";
 type Props = {
     statistics: SolveStatistics | null;
     onClose: () => void;
-    onOpenSolve: (entry: SolveHistoryEntry, solveNumber?: number, filteredResult?: boolean) => void;
+    onOpenSolve: (entry: SolveHistoryEntry, solveNumber?: number, filteredResult?: boolean, returnFocusTo?: HTMLElement | SVGElement) => void;
 };
 
 type ChartPoint = {
@@ -162,7 +162,17 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
                     ))}
                 </div>
 
-                <StatisticsSummary statistics={windowStatistics} loading={entries === null}/>
+                <StatisticsSummary
+                    statistics={windowStatistics}
+                    loading={entries === null}
+                    onOpenSolve={onOpenSolve}
+                    onOpenBestSolve={entries === null ? undefined : (bestMs) => {
+                        const bestEntry = newestFirst.find((entry) => !entry.dnf && entry.officialMs === bestMs);
+                        if (!bestEntry) throw new Error("Best solve is not available in this range.");
+                        const bestPoint = points.find((point) => point.entry.id === bestEntry.id);
+                        onOpenSolve(bestEntry, bestPoint?.solveNumber);
+                    }}
+                />
 
                 <section className="statistics-chart-section" aria-label={`${metricLabel(metric)} chart`}>
                     <div className="statistics-chart-heading">
@@ -238,12 +248,12 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
                                             onClick={(event) => {
                                                 setActivePoint(point.index);
                                                 event.currentTarget.focus();
-                                                onOpenSolve(point.entry, point.solveNumber);
+                                                onOpenSolve(point.entry, point.solveNumber, false, event.currentTarget);
                                             }}
                                             onKeyDown={(event) => {
                                                 if (event.key === "Enter" || event.key === " ") {
                                                     event.preventDefault();
-                                                    onOpenSolve(point.entry, point.solveNumber);
+                                                    onOpenSolve(point.entry, point.solveNumber, false, event.currentTarget);
                                                 }
                                             }}
                                             onMouseEnter={() => setActivePoint(point.index)}

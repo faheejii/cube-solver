@@ -10,7 +10,8 @@ import {
 import ScrambleCube from "./ScrambleCube";
 import CrossFaceSelect from "./CrossFaceSelect";
 import SolvePenaltyControl from "./SolvePenaltyControl";
-import {formatMetricTime, formatRollingAverage} from "./format";
+import RollingAverageStat from "./RollingAverageStat";
+import {formatMetricTime} from "./format";
 import type {ArmedSource, TimerPenalty} from "./hooks/useTimer";
 import type {SolveHistoryEntry, SolveResponse, SolveStatistics} from "./types";
 
@@ -50,6 +51,7 @@ type Props = {
     onCancelEdit: () => void;
     onSaveEdit: () => void;
     onShowSolution: () => void;
+    onOpenSolve: (entry: SolveHistoryEntry, solveNumber?: number, filteredResult?: boolean, returnFocusTo?: HTMLElement | SVGElement) => void;
     onPenaltyChange: (penalty: TimerPenalty) => void;
     onDeleteSavedSolve: (entry: SolveHistoryEntry) => void;
 };
@@ -85,6 +87,7 @@ export default function TimerWorkspace({
                                            onCancelEdit,
                                            onSaveEdit,
                                            onShowSolution,
+                                           onOpenSolve,
                                            onPenaltyChange,
                                            onDeleteSavedSolve,
                                        }: Props) {
@@ -248,8 +251,20 @@ export default function TimerWorkspace({
                     ) : null}
                     <div className="dashboard-inline-stats">
                         <InlineStat label="Best" value={formatMetricTime(statistics?.bestMs ?? null)} accent="blue"/>
-                        <InlineStat label="Ao5" value={formatRollingAverage(statistics?.ao5 ?? null)} accent="violet"/>
-                        <InlineStat label="Ao12" value={formatRollingAverage(statistics?.ao12 ?? null)} accent="cyan"/>
+                        <RollingAverageStat
+                            size={5}
+                            value={statistics?.ao5 ?? null}
+                            solveCount={statistics?.solveCount ?? null}
+                            onOpenSolve={onOpenSolve}
+                            className="inline-stat accent-violet"
+                        />
+                        <RollingAverageStat
+                            size={12}
+                            value={statistics?.ao12 ?? null}
+                            solveCount={statistics?.solveCount ?? null}
+                            onOpenSolve={onOpenSolve}
+                            className="inline-stat accent-cyan"
+                        />
                     </div>
                     <ScrambleCube scramble={scramble}/>
                 </div>

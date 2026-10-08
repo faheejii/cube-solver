@@ -30,7 +30,7 @@ const EMPTY_STATE: FilteredHistoryState = {
 };
 
 function getFilteredPage(page: SolveHistoryResponse | FilteredPage): FilteredPage {
-    if (!("totalCount" in page) || !Number.isInteger(page.totalCount) || page.totalCount < 0) {
+    if (typeof page.totalCount !== "number" || !Number.isInteger(page.totalCount) || page.totalCount < 0) {
         throw new Error("Filtered history response is missing a valid totalCount");
     }
     return page as FilteredPage;

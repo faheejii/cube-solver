@@ -47,6 +47,7 @@ function renderRail(overrides: Partial<ComponentProps<typeof StatisticsRail>> = 
         loadingMore: false,
         hasMore: true,
         solveCount: 12,
+        onOpenBestSolve: vi.fn(),
         onLoadMore: vi.fn(),
         onRetry: vi.fn(),
         onOpenHistory: vi.fn(),
@@ -58,6 +59,14 @@ function renderRail(overrides: Partial<ComponentProps<typeof StatisticsRail>> = 
 }
 
 describe("StatisticsRail solves list", () => {
+    it("opens the solve represented by the Timer Best statistic", () => {
+        const {props} = renderRail();
+
+        fireEvent.click(screen.getByRole("button", {name: "Open best solve 12.30"}));
+
+        expect(props.onOpenBestSolve).toHaveBeenCalledWith(12_300);
+    });
+
     it("opens statistics from its More button without changing the Solves More action", async () => {
         const {props} = renderRail();
         fireEvent.click(screen.getByRole("button", {name: "More statistics"}));
@@ -77,7 +86,7 @@ describe("StatisticsRail solves list", () => {
         expect(screen.queryByText("Recent solves")).not.toBeInTheDocument();
         expect(screen.getByText("#12")).toBeInTheDocument();
         expect(screen.getByRole("region", {name: "Solves list"})).toBeInTheDocument();
-        fireEvent.click(screen.getByRole("button", {name: /12\.30/}));
+        fireEvent.click(document.querySelector(".rail-recent-row")!);
         expect(props.onOpenSolve).toHaveBeenCalledWith(entry, 12);
     });
 

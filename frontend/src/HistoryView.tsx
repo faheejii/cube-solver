@@ -32,10 +32,11 @@ type Props = {
     solveCount: number | null;
     statistics: SolveStatistics | null;
     statisticsLoading: boolean;
+    onOpenBestSolve?: (bestMs: number) => Promise<void> | void;
     deletingSolveId: number | null;
     onRefresh: () => void;
     onLoadMore: () => void;
-    onOpenSolve: (entry: SolveHistoryEntry, solveNumber?: number, filteredResult?: boolean) => void;
+    onOpenSolve: (entry: SolveHistoryEntry, solveNumber?: number, filteredResult?: boolean, returnFocusTo?: HTMLElement | SVGElement) => void;
     onDeleteSolve: (entry: SolveHistoryEntry) => void;
 };
 
@@ -48,6 +49,7 @@ export default function HistoryView({
                                         solveCount,
                                         statistics,
                                         statisticsLoading,
+                                        onOpenBestSolve,
                                         deletingSolveId,
                                         onRefresh,
                                         onLoadMore,
@@ -238,7 +240,12 @@ export default function HistoryView({
                         More <ArrowUpRight size={14}/>
                     </button>
                 </div>
-                <StatisticsSummary statistics={statistics} loading={statisticsLoading}/>
+                <StatisticsSummary
+                    statistics={statistics}
+                    loading={statisticsLoading}
+                    onOpenBestSolve={onOpenBestSolve}
+                    onOpenSolve={onOpenSolve}
+                />
             </section>
 
             {statisticsOpen ? (
