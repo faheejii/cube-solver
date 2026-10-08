@@ -22,6 +22,7 @@ frontend/.env.*
 AGENTS.md
 PLAN.md
 DESIGN.md
+UX-CONTRACT.md
 .kotlin/
 
 ### Eclipse ###
