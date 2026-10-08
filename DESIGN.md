@@ -9,6 +9,7 @@ Cube Solver is a focused speedcubing instrument: fast to scan during a session, 
 - Keep the dark teal surfaces and the existing light theme. Source all colors from the CSS variables in `frontend/src/styles/foundation.css`.
 - Use system sans for interface labels and Space Mono for times, move notation, and other compact numeric data.
 - Keep dividers crisp, corners restrained, and cards flat. Avoid decorative gradients, oversized rounded panels, and gratuitous motion.
+- Use the shared `--radius-md` (5px) for interactive buttons across views and dialogs; avoid square or oversized button-specific corner radii.
 - Use blue for active navigation and chart interaction, green for best performance, amber for DNFs, and red only for destructive/error states.
 - Do not add chart dependencies for the solve trend; use the project-owned responsive SVG.
 

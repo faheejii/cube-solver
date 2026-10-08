@@ -341,7 +341,7 @@ textarea:focus-visible,
 .solve-penalty-options button {
     min-height: 32px;
     border: 0;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: transparent;
     color: var(--muted);
     cursor: pointer;
@@ -353,6 +353,11 @@ textarea:focus-visible,
 .solve-penalty-options button[aria-pressed="true"] {
     background: var(--blue);
     color: #fff;
+}
+
+.solve-penalty-options button:focus-visible {
+    outline: 2px solid var(--blue-bright);
+    outline-offset: 2px;
 }
 
 .solve-penalty-options button:disabled {
@@ -871,7 +876,7 @@ textarea:focus-visible,
     height: 34px;
     min-height: 34px;
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: var(--panel-muted);
     color: var(--muted);
 }
@@ -1253,4 +1258,9 @@ textarea:focus-visible,
     .playback-speed-select {
         margin-left: auto;
     }
+}
+
+/* Keep interactive controls rounded consistently across screens and dialogs. */
+:root button {
+    border-radius: var(--radius-md);
 }

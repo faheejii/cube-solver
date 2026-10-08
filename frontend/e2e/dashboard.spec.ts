@@ -2,6 +2,29 @@ import {expect, test} from "@playwright/test";
 import {historyEntry, mockProductionApi, normalUser} from "./production-fixtures";
 
 test.describe("authenticated dashboard production flow", () => {
+    test("uses the shared rounded shape for statistics and confirmation buttons", async ({page}) => {
+        await mockProductionApi(page, {user: normalUser});
+        await page.goto("/");
+
+        await page.locator(".statistics-card .rail-card-header button").click();
+        const statisticsDialog = page.getByRole("dialog", {name: "Statistics"});
+        await expect(statisticsDialog).toBeVisible();
+        const statisticsButtonRadii = await statisticsDialog
+            .locator(".statistics-range-control button, .statistics-metric-control button")
+            .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderRadius));
+        expect(statisticsButtonRadii.length).toBeGreaterThan(0);
+        expect(new Set(statisticsButtonRadii)).toEqual(new Set(["5px"]));
+
+        await page.keyboard.press("Escape");
+        await page.getByRole("button", {name: "History"}).click();
+        await page.getByRole("button", {name: "Delete solve 12.34"}).click();
+        const confirmation = page.getByRole("alertdialog", {name: "Delete solve?"});
+        const confirmationButtonRadii = await confirmation
+            .locator(".confirmation-dialog-actions button")
+            .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderRadius));
+        expect(confirmationButtonRadii).toEqual(["5px", "5px"]);
+    });
+
     test("opens the solve-time statistics modal from Statistics More", async ({page}) => {
         const api = await mockProductionApi(page, {user: normalUser});
         await page.goto("/");
