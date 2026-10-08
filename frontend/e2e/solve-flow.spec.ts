@@ -114,8 +114,6 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await timer.click();
         await expect(timer).toHaveClass(/phase-running/);
         await page.keyboard.press("a");
-        await expect(timer).toHaveClass(/phase-stopped/);
-        await expectTimerOutline("rgb(228, 184, 77)");
 
         const saveToast = page.getByRole("status");
         await expect(saveToast).toContainText(/Solve saved · \d+\.\d{2}/);

@@ -173,6 +173,12 @@ test.describe("authenticated dashboard production flow", () => {
         await expect(historyAo12).toBeFocused();
 
         await page.getByRole("button", {name: "Timer"}).click();
+        let delayedDetailCompleted = false;
+        await page.route("**/api/solves/1", async (route) => {
+            await page.waitForTimeout(300);
+            await route.fallback();
+            delayedDetailCompleted = true;
+        });
         await page.getByRole("button", {name: "More statistics"}).click();
         const statisticsDialog = page.getByRole("dialog", {name: "Statistics"});
         await expect(statisticsDialog).toBeVisible();
@@ -187,6 +193,8 @@ test.describe("authenticated dashboard production flow", () => {
         await expect(nestedBreakdown).toBeVisible();
         await expect(statisticsDialog).toBeVisible();
         await page.keyboard.press("Escape");
+        await expect(nestedSolution).toHaveCount(0);
+        await expect.poll(() => delayedDetailCompleted).toBe(true);
         await expect(nestedSolution).toHaveCount(0);
         await expect(statisticsSolveRow).toBeFocused();
         await page.keyboard.press("Escape");

@@ -1,4 +1,4 @@
-import {lazy, startTransition, Suspense, useEffect, useRef, useState} from "react";
+import {lazy, startTransition, Suspense, useEffect, useLayoutEffect, useRef, useState} from "react";
 import {LoaderCircle, Save, Trash2, X} from "lucide-react";
 import {CubePlaybackModeContext, CubePreviewModeContext} from "./CubePreviewModeContext";
 import CrossFaceSelect from "./CrossFaceSelect";
@@ -108,7 +108,15 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const attemptSavingRef = useRef<string | null>(null);
     const completedAttemptRef = useRef<CompletedAttemptSnapshot | null>(null);
     const modalJobRequestIdRef = useRef(0);
+    const modalLoadRequestIdRef = useRef(0);
     const modalReturnFocusRef = useRef<HTMLElement | SVGElement | null>(null);
+
+    useLayoutEffect(() => {
+        if (modalStatus !== "idle") return;
+        const target = modalReturnFocusRef.current;
+        if (target?.isConnected) target.focus({preventScroll: true});
+        modalReturnFocusRef.current = null;
+    }, [modalStatus]);
 
     const {
         processes,
@@ -317,6 +325,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         filteredResult = false,
         returnFocusTo?: HTMLElement | SVGElement,
     ) {
+        const requestId = ++modalLoadRequestIdRef.current;
         modalReturnFocusRef.current = returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
         setModalStatus("loading");
         setModalError(null);
@@ -329,6 +338,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         setModalResult(null);
         try {
             const detail = await fetchSolveHistoryDetail(entry.id);
+            if (requestId !== modalLoadRequestIdRef.current) return;
             const saved = detail.solutions[0];
             const nextMode = (saved?.mode ?? f2lMode) as F2LMode;
             const nextCross = saved?.crossFaceRequested ?? crossFace;
@@ -342,6 +352,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 await computeModalSolution(detail, nextMode, nextCross, true);
             }
         } catch (openError) {
+            if (requestId !== modalLoadRequestIdRef.current) return;
             const message = openError instanceof Error ? openError.message : "Solve detail request failed";
             setModalError(message);
             setModalStatus("error");
@@ -542,6 +553,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
             return;
         }
         setModalStatus("idle");
+        modalLoadRequestIdRef.current++;
         modalJobRequestIdRef.current++;
         setModalDetail(null);
         setModalEntry(null);
@@ -559,11 +571,6 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
         setModalCompletedCandidates(0);
         setModalCandidatesEvaluated(0);
         setModalBestTotalMoves(-1);
-        window.requestAnimationFrame(() => {
-            const target = modalReturnFocusRef.current;
-            if (target?.isConnected) target.focus();
-            modalReturnFocusRef.current = null;
-        });
     }
 
     async function confirmDiscardModalPreview() {
