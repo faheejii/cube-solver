@@ -52,6 +52,7 @@ type Props = {
     onSaveEdit: () => void;
     onShowSolution: () => void;
     onOpenSolve: (entry: SolveHistoryEntry, solveNumber?: number, filteredResult?: boolean, returnFocusTo?: HTMLElement | SVGElement) => void;
+    onOpenBestSolve: (bestMs: number) => Promise<void> | void;
     onPenaltyChange: (penalty: TimerPenalty) => void;
     onDeleteSavedSolve: (entry: SolveHistoryEntry) => void;
 };
@@ -88,11 +89,14 @@ export default function TimerWorkspace({
                                            onSaveEdit,
                                            onShowSolution,
                                            onOpenSolve,
+                                           onOpenBestSolve,
                                            onPenaltyChange,
                                            onDeleteSavedSolve,
                                        }: Props) {
     const scrambleTextRef = useRef<HTMLParagraphElement>(null);
     const [scrambleFontSize, setScrambleFontSize] = useState<number | null>(null);
+    const [openingBestSolve, setOpeningBestSolve] = useState(false);
+    const [bestSolveError, setBestSolveError] = useState<string | null>(null);
 
     useLayoutEffect(() => {
         const textElement = scrambleTextRef.current;
@@ -136,6 +140,20 @@ export default function TimerWorkspace({
         resizeObserver.observe(container);
         return () => resizeObserver.disconnect();
     }, [scramble, isEditingScramble]);
+
+    async function handleOpenBestSolve() {
+        const bestMs = statistics?.bestMs;
+        if (bestMs == null || openingBestSolve) return;
+        setOpeningBestSolve(true);
+        setBestSolveError(null);
+        try {
+            await onOpenBestSolve(bestMs);
+        } catch {
+            setBestSolveError("Could not open the best solve. Try again.");
+        } finally {
+            setOpeningBestSolve(false);
+        }
+    }
 
     return (
         <section className="timer-workspace">
@@ -250,7 +268,14 @@ export default function TimerWorkspace({
                         </div>
                     ) : null}
                     <div className="dashboard-inline-stats">
-                        <InlineStat label="Best" value={formatMetricTime(statistics?.bestMs ?? null)} accent="blue"/>
+                        <InlineStat
+                            label="Best"
+                            value={formatMetricTime(statistics?.bestMs ?? null)}
+                            accent="blue"
+                            onClick={() => void handleOpenBestSolve()}
+                            disabled={statistics?.bestMs == null || openingBestSolve}
+                            busy={openingBestSolve}
+                        />
                         <RollingAverageStat
                             size={5}
                             value={statistics?.ao5 ?? null}
@@ -266,6 +291,7 @@ export default function TimerWorkspace({
                             className="inline-stat accent-cyan"
                         />
                     </div>
+                    {bestSolveError ? <p className="statistics-summary-error" role="alert">{bestSolveError}</p> : null}
                     <ScrambleCube scramble={scramble}/>
                 </div>
                 <button
@@ -289,15 +315,38 @@ function InlineStat({
                         label,
                         value,
                         accent,
+                        onClick,
+                        disabled = false,
+                        busy = false,
                     }: {
     label: string;
     value: string;
     accent: string;
+    onClick?: () => void;
+    disabled?: boolean;
+    busy?: boolean;
 }) {
+    const content = <><span>{label}</span><strong>{value}</strong>{busy ? <LoaderCircle className="best-solve-loading" size={13} aria-hidden="true"/> : null}</>;
+
+    if (onClick) {
+        return (
+            <button
+                className={`inline-stat inline-stat-action accent-${accent}`}
+                type="button"
+                onClick={onClick}
+                disabled={disabled}
+                aria-label={`Open best solve ${value}`}
+                aria-busy={busy}
+                title="Open solve with best time"
+            >
+                {content}
+            </button>
+        );
+    }
+
     return (
         <div className={`inline-stat accent-${accent}`}>
-            <span>{label}</span>
-            <strong>{value}</strong>
+            {content}
         </div>
     );
 }

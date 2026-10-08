@@ -384,6 +384,32 @@
     text-align: center;
 }
 
+.inline-stat-action {
+    position: relative;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    padding: 0;
+}
+
+.inline-stat-action:hover:not(:disabled) {
+    background: var(--panel-hover);
+}
+
+.inline-stat-action:focus-visible {
+    z-index: 1;
+    outline: 2px solid var(--blue-bright);
+    outline-offset: -3px;
+}
+
+.inline-stat-action:disabled {
+    cursor: default;
+    opacity: 0.78;
+}
+
 .inline-stat:last-child {
     border-right: 0;
 }

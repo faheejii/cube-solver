@@ -100,6 +100,13 @@
     cursor: pointer;
 }
 
+.statistics-grid .rail-stat-action,
+.statistics-grid .rolling-average-stat,
+.dashboard-inline-stats .inline-stat-action,
+.dashboard-inline-stats .rolling-average-stat {
+    border-radius: 0;
+}
+
 .rolling-average-stat:hover {
     background: var(--panel-hover);
 }

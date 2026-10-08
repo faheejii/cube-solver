@@ -832,6 +832,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                             onCancelEdit={handleCancelEdit}
                             onSaveEdit={handleSaveEdit}
                             onShowSolution={handleShowSolution}
+                            onOpenBestSolve={openBestSolve}
                             onOpenSolve={(entry, solveNumber, filteredResult, returnFocusTo) =>
                                 void openHistorySolution(entry, solveNumber, filteredResult, returnFocusTo)}
                         />

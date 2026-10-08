@@ -6,9 +6,18 @@ test.describe("authenticated dashboard production flow", () => {
         await mockProductionApi(page, {user: normalUser});
         await page.goto("/");
 
+        const inlineStatisticsRadii = await page.locator(".dashboard-inline-stats .rolling-average-stat")
+            .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderRadius));
+        expect(inlineStatisticsRadii.length).toBeGreaterThan(0);
+        expect(new Set(inlineStatisticsRadii)).toEqual(new Set(["0px"]));
+
         await page.locator(".statistics-card .rail-card-header button").click();
         const statisticsDialog = page.getByRole("dialog", {name: "Statistics"});
         await expect(statisticsDialog).toBeVisible();
+        const summaryRadii = await statisticsDialog.locator(".statistics-grid button")
+            .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderRadius));
+        expect(summaryRadii.length).toBeGreaterThan(0);
+        expect(new Set(summaryRadii)).toEqual(new Set(["0px"]));
         const statisticsButtonRadii = await statisticsDialog
             .locator(".statistics-range-control button, .statistics-metric-control button")
             .evaluateAll((buttons) => buttons.map((button) => getComputedStyle(button).borderRadius));
@@ -85,6 +94,22 @@ test.describe("authenticated dashboard production flow", () => {
         const solutionDialog = page.getByRole("dialog", {name: "Solve solution"});
         await expect(solutionDialog.locator(".modal-scramble")).toHaveText("BEST_ONLY R U");
         expect(api.requests.some((request) => request.pathname === "/api/solves" && new URLSearchParams(request.search).get("time") === "5.00")).toBe(true);
+    });
+
+    test("opens the best solve from the Timer's inline statistics", async ({page}) => {
+        const historyEntries = [
+            {...historyEntry, id: 2, clientAttemptId: "timer-best-latest", scramble: "R U F", officialMs: 12_340, timerMs: 12_340},
+            {...historyEntry, id: 1, clientAttemptId: "timer-best-entry", scramble: "TIMER_BEST R U", officialMs: 5_670, timerMs: 5_670},
+        ];
+        await mockProductionApi(page, {user: normalUser, historyEntries});
+        await page.goto("/");
+
+        const bestButton = page.locator(".dashboard-inline-stats").getByRole("button", {name: "Open best solve 5.67"});
+        await expect(bestButton).toBeVisible();
+        await bestButton.click();
+
+        const solutionDialog = page.getByRole("dialog", {name: "Solve solution"});
+        await expect(solutionDialog.locator(".modal-scramble")).toHaveText("TIMER_BEST R U");
     });
 
     test("opens Ao5 and Ao12 breakdowns from Timer, History, and Statistics", async ({page}) => {
