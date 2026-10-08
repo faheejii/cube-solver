@@ -77,6 +77,12 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await expect(page.getByRole("button", {name: "Delete most recent solve"})).toHaveCount(0);
         await expect(page.getByRole("button", {name: "Show solution"})).toBeEnabled();
         const timer = page.getByLabel("Solve timer");
+        const expectTimerOutline = async (color: string) => {
+            await expect.poll(() => timer.evaluate((element) => {
+                const style = getComputedStyle(element);
+                return [style.borderTopColor, style.borderRightColor, style.borderBottomColor, style.borderLeftColor];
+            })).toEqual([color, color, color, color]);
+        };
 
         await timer.click();
         await expect(timer).toHaveClass(/phase-idle/);
@@ -92,6 +98,7 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await page.keyboard.down("Space");
         await page.waitForTimeout(550);
         await expect(timer).toHaveClass(/phase-armed-ready/);
+        await expectTimerOutline("rgb(47, 145, 214)");
         await expect(holdStatus).toContainText("Ready");
         await expect(holdStatus).toContainText("Release to inspect");
         await page.keyboard.up("Space");
@@ -103,10 +110,12 @@ test.describe("timer, solve, history, and playback production flows", () => {
         await expect(holdStatus).toContainText("Release to start solve");
         await page.keyboard.up("Space");
         await expect(timer).toHaveClass(/phase-running/);
+        await expectTimerOutline("rgb(98, 189, 145)");
         await timer.click();
         await expect(timer).toHaveClass(/phase-running/);
         await page.keyboard.press("a");
         await expect(timer).toHaveClass(/phase-stopped/);
+        await expectTimerOutline("rgb(228, 184, 77)");
 
         const saveToast = page.getByRole("status");
         await expect(saveToast).toContainText(/Solve saved · \d+\.\d{2}/);

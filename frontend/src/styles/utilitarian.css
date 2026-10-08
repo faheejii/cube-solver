@@ -278,8 +278,7 @@ textarea:focus-visible,
 .dashboard-timer-stage {
     grid-template-rows: minmax(0, 1fr) auto;
     gap: 8px;
-    border: 0;
-    border-top: 1px solid var(--border);
+    border: 1px solid var(--border);
     border-radius: 0;
     background: transparent;
     box-shadow: none;
@@ -301,9 +300,9 @@ textarea:focus-visible,
     display: none;
 }
 
-.dashboard-timer-stage.phase-armed { border-left-color: var(--blue); }
-.dashboard-timer-stage.phase-running { border-left-color: var(--green); }
-.dashboard-timer-stage.phase-stopped { border-left-color: var(--amber); }
+.dashboard-timer-stage.phase-armed { border-color: var(--blue); }
+.dashboard-timer-stage.phase-running { border-color: var(--green); }
+.dashboard-timer-stage.phase-stopped { border-color: var(--amber); }
 
 .dashboard-timer-number {
     color: var(--text);
