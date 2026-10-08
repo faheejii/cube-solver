@@ -21,6 +21,7 @@ frontend/.env.*
 /.codex/
 AGENTS.md
 PLAN.md
+DESIGN.md
 .kotlin/
 
 ### Eclipse ###
