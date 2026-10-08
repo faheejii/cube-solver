@@ -22,6 +22,7 @@ import jakarta.servlet.http.Cookie;
 import java.sql.SQLException;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
@@ -241,6 +242,7 @@ class SpringJpaApiIntegrationTest {
         var firstPage = mockMvc.perform(get("/api/solves?limit=2").cookie(sessionCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items", hasSize(2)))
+                .andExpect(jsonPath("$.totalCount", is(3)))
                 .andReturn();
         var cursor = jsonString(firstPage, "nextCursor");
         assertNotNull(cursor);
@@ -250,6 +252,7 @@ class SpringJpaApiIntegrationTest {
                         .cookie(sessionCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.totalCount", is(3)))
                 .andExpect(jsonPath("$.nextCursor").doesNotExist());
 
         loginAs(uniqueEmail("history-other"));
@@ -262,6 +265,182 @@ class SpringJpaApiIntegrationTest {
         mockMvc.perform(get("/api/solves").cookie(sessionCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.items", hasSize(0)));
+    }
+
+    @Test
+    void filteredHistory_shouldSearchLiterallyFilterPenaltiesAndPreserveCursorOrdering() throws Exception {
+        loginAs(uniqueEmail("filtered-history-owner"));
+        var none = createSolve("attempt-" + UUID.randomUUID(), "target R U", "none", 1000);
+        var plusTwoOlder = createSolve("attempt-" + UUID.randomUUID(), "TARGET F R", "+2", 1200);
+        var dnf = createSolve("attempt-" + UUID.randomUUID(), "Target L D", "dnf", 1300);
+        var literal = createSolve("attempt-" + UUID.randomUUID(), "literal %_\\ marker", "+2", 1400);
+        var plusTwoNewer = createSolve("attempt-" + UUID.randomUUID(), "target U F", "+2", 1500);
+        createSolve("attempt-" + UUID.randomUUID(), "unrelated scramble", "none", 1600);
+
+        mockMvc.perform(get("/api/stats").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recentSolves", hasSize(5)))
+                .andExpect(jsonPath("$.recentSolves[0].scramble", is("unrelated scramble")));
+
+        mockMvc.perform(get("/api/solves")
+                        .param("q", "  TaRgEt  ")
+                        .cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(4)))
+                .andExpect(jsonPath("$.items", hasSize(4)))
+                .andExpect(jsonPath("$.items[*].id", contains(
+                        (int) jsonLong(plusTwoNewer, "id"),
+                        (int) jsonLong(dnf, "id"),
+                        (int) jsonLong(plusTwoOlder, "id"),
+                        (int) jsonLong(none, "id"))))
+                .andReturn();
+
+        mockMvc.perform(get("/api/solves")
+                        .param("q", "%_\\")
+                        .cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].id", is((int) jsonLong(literal, "id"))));
+
+        mockMvc.perform(get("/api/solves").param("penalty", "none").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(2)))
+                .andExpect(jsonPath("$.items[*].penalty", contains("none", "none")));
+        mockMvc.perform(get("/api/solves").param("penalty", "+2").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(3)))
+                .andExpect(jsonPath("$.items[*].penalty", contains("+2", "+2", "+2")));
+        mockMvc.perform(get("/api/solves").param("penalty", "dnf").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.items[0].penalty", is("dnf")));
+
+        var firstFilteredPage = mockMvc.perform(get("/api/solves")
+                        .param("q", "target")
+                        .param("penalty", "+2")
+                        .param("limit", "1")
+                        .cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(2)))
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].id", is((int) jsonLong(plusTwoNewer, "id"))))
+                .andReturn();
+        var filteredCursor = jsonString(firstFilteredPage, "nextCursor");
+        mockMvc.perform(get("/api/solves")
+                        .param("q", "TARGET")
+                        .param("penalty", "+2")
+                        .param("limit", "1")
+                        .param("cursor", filteredCursor)
+                        .cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(2)))
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].id", is((int) jsonLong(plusTwoOlder, "id"))))
+                .andExpect(jsonPath("$.nextCursor").value(nullValue()));
+
+        mockMvc.perform(get("/api/solves")
+                        .param("penalty", "maybe")
+                        .cookie(sessionCookie()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code", is("BAD_REQUEST")))
+                .andExpect(jsonPath("$.error", is("penalty must be all, none, +2, or dnf")))
+                .andExpect(jsonPath("$.requestId", notNullValue()));
+
+        loginAs(uniqueEmail("filtered-history-other"));
+        createSolve("attempt-" + UUID.randomUUID(), "TARGET R U", "+2", 1700);
+        mockMvc.perform(get("/api/solves")
+                        .param("q", "target")
+                        .param("penalty", "+2")
+                        .cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].scramble", is("TARGET R U")));
+    }
+
+    @Test
+    void timeFilteredHistory_shouldMatchDisplayedOfficialTimesAndPreservePaginationAndOwnership() throws Exception {
+        loginAs(uniqueEmail("time-history-owner"));
+        var exact = createSolve("attempt-" + UUID.randomUUID(), "exact", "none", 210);
+        var endingInTwentyOne = createSolve("attempt-" + UUID.randomUUID(), "centiseconds", "none", 19_210);
+        var minuteTwentyOne = createSolve("attempt-" + UUID.randomUUID(), "minute", "none", 81_000);
+        var nineSeconds = createSolve("attempt-" + UUID.randomUUID(), "nine", "none", 9_570);
+        var plusTwoEndingInTwentyOne = createSolve("attempt-" + UUID.randomUUID(), "plus two centiseconds", "+2", 211);
+        var plusTwo = createSolve("attempt-" + UUID.randomUUID(), "plus two", "+2", 200);
+        var sameOfficialWithoutPenalty = createSolve("attempt-" + UUID.randomUUID(), "no penalty", "none", 2_200);
+        createSolve("attempt-" + UUID.randomUUID(), "dnf", "dnf", 12_000);
+
+        mockMvc.perform(get("/api/solves").param("time", "0.21").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.items[0].id", is((int) jsonLong(exact, "id"))));
+
+        var endingPatternPage = mockMvc.perform(get("/api/solves")
+                        .param("time", "*.21")
+                        .param("limit", "2")
+                        .cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(3)))
+                .andExpect(jsonPath("$.items", hasSize(2)))
+                .andExpect(jsonPath("$.items[*].id", contains(
+                        (int) jsonLong(plusTwoEndingInTwentyOne, "id"),
+                        (int) jsonLong(endingInTwentyOne, "id"))))
+                .andReturn();
+        var endingPatternCursor = jsonString(endingPatternPage, "nextCursor");
+        mockMvc.perform(get("/api/solves")
+                        .param("time", "*.21")
+                        .param("limit", "2")
+                        .param("cursor", endingPatternCursor)
+                        .cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(3)))
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].id", is((int) jsonLong(exact, "id"))));
+
+        mockMvc.perform(get("/api/solves").param("time", "*:21.*").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.items[0].id", is((int) jsonLong(minuteTwentyOne, "id"))));
+        mockMvc.perform(get("/api/solves").param("time", "9.*").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.items[0].id", is((int) jsonLong(nineSeconds, "id"))));
+
+        mockMvc.perform(get("/api/solves").param("time", "2.20").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(2)))
+                .andExpect(jsonPath("$.items[*].penalty", contains("none", "+2")));
+        mockMvc.perform(get("/api/solves").param("time", "2.20+").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.items[0].id", is((int) jsonLong(plusTwo, "id"))))
+                .andExpect(jsonPath("$.items[0].penalty", is("+2")));
+        mockMvc.perform(get("/api/solves").param("time", "DNF").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.items[0].penalty", is("dnf")));
+
+        mockMvc.perform(get("/api/solves")
+                        .param("q", "exact")
+                        .param("time", "0.21")
+                        .cookie(sessionCookie()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error", is("q and time cannot be used together")));
+        for (var malformed : new String[]{"9.2", "9.*.", "1:2.*"}) {
+            mockMvc.perform(get("/api/solves").param("time", malformed).cookie(sessionCookie()))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.code", is("BAD_REQUEST")));
+        }
+
+        loginAs(uniqueEmail("time-history-other"));
+        createSolve("attempt-" + UUID.randomUUID(), "other-user", "none", 210);
+        mockMvc.perform(get("/api/solves").param("time", "0.21").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalCount", is(1)))
+                .andExpect(jsonPath("$.items[0].scramble", is("other-user")))
+                .andExpect(jsonPath("$.items[0].id", is(notNullValue())));
+        assertTrue(jsonLong(sameOfficialWithoutPenalty, "id") > jsonLong(plusTwo, "id"));
     }
 
     @Test
@@ -392,6 +571,24 @@ class SpringJpaApiIntegrationTest {
                                 """.formatted(attemptId, official, dnf ? "dnf" : "none", official, dnf)))
                 .andExpect(status().isCreated())
                 .andReturn();
+    }
+
+    private MvcResult createSolve(String attemptId, String scramble, String penalty, int timerMs) throws Exception {
+        var dnf = penalty.equals("dnf");
+        var official = dnf ? "null" : Integer.toString(timerMs + (penalty.equals("+2") ? 2_000 : 0));
+        return mockMvc.perform(post("/api/solves")
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"clientAttemptId":"%s","scramble":"%s","crossFaceRequested":"U",
+                                 "timerMs":%d,"penalty":"%s","officialMs":%s,"dnf":%s}
+                                """.formatted(attemptId, escapeJson(scramble), timerMs, penalty, official, dnf)))
+                .andExpect(status().isCreated())
+                .andReturn();
+    }
+
+    private static String escapeJson(String value) {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private void captureSession(MvcResult result) throws Exception {

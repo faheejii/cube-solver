@@ -73,6 +73,9 @@ async function requestJson<T>(
     }
 }
 
+export type SolveHistoryFilterOptions = {q?: string; time?: string; penalty?: "all" | "none" | "+2" | "dnf"};
+export type FilteredSolveHistoryResponse = SolveHistoryResponse & {totalCount: number};
+
 export async function register(request: RegisterRequest): Promise<AuthUser> {
     return requestJson<AuthUser>("/api/auth/register", jsonRequest("POST", request), false);
 }
@@ -141,14 +144,25 @@ export async function updateSolvePenalty(solveId: number, penalty: TimerPenalty)
 export async function fetchSolveHistory(
     limit = 20,
     cursor?: string | null,
-): Promise<SolveHistoryResponse> {
+    filters?: SolveHistoryFilterOptions,
+): Promise<SolveHistoryResponse | FilteredSolveHistoryResponse> {
     const params = new URLSearchParams({
         limit: String(limit),
     });
     if (cursor) {
         params.set("cursor", cursor);
     }
-    return requestJson<SolveHistoryResponse>(`/api/solves?${params.toString()}`);
+    if (filters) {
+        if (filters.q && filters.time) {
+            throw new Error("Solve history cannot be filtered by scramble and time at the same time");
+        }
+        if (filters.q) params.set("q", filters.q);
+        if (filters.time) params.set("time", filters.time);
+        if (filters.penalty && filters.penalty !== "all") params.set("penalty", filters.penalty);
+    }
+    return requestJson<SolveHistoryResponse | FilteredSolveHistoryResponse>(
+        `/api/solves?${params.toString()}`
+    );
 }
 
 export async function fetchSolveStatistics(): Promise<SolveStatistics> {

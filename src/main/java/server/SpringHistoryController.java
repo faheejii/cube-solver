@@ -5,6 +5,7 @@ import api.SaveSolutionApiRequest;
 import api.SpringSaveSolutionRequest;
 import api.UpdateSolvePenaltyRequest;
 import database.CreateSolveAttemptCommand;
+import database.SolveTimeSearch;
 import database.SaveSolutionCommand;
 import database.persistence.entity.SpringHistoryPersistenceService;
 import org.springframework.http.ResponseEntity;
@@ -19,10 +20,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Locale;
+import java.util.Set;
+
 /** MVC adapter for authenticated solve history and saved solution routes. */
 @RestController
 @RequestMapping("/api/solves")
 final class SpringHistoryController {
+    private static final Set<String> HISTORY_PENALTIES = Set.of("all", "none", "+2", "dnf");
+
     private final SpringDatabaseHealth databaseHealth;
     private final SpringHistoryPersistenceService history;
     private final SolveJobManager solveJobManager;
@@ -57,14 +63,26 @@ final class SpringHistoryController {
     @GetMapping
     ResponseEntity<String> list(
             @RequestParam(value = "limit", required = false) String limitValue,
-            @RequestParam(value = "cursor", required = false) String cursorValue
+            @RequestParam(value = "cursor", required = false) String cursorValue,
+            @RequestParam(value = "q", required = false) String searchValue,
+            @RequestParam(value = "time", required = false) String timeValue,
+            @RequestParam(value = "penalty", defaultValue = "all") String penaltyValue
     ) throws Exception {
         ensureDatabase();
         var user = SpringRequestSupport.requireUser();
         var limit = parseLimit(limitValue);
         var cursor = database.HistoryCursor.parse(cursorValue);
+        var searchTerm = searchValue == null ? null : searchValue.trim();
+        if (searchTerm != null && searchTerm.isEmpty()) {
+            searchTerm = null;
+        }
+        if (searchValue != null && timeValue != null) {
+            throw new IllegalArgumentException("q and time cannot be used together");
+        }
+        var timeSearch = timeValue == null ? null : SolveTimeSearch.parse(timeValue);
+        var penalty = parsePenalty(penaltyValue);
         return SpringRequestSupport.json(200, JsonSupport.solveHistoryPageJson(
-                history.listPage(user.externalId(), limit, cursor)));
+                history.listPage(user.externalId(), limit, cursor, searchTerm, penalty, timeSearch)));
     }
 
     @GetMapping("/{solveId}")
@@ -161,6 +179,14 @@ final class SpringHistoryController {
             return 20;
         }
         return Math.max(1, Math.min(Integer.parseInt(value.trim()), 100));
+    }
+
+    private static String parsePenalty(String value) {
+        var normalized = value.trim().toLowerCase(Locale.ROOT);
+        if (!HISTORY_PENALTIES.contains(normalized)) {
+            throw new IllegalArgumentException("penalty must be all, none, +2, or dnf");
+        }
+        return normalized;
     }
 
     private static long parseSolveId(String value) {
