@@ -97,6 +97,7 @@ export type MockApiOptions = {
     historyEntries?: typeof historyEntry[];
     algorithms?: typeof catalogEntries;
     penaltyUpdateFailure?: boolean;
+    deleteFailures?: number;
 };
 
 export type MockApiHandle = {
@@ -108,6 +109,7 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
     const user = options.user ?? normalUser;
     let entries = [...(options.historyEntries ?? [historyEntry])];
     let nextSolveId = Math.max(1, ...entries.map((entry) => entry.id)) + 1;
+    let deleteFailuresRemaining = options.deleteFailures ?? 0;
     const algorithms = options.algorithms ?? catalogEntries;
     const requests: MockApiHandle["requests"] = [];
     const jobs = new Map<string, unknown>();
@@ -158,9 +160,34 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
         if (url.pathname === "/api/solves" && request.method() === "GET") {
             const limit = Math.max(1, Number(url.searchParams.get("limit") ?? 20));
             const offset = Number(url.searchParams.get("cursor") ?? 0);
-            const items = entries.slice(offset, offset + limit);
+            const query = (url.searchParams.get("q") ?? "").trim().toLocaleLowerCase();
+            const time = (url.searchParams.get("time") ?? "").trim();
+            const penalty = url.searchParams.get("penalty") ?? "all";
+            const plusOnly = time.endsWith("+");
+            const timePattern = plusOnly ? time.slice(0, -1) : time;
+            const escapedTimePattern = timePattern
+                .split("*")
+                .map((part) => part.replace(/[|\\{}()[\]^$+?.]/g, "\\$&"))
+                .join(".*");
+            const timeRegex = timePattern
+                ? new RegExp(`^${escapedTimePattern}$`)
+                : null;
+            const filtered = entries.filter((entry) =>
+                (!query || entry.scramble.toLocaleLowerCase().includes(query))
+                && (!time || (timePattern.toLocaleLowerCase() === "dnf"
+                    ? entry.dnf
+                    : !entry.dnf && entry.officialMs !== null
+                        && (!plusOnly || entry.penalty === "+2")
+                        && timeRegex?.test(formatOfficialTime(entry.officialMs))))
+                && (penalty === "all" || entry.penalty === penalty)
+            );
+            const items = filtered.slice(offset, offset + limit);
             const nextOffset = offset + items.length;
-            await json(route, {items, nextCursor: nextOffset < entries.length ? String(nextOffset) : null});
+            await json(route, {
+                items,
+                nextCursor: nextOffset < filtered.length ? String(nextOffset) : null,
+                totalCount: filtered.length,
+            });
             return;
         }
         if (url.pathname === "/api/solves" && request.method() === "POST") {
@@ -219,6 +246,11 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
             return;
         }
         if (solveMatch && request.method() === "DELETE") {
+            if (deleteFailuresRemaining > 0) {
+                deleteFailuresRemaining -= 1;
+                await json(route, {error: "Delete failed. Please retry."}, 500);
+                return;
+            }
             const id = Number(solveMatch[1]);
             entries = entries.filter((entry) => entry.id !== id);
             savedBySolve.delete(id);
@@ -294,6 +326,16 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
     });
 
     return {requests};
+}
+
+function formatOfficialTime(milliseconds: number): string {
+    const centiseconds = Math.floor(milliseconds / 10);
+    const minutes = Math.floor(centiseconds / 6000);
+    const seconds = Math.floor((centiseconds % 6000) / 100);
+    const hundredths = String(centiseconds % 100).padStart(2, "0");
+    return minutes > 0
+        ? `${minutes}:${String(seconds).padStart(2, "0")}.${hundredths}`
+        : `${seconds}.${hundredths}`;
 }
 
 export function resultFor(scramble: string, f2lMode = "greedy") {

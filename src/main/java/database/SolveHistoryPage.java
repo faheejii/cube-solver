@@ -4,6 +4,7 @@ import java.util.List;
 
 public record SolveHistoryPage(
         List<SolveHistoryEntry> items,
-        String nextCursor
+        String nextCursor,
+        long totalCount
 ) {
 }

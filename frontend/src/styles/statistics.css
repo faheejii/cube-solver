@@ -59,7 +59,93 @@
     text-align: center;
 }
 
-.rail-stat:nth-child(even) {
+.rail-stat-action {
+    position: relative;
+    width: 100%;
+    border: 0;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    padding: 0;
+    cursor: pointer;
+}
+
+.rail-stat-action:hover:not(:disabled) {
+    background: var(--panel-hover);
+}
+
+.rail-stat-action:focus-visible {
+    outline: 2px solid var(--blue-bright);
+    outline-offset: -3px;
+    z-index: 1;
+}
+
+.rail-stat-action:active:not(:disabled) {
+    background: var(--panel-hover);
+}
+
+.rail-stat-action:disabled {
+    cursor: default;
+    opacity: 0.78;
+}
+
+.rolling-average-stat {
+    width: 100%;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.statistics-grid .rail-stat-action,
+.statistics-grid .rolling-average-stat,
+.dashboard-inline-stats .inline-stat-action,
+.dashboard-inline-stats .rolling-average-stat {
+    border-radius: 0;
+}
+
+.rolling-average-stat:hover {
+    background: var(--panel-hover);
+}
+
+.rolling-average-stat:focus-visible {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid var(--blue-bright);
+    outline-offset: -3px;
+}
+
+.statistics-rail .rail-stat.rolling-average-stat {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+}
+
+.inline-stat.rolling-average-stat {
+    padding: 0;
+}
+
+.inline-stat.rolling-average-stat:not(:last-child) {
+    border-right: 1px solid var(--border);
+}
+
+.best-solve-loading {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    color: var(--blue-bright);
+    animation: spin 1s linear infinite;
+}
+
+.statistics-summary-error {
+    margin: 8px 12px 0;
+    color: var(--danger, #e46b6b);
+    font-size: 0.72rem;
+}
+
+.statistics-rail .rail-stat:nth-child(even) {
     border-right: 0;
 }
 
@@ -158,6 +244,81 @@
     backdrop-filter: blur(6px);
 }
 
+.confirmation-dialog-backdrop {
+    position: fixed;
+    z-index: 1200;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgb(3 10 16 / 88%);
+}
+
+.confirmation-dialog {
+    display: grid;
+    gap: 12px;
+    width: min(440px, 100%);
+    border: 1px solid var(--border-strong);
+    background: var(--panel);
+    padding: 22px;
+}
+
+.confirmation-dialog h2,
+.confirmation-dialog p {
+    margin: 0;
+}
+
+.confirmation-dialog > p {
+    color: var(--text-soft);
+    line-height: 1.5;
+}
+
+.confirmation-dialog .confirmation-dialog-error {
+    color: var(--red);
+}
+
+.confirmation-dialog-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.confirmation-dialog-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-soft);
+    cursor: pointer;
+    padding: 8px 12px;
+}
+
+.confirmation-dialog-actions button.primary {
+    border-color: var(--blue);
+    background: var(--blue);
+    color: #fff;
+}
+
+.confirmation-dialog-actions button.danger {
+    border-color: var(--danger-red);
+    background: var(--danger-red);
+    color: #fff;
+}
+
+.confirmation-dialog-actions button:focus-visible {
+    outline: 2px solid var(--blue-bright);
+    outline-offset: 2px;
+}
+
+.confirmation-dialog-actions button:disabled {
+    cursor: wait;
+    opacity: 0.7;
+}
+
 .statistics-modal {
     display: grid;
     gap: 18px;
@@ -187,15 +348,29 @@
     color: var(--muted);
 }
 
+.statistics-modal-controls {
+    display: flex;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+}
+
 .statistics-range-control {
     display: flex;
-    justify-self: end;
     gap: 3px;
     border-bottom: 1px solid var(--border);
     padding: 0 0 4px;
 }
 
-.statistics-range-control button {
+.statistics-metric-control {
+    display: flex;
+    gap: 3px;
+    border-bottom: 1px solid var(--border);
+    padding: 0 0 4px;
+}
+
+.statistics-range-control button,
+.statistics-metric-control button {
     border: 0;
     background: transparent;
     color: var(--muted);
@@ -205,12 +380,14 @@
     padding: 8px 12px;
 }
 
-.statistics-range-control button.active {
+.statistics-range-control button.active,
+.statistics-metric-control button.active {
     background: var(--blue);
     color: #fff;
 }
 
-.statistics-range-control button:focus-visible {
+.statistics-range-control button:focus-visible,
+.statistics-metric-control button:focus-visible {
     outline: 2px solid var(--blue-bright);
     outline-offset: 2px;
 }
@@ -420,6 +597,180 @@
     cursor: pointer;
 }
 
+.rolling-average-backdrop {
+    position: fixed;
+    z-index: 1050;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 16px;
+    background: rgb(3 10 16 / 86%);
+    backdrop-filter: blur(5px);
+}
+
+.rolling-average-dialog {
+    display: grid;
+    gap: 16px;
+    width: min(620px, 100%);
+    max-height: min(720px, calc(100dvh - 32px));
+    overflow: auto;
+    border: 1px solid var(--border-strong);
+    background: var(--panel);
+    color: var(--text);
+    padding: clamp(16px, 3vw, 24px);
+}
+
+.rolling-average-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.rolling-average-header h2,
+.rolling-average-header p {
+    margin: 0;
+}
+
+.rolling-average-header p {
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: 0.86rem;
+}
+
+.rolling-average-result {
+    display: grid;
+    gap: 4px;
+    border-block: 1px solid var(--border);
+    padding: 12px 4px;
+}
+
+.rolling-average-result > span {
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.rolling-average-result > strong {
+    color: var(--violet);
+    font-family: "Space Mono", monospace;
+    font-size: clamp(1.5rem, 6vw, 2rem);
+}
+
+.rolling-average-dialog.metric-ao12 .rolling-average-result > strong {
+    color: var(--cyan);
+}
+
+.rolling-average-result p {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: 0.8rem;
+    line-height: 1.45;
+}
+
+.rolling-average-list {
+    display: grid;
+    max-height: min(440px, 52dvh);
+    overflow: auto;
+    border: 1px solid var(--border);
+}
+
+.rolling-average-solve {
+    display: grid;
+    grid-template-columns: 52px minmax(70px, 0.7fr) minmax(110px, 1.5fr) minmax(112px, auto);
+    align-items: center;
+    gap: 10px;
+    min-height: 50px;
+    border: 0;
+    border-bottom: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-soft);
+    cursor: pointer;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.rolling-average-solve:last-child {
+    border-bottom: 0;
+}
+
+.rolling-average-solve:hover {
+    background: var(--panel-hover);
+}
+
+.rolling-average-solve:focus-visible {
+    position: relative;
+    z-index: 1;
+    outline: 2px solid var(--blue-bright);
+    outline-offset: -2px;
+}
+
+.rolling-average-solve-number,
+.rolling-average-solve time {
+    color: var(--muted);
+    font-size: 0.76rem;
+}
+
+.rolling-average-solve-time {
+    color: var(--text);
+    font-family: "Space Mono", monospace;
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.rolling-average-disposition {
+    justify-self: end;
+    color: var(--green);
+    font-size: 0.7rem;
+    white-space: nowrap;
+}
+
+.disposition-dropped-fastest,
+.disposition-dropped-slowest,
+.disposition-dnf {
+    color: var(--amber);
+}
+
+.disposition-not-counted {
+    color: var(--muted);
+}
+
+.rolling-average-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    min-height: 120px;
+    color: var(--muted);
+    text-align: center;
+}
+
+.rolling-average-state svg {
+    flex: 0 0 auto;
+    animation: spin 1s linear infinite;
+}
+
+.rolling-average-state.error {
+    flex-direction: column;
+    color: var(--red);
+}
+
+.rolling-average-state button {
+    min-height: 36px;
+    border: 0;
+    background: transparent;
+    color: var(--blue-bright);
+    cursor: pointer;
+    font: inherit;
+}
+
+.rolling-average-state button:focus-visible {
+    outline: 2px solid var(--blue-bright);
+    outline-offset: 2px;
+}
+
 @media (max-width: 700px) {
     .statistics-modal-backdrop {
         padding: 8px;
@@ -462,6 +813,34 @@
 
     .statistics-modal .rail-stat:nth-child(4) {
         border-bottom: 1px solid var(--border);
+    }
+}
+
+@media (max-width: 520px) {
+    .rolling-average-backdrop {
+        padding: 8px;
+    }
+
+    .rolling-average-dialog {
+        max-height: calc(100dvh - 16px);
+        padding: 14px;
+    }
+
+    .rolling-average-solve {
+        grid-template-columns: 40px minmax(66px, 1fr) auto;
+        gap: 5px 8px;
+        padding: 9px;
+    }
+
+    .rolling-average-solve time {
+        grid-column: 2;
+        grid-row: 2;
+        font-size: 0.68rem;
+    }
+
+    .rolling-average-disposition {
+        grid-column: 3;
+        grid-row: 1 / span 2;
     }
 }
 

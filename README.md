@@ -64,7 +64,7 @@ Implemented:
 - pooled PostgreSQL connections and aggregate-based solve statistics
 - Java HTTP API and Vite/React frontend
 - browser-local Settings for the solver processing deadline, inspection behavior, deep color-neutral optimization, theme, and independent 2D/3D modes for the timer cube preview and solution playback
-- post-solve penalty controls in the Timer and History/solution views, allowing a saved solve to be changed between no penalty, +2, and DNF with statistics recalculated immediately
+- post-solve penalty controls in the Timer and History/solution views, allowing a saved solve to be changed between no penalty, +2, and DNF with statistics recalculated immediately; the Timer also lets users delete its displayed saved solve through the same confirmation flow as History
 - application-owned cube previews and playback driven by one authoritative cubie/sticker model, with WCA/cubing.js-compatible face, wide, slice, and rotation notation; previews can use the interactive Three.js renderer or a lightweight project-owned six-face SVG net
 
 Known limitations:
@@ -291,6 +291,8 @@ That lets one timed solve keep separate Fast and Optimized solutions. Each mode 
 
 Deleting a solve uses `DELETE /api/solves/{id}`. The API derives ownership from the active session, cancels linked jobs, removes saved solutions through database cascade, and rebuilds user statistics before returning `204 No Content`.
 
+`GET /api/solves` accepts the existing `limit` and opaque `cursor` parameters plus optional `q`, `time`, and `penalty` filters. `q` is a literal, case-insensitive substring of the scramble. `time` matches displayed official times (`S.CC` or `M:SS.CC`), supports `*` wildcards and `DNF`, and a trailing `+` restricts a match to +2 solves; `q` and `time` cannot be combined. `penalty` is `all` (default), `none`, `+2`, or `dnf`. Results remain user-scoped and ordered newest-first by timestamp and ID. Responses include `totalCount` for the active filters alongside `items` and `nextCursor`.
+
 ## Docker
 
 Build and run the complete app with PostgreSQL:
@@ -394,6 +396,9 @@ Current frontend behavior:
 - calculates best time, Ao5, Ao12, mean time, solve count, and DNF count from saved attempts; the global summary is shown above History, while the Statistics modal charts the latest 50 or all solves with metrics scoped to the selected range
 - saves completed attempts to Postgres and advances to the next scramble automatically
 - includes cursor-paginated solve history in 20-entry pages; the Timer's scrollable Solves rail reuses the same history data and opens the saved-solution modal
+- searches History by scramble text or displayed solve time (including simple `*` patterns) through the user-scoped cursor API; the query is URL-restorable and does not change Timer or Statistics datasets
+- opens a solve-review modal with its solve context, penalty controls, and saved solution; deleting a solve uses an in-app confirmation that explains the saved-solution consequences
+- charts Time, Ao5, or Ao12 in the Statistics modal for either the latest 50 or all solves; chart points open the exact solve and preserve chart state and focus on return
 - supports permanent deletion of owned solves from the History tab or saved-solution modal, including the saved Fast and Optimized solutions
 - includes an Active Solutions page with live progress, result previews, retry, and termination
 - includes an admin-only Algorithms tab with a compact responsive case list, filters, copy actions, expandable details, and cube previews

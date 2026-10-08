@@ -224,6 +224,8 @@ final class JsonSupport {
         }
         builder.append("],\"nextCursor\":")
                 .append(nullableString(page.nextCursor()))
+                .append(",\"totalCount\":")
+                .append(page.totalCount())
                 .append('}');
         return builder.toString();
     }

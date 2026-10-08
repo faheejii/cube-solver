@@ -259,6 +259,7 @@ export type SolveHistoryEntry = {
 export type SolveHistoryResponse = {
     items: SolveHistoryEntry[];
     nextCursor: string | null;
+    totalCount?: number;
 };
 
 export type RollingAverage = {

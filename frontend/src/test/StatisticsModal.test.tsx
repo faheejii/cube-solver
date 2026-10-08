@@ -96,9 +96,60 @@ describe("StatisticsModal", () => {
         fireEvent.keyDown(point, {key: " "});
 
         expect(onOpenSolve).toHaveBeenCalledTimes(3);
-        expect(onOpenSolve).toHaveBeenNthCalledWith(1, entry);
-        expect(onOpenSolve).toHaveBeenNthCalledWith(2, entry);
-        expect(onOpenSolve).toHaveBeenNthCalledWith(3, entry);
+        expect(onOpenSolve).toHaveBeenNthCalledWith(1, entry, 3, false, expect.any(SVGGElement));
+        expect(onOpenSolve).toHaveBeenNthCalledWith(2, entry, 3, false, expect.any(SVGGElement));
+        expect(onOpenSolve).toHaveBeenNthCalledWith(3, entry, 3, false, expect.any(SVGGElement));
+    });
+
+    it("opens the best solve from the selected-range summary", async () => {
+        const bestEntry = makeEntry(1, {officialMs: 10_000, timerMs: 10_000});
+        api.fetchSolveHistory.mockResolvedValue({
+            items: [
+                makeEntry(3, {officialMs: null, timerMs: 14_000, penalty: "dnf", dnf: true}),
+                makeEntry(2, {officialMs: 12_000, timerMs: 10_000, penalty: "+2"}),
+                bestEntry,
+            ],
+            nextCursor: null,
+        });
+        const onOpenSolve = vi.fn();
+        renderModal(vi.fn(), onOpenSolve);
+
+        const best = await screen.findByRole("button", {name: "Open best solve 10.00"});
+        fireEvent.click(best);
+
+        expect(onOpenSolve).toHaveBeenCalledWith(bestEntry, 1);
+    });
+
+    it("switches between Time, Ao5, and Ao12 while retaining solve-linked DNF and rolling points", async () => {
+        const entries = Array.from({length: 13}, (_, index) => makeEntry(13 - index, {
+            officialMs: 10_000 + index * 1_000,
+            timerMs: 10_000 + index * 1_000,
+            createdAt: new Date(Date.UTC(2026, 0, 1) + index * 1000).toISOString(),
+        }));
+        entries[0] = {...entries[0], officialMs: null, penalty: "dnf", dnf: true};
+        entries[1] = {...entries[1], officialMs: null, penalty: "dnf", dnf: true};
+        api.fetchSolveHistory.mockResolvedValue({items: entries, nextCursor: null});
+        const onOpenSolve = vi.fn();
+
+        renderModal(vi.fn(), onOpenSolve);
+        await screen.findByRole("button", {name: /Solve 12: DNF/});
+        expect(document.querySelectorAll(".chart-point.dnf")).toHaveLength(2);
+
+        fireEvent.click(screen.getByRole("button", {name: "Ao5"}));
+        expect(screen.getByRole("heading", {name: "Ao5"})).toBeInTheDocument();
+        expect(document.querySelectorAll(".chart-point")).toHaveLength(9);
+        expect(document.querySelectorAll(".chart-point.dnf")).toHaveLength(1);
+        expect(screen.getByRole("button", {name: /Solve 13: DNF/})).toBeInTheDocument();
+        fireEvent.click(screen.getByRole("button", {name: /Solve 13:/}));
+        expect(onOpenSolve).toHaveBeenCalledWith(entries[0], 13, false, expect.any(SVGGElement));
+
+        fireEvent.click(screen.getByRole("button", {name: "Ao12"}));
+        expect(screen.getByRole("heading", {name: "Ao12"})).toBeInTheDocument();
+        expect(document.querySelectorAll(".chart-point")).toHaveLength(2);
+        expect(document.querySelectorAll(".chart-point.dnf")).toHaveLength(1);
+        fireEvent.click(screen.getByRole("button", {name: "Time"}));
+        expect(screen.getByRole("heading", {name: "Solve time"})).toBeInTheDocument();
+        expect(screen.getByRole("button", {name: "Time"})).toHaveAttribute("aria-pressed", "true");
     });
 
     it("loads all cursor pages, deduplicates entries, updates the selected-range summary, and reuses cached ranges", async () => {

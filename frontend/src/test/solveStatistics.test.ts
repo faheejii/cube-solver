@@ -1,5 +1,5 @@
 import {describe, expect, it} from "vitest";
-import {calculateWindowStatistics} from "../solveStatistics";
+import {calculateRollingMetricSeries, calculateRollingWindowBreakdown, calculateWindowStatistics} from "../solveStatistics";
 import type {SolveHistoryEntry} from "../types";
 
 function entry(id: number, time: number | null, penalty = "none"): SolveHistoryEntry {
@@ -63,5 +63,79 @@ describe("calculateWindowStatistics", () => {
 
         expect(result.ao5).toEqual({status: "value", valueMs: 12_000});
         expect(result.ao12).toEqual({status: "value", valueMs: 15_500});
+    });
+});
+
+describe("calculateRollingMetricSeries", () => {
+    it("associates each Ao5 value with its ending solve and follows WCA DNF windows", () => {
+        const solves = [
+            entry(5, 50_000),
+            entry(4, 40_000),
+            entry(3, 30_000),
+            entry(2, 20_000),
+            entry(1, 10_000),
+            entry(0, null, "dnf"),
+            entry(-1, null, "dnf"),
+        ];
+
+        const series = calculateRollingMetricSeries(solves, 5);
+
+        expect(series.slice(3).every((point) => point.status === "insufficient")).toBe(true);
+        expect(series[0]).toEqual({status: "value", valueMs: 30_000});
+        expect(series[1]).toEqual({status: "value", valueMs: 30_000});
+        expect(series[2]).toEqual({status: "dnf", valueMs: null});
+    });
+
+    it("treats a single DNF as the removed high result in Ao12", () => {
+        const solves = Array.from({length: 12}, (_, index) =>
+            entry(12 - index, index === 0 ? null : 10_000 + index * 1_000, index === 0 ? "dnf" : "none"));
+
+        expect(calculateRollingMetricSeries(solves, 12)[0]).toEqual({status: "value", valueMs: 16_500});
+    });
+});
+
+describe("calculateRollingWindowBreakdown", () => {
+    it("marks fastest and slowest as dropped and uses official +2 times", () => {
+        const result = calculateRollingWindowBreakdown([
+            entry(5, 12_000, "+2"),
+            entry(4, 9_000),
+            entry(3, 11_000),
+            entry(2, 14_000),
+            entry(1, 13_000),
+        ], 5);
+
+        expect(result.average).toEqual({status: "value", valueMs: 12_000});
+        expect(result.solves.map(({disposition}) => disposition)).toEqual([
+            "counted", "dropped-fastest", "counted", "dropped-slowest", "counted",
+        ]);
+    });
+
+    it("drops a single DNF as slowest and marks multiple-DNF windows without a numeric average", () => {
+        const oneDnf = calculateRollingWindowBreakdown([
+            entry(5, null, "dnf"), entry(4, 9_000), entry(3, 11_000), entry(2, 14_000), entry(1, 13_000),
+        ], 5);
+        expect(oneDnf.average).toEqual({status: "value", valueMs: 12_667});
+        expect(oneDnf.solves[0].disposition).toBe("dropped-slowest");
+
+        const multipleDnfs = calculateRollingWindowBreakdown([
+            entry(5, null, "dnf"), entry(4, null, "dnf"), entry(3, 11_000), entry(2, 14_000), entry(1, 13_000),
+        ], 5);
+        expect(multipleDnfs.average).toEqual({status: "dnf", valueMs: null});
+        expect(multipleDnfs.solves.map(({disposition}) => disposition)).toEqual([
+            "dnf", "dnf", "not-counted", "not-counted", "not-counted",
+        ]);
+    });
+
+    it("keeps tied exclusions deterministic and identifies partial windows", () => {
+        const tied = calculateRollingWindowBreakdown([
+            entry(5, 10_000), entry(4, 10_000), entry(3, 10_000), entry(2, 10_000), entry(1, 10_000),
+        ], 5);
+        expect(tied.solves.map(({disposition}) => disposition)).toEqual([
+            "dropped-fastest", "dropped-slowest", "counted", "counted", "counted",
+        ]);
+
+        const partial = calculateRollingWindowBreakdown([entry(2, 12_000), entry(1, 11_000)], 5);
+        expect(partial.average).toEqual({status: "insufficient", valueMs: null});
+        expect(partial.solves.map(({disposition}) => disposition)).toEqual(["not-counted", "not-counted"]);
     });
 });

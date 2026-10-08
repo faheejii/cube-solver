@@ -278,8 +278,7 @@ textarea:focus-visible,
 .dashboard-timer-stage {
     grid-template-rows: minmax(0, 1fr) auto;
     gap: 8px;
-    border: 0;
-    border-top: 1px solid var(--border);
+    border: 1px solid var(--border);
     border-radius: 0;
     background: transparent;
     box-shadow: none;
@@ -301,9 +300,9 @@ textarea:focus-visible,
     display: none;
 }
 
-.dashboard-timer-stage.phase-armed { border-left-color: var(--blue); }
-.dashboard-timer-stage.phase-running { border-left-color: var(--green); }
-.dashboard-timer-stage.phase-stopped { border-left-color: var(--amber); }
+.dashboard-timer-stage.phase-armed { border-color: var(--blue); }
+.dashboard-timer-stage.phase-running { border-color: var(--green); }
+.dashboard-timer-stage.phase-stopped { border-color: var(--amber); }
 
 .dashboard-timer-number {
     color: var(--text);
@@ -321,6 +320,17 @@ textarea:focus-visible,
     gap: 5px;
 }
 
+.timer-saved-solve-controls {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.timer-saved-solve-delete {
+    flex: 0 0 36px;
+    margin-top: -2px;
+}
+
 .solve-penalty-options {
     display: flex;
     align-items: center;
@@ -330,7 +340,7 @@ textarea:focus-visible,
 .solve-penalty-options button {
     min-height: 32px;
     border: 0;
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: transparent;
     color: var(--muted);
     cursor: pointer;
@@ -342,6 +352,11 @@ textarea:focus-visible,
 .solve-penalty-options button[aria-pressed="true"] {
     background: var(--blue);
     color: #fff;
+}
+
+.solve-penalty-options button:focus-visible {
+    outline: 2px solid var(--blue-bright);
+    outline-offset: 2px;
 }
 
 .solve-penalty-options button:disabled {
@@ -860,7 +875,7 @@ textarea:focus-visible,
     height: 34px;
     min-height: 34px;
     border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     background: var(--panel-muted);
     color: var(--muted);
 }
@@ -872,13 +887,13 @@ textarea:focus-visible,
 }
 
 .solution-modal-actions .history-delete-button {
-    border-color: color-mix(in srgb, var(--red) 55%, var(--border));
-    color: var(--red);
+    border-color: color-mix(in srgb, var(--danger-red) 55%, var(--border));
+    color: var(--danger-red);
 }
 
 .solution-modal-actions .history-delete-button:hover {
-    border-color: var(--red);
-    background: color-mix(in srgb, var(--red) 12%, var(--panel));
+    border-color: var(--danger-red);
+    background: color-mix(in srgb, var(--danger-red) 12%, var(--panel));
 }
 
 .solution-modal-controls {
@@ -1242,4 +1257,9 @@ textarea:focus-visible,
     .playback-speed-select {
         margin-left: auto;
     }
+}
+
+/* Keep interactive controls rounded consistently across screens and dialogs. */
+:root button {
+    border-radius: var(--radius-md);
 }

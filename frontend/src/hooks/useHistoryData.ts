@@ -1,6 +1,5 @@
 import {useCallback, useEffect, useRef, useState} from "react";
 import {deleteSolve, fetchSolveHistory, fetchSolveStatistics} from "../api";
-import {formatHistoryTime} from "../format";
 import type {SolveHistoryEntry, SolveStatistics} from "../types";
 
 type HistoryStatus = "idle" | "loading" | "ready" | "error";
@@ -18,6 +17,7 @@ export function useHistoryData({onNotice}: Options) {
     const [historyCursor, setHistoryCursor] = useState<string | null>(null);
     const [historyLoadingMore, setHistoryLoadingMore] = useState(false);
     const [deletingSolveId, setDeletingSolveId] = useState<number | null>(null);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
     const [statistics, setStatistics] = useState<SolveStatistics | null>(null);
     const [statisticsLoading, setStatisticsLoading] = useState(true);
     const historyLoadRequestedRef = useRef(false);
@@ -87,14 +87,9 @@ export function useHistoryData({onNotice}: Options) {
         if (deletingSolveId !== null) {
             return false;
         }
-        const displayedTime = formatHistoryTime(entry.officialMs, entry.penalty, entry.dnf);
-        if (!window.confirm(
-            `Delete the ${displayedTime} solve permanently?\n\nThis also deletes all saved Fast and Optimized solutions.`
-        )) {
-            return false;
-        }
 
         setDeletingSolveId(entry.id);
+        setDeleteError(null);
         setHistoryError(null);
         try {
             await deleteSolve(entry.id);
@@ -104,7 +99,7 @@ export function useHistoryData({onNotice}: Options) {
             return true;
         } catch (deleteError) {
             const message = deleteError instanceof Error ? deleteError.message : "Solve deletion failed";
-            setHistoryError(message);
+            setDeleteError(message);
             return false;
         } finally {
             setDeletingSolveId(null);
@@ -118,6 +113,8 @@ export function useHistoryData({onNotice}: Options) {
         historyCursor,
         historyLoadingMore,
         deletingSolveId,
+        deleteError,
+        clearDeleteError: () => setDeleteError(null),
         statistics,
         statisticsLoading,
         loadHistory,

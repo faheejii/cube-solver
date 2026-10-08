@@ -109,6 +109,39 @@ for index in 1 2 3; do
     -d "{\"clientAttemptId\":\"${attempt_id}-${index}\",\"scramble\":\"R U ${index}\",\"crossFaceRequested\":\"U\",\"timerMs\":$((1234 + index)),\"penalty\":\"none\",\"officialMs\":$((1234 + index)),\"dnf\":false}" \
     "$base_url/api/solves" >/dev/null
 done
+filter_attempt_id="${attempt_id}-filter"
+curl --fail --silent --show-error \
+  -b "$user_cookie" \
+  -H 'Content-Type: application/json' \
+  -d "{\"clientAttemptId\":\"$filter_attempt_id\",\"scramble\":\"FilterToken R U\",\"crossFaceRequested\":\"U\",\"timerMs\":1234,\"penalty\":\"+2\",\"officialMs\":3234,\"dnf\":false}" \
+  "$base_url/api/solves" >/dev/null
+
+filtered_history=$(curl --fail --silent --show-error -G -b "$user_cookie" \
+  --data-urlencode 'q=filtertoken' --data-urlencode 'penalty=+2' \
+  "$base_url/api/solves")
+[[ "$filtered_history" == *'"totalCount":1'* ]]
+[[ "$filtered_history" == *"$filter_attempt_id"* ]]
+literal_history=$(curl --fail --silent --show-error -G -b "$user_cookie" \
+  --data-urlencode 'q=filtertoken%' --data-urlencode 'penalty=+2' \
+  "$base_url/api/solves")
+[[ "$literal_history" == *'"totalCount":0'* ]]
+exact_time_history=$(curl --fail --silent --show-error -G -b "$user_cookie" \
+  --data-urlencode 'time=3.23' "$base_url/api/solves")
+[[ "$exact_time_history" == *'"totalCount":1'* ]]
+[[ "$exact_time_history" == *"$filter_attempt_id"* ]]
+plus_time_history=$(curl --fail --silent --show-error -G -b "$user_cookie" \
+  --data-urlencode 'time=3.23+' "$base_url/api/solves")
+[[ "$plus_time_history" == *'"totalCount":1'* ]]
+time_scramble_conflict_status=$(curl --silent --show-error -o /dev/null -w '%{http_code}' \
+  -G -b "$user_cookie" --data-urlencode 'q=R U' --data-urlencode 'time=3.23' "$base_url/api/solves")
+[[ "$time_scramble_conflict_status" == "400" ]]
+invalid_time_status=$(curl --silent --show-error -o /dev/null -w '%{http_code}' \
+  -G -b "$user_cookie" --data-urlencode 'time=*.2' "$base_url/api/solves")
+[[ "$invalid_time_status" == "400" ]]
+invalid_penalty_status=$(curl --silent --show-error -o /dev/null -w '%{http_code}' \
+  -G -b "$user_cookie" --data-urlencode 'penalty=invalid' "$base_url/api/solves")
+[[ "$invalid_penalty_status" == "400" ]]
+
 page_body=$(curl --fail --silent --show-error -b "$user_cookie" \
   "$base_url/api/solves?limit=2")
 next_cursor=$(sed -n 's/.*"nextCursor":"\([^"]*\)".*/\1/p' <<<"$page_body")

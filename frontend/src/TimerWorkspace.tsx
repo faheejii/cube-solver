@@ -1,14 +1,17 @@
 import {useLayoutEffect, useRef, useState} from "react";
 import {
     Check,
+    LoaderCircle,
     Pencil,
     RefreshCw,
+    Trash2,
     X,
 } from "lucide-react";
 import ScrambleCube from "./ScrambleCube";
 import CrossFaceSelect from "./CrossFaceSelect";
 import SolvePenaltyControl from "./SolvePenaltyControl";
-import {formatMetricTime, formatRollingAverage} from "./format";
+import RollingAverageStat from "./RollingAverageStat";
+import {formatMetricTime} from "./format";
 import type {ArmedSource, TimerPenalty} from "./hooks/useTimer";
 import type {SolveHistoryEntry, SolveResponse, SolveStatistics} from "./types";
 
@@ -36,6 +39,7 @@ type Props = {
     timerHint: string;
     timerDetail: string;
     latestSavedAttempt: SolveHistoryEntry | null;
+    deletingSolveId: number | null;
     showPenaltyControl: boolean;
     penaltySaving: boolean;
     penaltyError: string | null;
@@ -47,7 +51,10 @@ type Props = {
     onCancelEdit: () => void;
     onSaveEdit: () => void;
     onShowSolution: () => void;
+    onOpenSolve: (entry: SolveHistoryEntry, solveNumber?: number, filteredResult?: boolean, returnFocusTo?: HTMLElement | SVGElement) => void;
+    onOpenBestSolve: (bestMs: number) => Promise<void> | void;
     onPenaltyChange: (penalty: TimerPenalty) => void;
+    onDeleteSavedSolve: (entry: SolveHistoryEntry) => void;
 };
 
 export default function TimerWorkspace({
@@ -69,6 +76,7 @@ export default function TimerWorkspace({
                                            timerHint,
                                            timerDetail,
                                            latestSavedAttempt,
+                                           deletingSolveId,
                                            showPenaltyControl,
                                            penaltySaving,
                                            penaltyError,
@@ -80,10 +88,15 @@ export default function TimerWorkspace({
                                            onCancelEdit,
                                            onSaveEdit,
                                            onShowSolution,
+                                           onOpenSolve,
+                                           onOpenBestSolve,
                                            onPenaltyChange,
+                                           onDeleteSavedSolve,
                                        }: Props) {
     const scrambleTextRef = useRef<HTMLParagraphElement>(null);
     const [scrambleFontSize, setScrambleFontSize] = useState<number | null>(null);
+    const [openingBestSolve, setOpeningBestSolve] = useState(false);
+    const [bestSolveError, setBestSolveError] = useState<string | null>(null);
 
     useLayoutEffect(() => {
         const textElement = scrambleTextRef.current;
@@ -127,6 +140,20 @@ export default function TimerWorkspace({
         resizeObserver.observe(container);
         return () => resizeObserver.disconnect();
     }, [scramble, isEditingScramble]);
+
+    async function handleOpenBestSolve() {
+        const bestMs = statistics?.bestMs;
+        if (bestMs == null || openingBestSolve) return;
+        setOpeningBestSolve(true);
+        setBestSolveError(null);
+        try {
+            await onOpenBestSolve(bestMs);
+        } catch {
+            setBestSolveError("Could not open the best solve. Try again.");
+        } finally {
+            setOpeningBestSolve(false);
+        }
+    }
 
     return (
         <section className="timer-workspace">
@@ -218,18 +245,53 @@ export default function TimerWorkspace({
                 <div className="timer-display-group">
                     <div className="dashboard-timer-number">{timerValue}</div>
                     {showPenaltyControl && latestSavedAttempt ? (
-                        <SolvePenaltyControl
-                            value={latestSavedAttempt.penalty as TimerPenalty}
-                            saving={penaltySaving}
-                            error={penaltyError}
-                            onChange={onPenaltyChange}
-                        />
+                        <div className="timer-saved-solve-controls">
+                            <SolvePenaltyControl
+                                value={latestSavedAttempt.penalty as TimerPenalty}
+                                saving={penaltySaving}
+                                error={penaltyError}
+                                onChange={onPenaltyChange}
+                            />
+                            <button
+                                className="history-delete-button timer-saved-solve-delete"
+                                type="button"
+                                onClick={() => onDeleteSavedSolve(latestSavedAttempt)}
+                                disabled={penaltySaving || deletingSolveId !== null}
+                                aria-label="Delete most recent solve"
+                                title="Delete most recent solve"
+                            >
+                                {deletingSolveId === latestSavedAttempt.id
+                                    ? <LoaderCircle size={15}/>
+                                    : <Trash2 size={15}/>
+                                }
+                            </button>
+                        </div>
                     ) : null}
                     <div className="dashboard-inline-stats">
-                        <InlineStat label="Best" value={formatMetricTime(statistics?.bestMs ?? null)} accent="blue"/>
-                        <InlineStat label="Ao5" value={formatRollingAverage(statistics?.ao5 ?? null)} accent="violet"/>
-                        <InlineStat label="Ao12" value={formatRollingAverage(statistics?.ao12 ?? null)} accent="cyan"/>
+                        <InlineStat
+                            label="Best"
+                            value={formatMetricTime(statistics?.bestMs ?? null)}
+                            accent="blue"
+                            onClick={() => void handleOpenBestSolve()}
+                            disabled={statistics?.bestMs == null || openingBestSolve}
+                            busy={openingBestSolve}
+                        />
+                        <RollingAverageStat
+                            size={5}
+                            value={statistics?.ao5 ?? null}
+                            solveCount={statistics?.solveCount ?? null}
+                            onOpenSolve={onOpenSolve}
+                            className="inline-stat accent-violet"
+                        />
+                        <RollingAverageStat
+                            size={12}
+                            value={statistics?.ao12 ?? null}
+                            solveCount={statistics?.solveCount ?? null}
+                            onOpenSolve={onOpenSolve}
+                            className="inline-stat accent-cyan"
+                        />
                     </div>
+                    {bestSolveError ? <p className="statistics-summary-error" role="alert">{bestSolveError}</p> : null}
                     <ScrambleCube scramble={scramble}/>
                 </div>
                 <button
@@ -253,15 +315,38 @@ function InlineStat({
                         label,
                         value,
                         accent,
+                        onClick,
+                        disabled = false,
+                        busy = false,
                     }: {
     label: string;
     value: string;
     accent: string;
+    onClick?: () => void;
+    disabled?: boolean;
+    busy?: boolean;
 }) {
+    const content = <><span>{label}</span><strong>{value}</strong>{busy ? <LoaderCircle className="best-solve-loading" size={13} aria-hidden="true"/> : null}</>;
+
+    if (onClick) {
+        return (
+            <button
+                className={`inline-stat inline-stat-action accent-${accent}`}
+                type="button"
+                onClick={onClick}
+                disabled={disabled}
+                aria-label={`Open best solve ${value}`}
+                aria-busy={busy}
+                title="Open solve with best time"
+            >
+                {content}
+            </button>
+        );
+    }
+
     return (
         <div className={`inline-stat accent-${accent}`}>
-            <span>{label}</span>
-            <strong>{value}</strong>
+            {content}
         </div>
     );
 }

@@ -3,14 +3,14 @@ import {createPortal} from "react-dom";
 import {LoaderCircle, X} from "lucide-react";
 import {fetchSolveHistory} from "./api";
 import {formatHistoryTime, formatSolveTime} from "./format";
-import {calculateWindowStatistics} from "./solveStatistics";
+import {calculateRollingMetricSeries, calculateWindowStatistics} from "./solveStatistics";
 import StatisticsSummary from "./StatisticsSummary";
 import type {SolveHistoryEntry, SolveStatistics} from "./types";
 
 type Props = {
     statistics: SolveStatistics | null;
     onClose: () => void;
-    onOpenSolve: (entry: SolveHistoryEntry) => void;
+    onOpenSolve: (entry: SolveHistoryEntry, solveNumber?: number, filteredResult?: boolean, returnFocusTo?: HTMLElement | SVGElement) => void;
 };
 
 type ChartPoint = {
@@ -19,9 +19,11 @@ type ChartPoint = {
     solveNumber: number;
     x: number;
     y: number | null;
+    status: "value" | "dnf" | "insufficient";
 };
 
 type Range = "last50" | "all";
+type Metric = "time" | "ao5" | "ao12";
 const HISTORY_WINDOW = 50;
 const HISTORY_PAGE_SIZE = 100;
 const CHART_WIDTH = 840;
@@ -30,6 +32,7 @@ const PLOT = {left: 76, right: 24, top: 58, bottom: 322};
 
 export default function StatisticsModal({statistics, onClose, onOpenSolve}: Props) {
     const [range, setRange] = useState<Range>("last50");
+    const [metric, setMetric] = useState<Metric>("time");
     const [last50Entries, setLast50Entries] = useState<SolveHistoryEntry[] | null>(null);
     const [allEntries, setAllEntries] = useState<SolveHistoryEntry[] | null>(null);
     const [errors, setErrors] = useState<Partial<Record<Range, string>>>({});
@@ -84,7 +87,7 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
 
     const newestFirst = entries ?? [];
     const chronologicalEntries = [...newestFirst].reverse();
-    const points = makeChartPoints(chronologicalEntries, statistics?.solveCount ?? newestFirst.length);
+    const points = makeChartPoints(chronologicalEntries, statistics?.solveCount ?? newestFirst.length, metric);
     const validPoints = points.filter((point): point is ChartPoint & {y: number} => point.y !== null);
     const yDomain = getYDomain(validPoints.map((point) => point.y));
     const yTicks = createTicks(yDomain.min, yDomain.max, 4);
@@ -92,9 +95,11 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
     const selected = activePoint === null ? null : points[activePoint] ?? null;
     const showing = entries?.length ?? 0;
     const windowStatistics = entries === null ? null : calculateWindowStatistics(entries);
-    const meanY = windowStatistics?.averageMs === null || windowStatistics?.averageMs === undefined
+    const plottedMean = validPoints.length === 0
         ? null
-        : scaleY(windowStatistics.averageMs / 1000, yDomain.min, yDomain.max);
+        : validPoints.reduce((sum, point) => sum + point.y, 0) / validPoints.length;
+    const meanY = plottedMean === null ? null : scaleY(plottedMean, yDomain.min, yDomain.max);
+    const bestPointValue = validPoints.length === 0 ? null : Math.min(...validPoints.map((point) => point.y));
 
     return createPortal((
         <div
@@ -124,30 +129,56 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
                     </button>
                 </header>
 
-                <div className="statistics-range-control" role="group" aria-label="Statistics range">
-                    <button
-                        type="button"
-                        className={range === "last50" ? "active" : ""}
-                        aria-pressed={range === "last50"}
-                        onClick={() => { setActivePoint(null); setRange("last50"); }}
-                    >
-                        Last 50
-                    </button>
-                    <button
-                        type="button"
-                        className={range === "all" ? "active" : ""}
-                        aria-pressed={range === "all"}
-                        onClick={() => { setActivePoint(null); setRange("all"); }}
-                    >
-                        All solves
-                    </button>
+                <div className="statistics-modal-controls">
+                    <div className="statistics-range-control" role="group" aria-label="Statistics range">
+                        <button
+                            type="button"
+                            className={range === "last50" ? "active" : ""}
+                            aria-pressed={range === "last50"}
+                            onClick={() => { setActivePoint(null); setRange("last50"); }}
+                        >
+                            Last 50
+                        </button>
+                        <button
+                            type="button"
+                            className={range === "all" ? "active" : ""}
+                            aria-pressed={range === "all"}
+                            onClick={() => { setActivePoint(null); setRange("all"); }}
+                        >
+                            All solves
+                        </button>
+                    </div>
+
+                    <div className="statistics-metric-control" role="group" aria-label="Chart metric">
+                        {(["time", "ao5", "ao12"] as const).map((value) => (
+                            <button
+                                key={value}
+                                type="button"
+                                className={metric === value ? "active" : ""}
+                                aria-pressed={metric === value}
+                                onClick={() => { setActivePoint(null); setMetric(value); }}
+                            >
+                                {value === "time" ? "Time" : value === "ao5" ? "Ao5" : "Ao12"}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                <StatisticsSummary statistics={windowStatistics} loading={entries === null}/>
+                <StatisticsSummary
+                    statistics={windowStatistics}
+                    loading={entries === null}
+                    onOpenSolve={onOpenSolve}
+                    onOpenBestSolve={entries === null ? undefined : (bestMs) => {
+                        const bestEntry = newestFirst.find((entry) => !entry.dnf && entry.officialMs === bestMs);
+                        if (!bestEntry) throw new Error("Best solve is not available in this range.");
+                        const bestPoint = points.find((point) => point.entry.id === bestEntry.id);
+                        onOpenSolve(bestEntry, bestPoint?.solveNumber);
+                    }}
+                />
 
-                <section className="statistics-chart-section" aria-label="Solve time chart">
+                <section className="statistics-chart-section" aria-label={`${metricLabel(metric)} chart`}>
                     <div className="statistics-chart-heading">
-                        <h3>Solve time</h3>
+                        <h3>{metricLabel(metric)}</h3>
                         <span>{entries === null ? "" : `Showing ${showing} ${showing === 1 ? "solve" : "solves"}`}</span>
                     </div>
                     {error ? (
@@ -168,7 +199,7 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
                                 className="statistics-chart"
                                 viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
                                 role="group"
-                                aria-label={`Solve times for ${showing} ${range === "all" ? "total" : "recent"} ${showing === 1 ? "solve" : "solves"}, oldest to newest`}
+                                aria-label={`${metricLabel(metric)} for ${showing} ${range === "all" ? "total" : "recent"} ${showing === 1 ? "solve" : "solves"}, oldest to newest`}
                                 preserveAspectRatio="xMidYMid meet"
                             >
                                 <text className="chart-axis-title" x="0" y="20">DNF</text>
@@ -191,20 +222,23 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
                                         x2={CHART_WIDTH - PLOT.right}
                                         y1={meanY}
                                         y2={meanY}
-                                        aria-label={`Mean ${formatHistoryTime(windowStatistics?.averageMs ?? null, "none", false)}`}
+                                        aria-label={`Mean ${metricLabel(metric)} ${formatSolveTime(plottedMean! * 1000)}`}
                                     />
                                 )}
                                 {chartLines.map((line, index) => (
                                     <path key={index} className="chart-time-line" d={line}/>
                                 ))}
                                 {points.map((point) => {
-                                    const isDnf = point.y === null;
+                                    if (point.status === "insufficient") return null;
+                                    const isDnf = point.status === "dnf";
                                     const y = isDnf ? 26 : scaleY(point.y!, yDomain.min, yDomain.max);
                                     const date = new Date(point.entry.createdAt).toLocaleString();
                                     const label = isDnf
                                         ? `Solve ${point.solveNumber}: DNF, ${date}`
-                                        : `Solve ${point.solveNumber}: ${formatHistoryTime(point.entry.officialMs, point.entry.penalty, point.entry.dnf)}, ${date}`;
-                                    const isBest = !isDnf && point.entry.officialMs === windowStatistics?.bestMs;
+                                        : `Solve ${point.solveNumber}: ${metric === "time"
+                                            ? formatHistoryTime(point.entry.officialMs, point.entry.penalty, point.entry.dnf)
+                                            : formatSolveTime(point.y! * 1000)}, ${date}`;
+                                    const isBest = !isDnf && point.y === bestPointValue;
                                     return (
                                         <g
                                             key={point.entry.id}
@@ -213,11 +247,15 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
                                             role="button"
                                             tabIndex={0}
                                             aria-label={`${label}${isBest ? ", Best" : ""}. Open solution`}
-                                            onClick={() => onOpenSolve(point.entry)}
+                                            onClick={(event) => {
+                                                setActivePoint(point.index);
+                                                event.currentTarget.focus();
+                                                onOpenSolve(point.entry, point.solveNumber, false, event.currentTarget);
+                                            }}
                                             onKeyDown={(event) => {
                                                 if (event.key === "Enter" || event.key === " ") {
                                                     event.preventDefault();
-                                                    onOpenSolve(point.entry);
+                                                    onOpenSolve(point.entry, point.solveNumber, false, event.currentTarget);
                                                 }
                                             }}
                                             onMouseEnter={() => setActivePoint(point.index)}
@@ -238,13 +276,13 @@ export default function StatisticsModal({statistics, onClose, onOpenSolve}: Prop
                                 ) : null}
                             </svg>
                             <div className="statistics-chart-legend" aria-label="Chart legend">
-                                <span><i className="chart-legend-time"/> Solve time</span>
+                                <span><i className="chart-legend-time"/> {metricLabel(metric)}</span>
                                 <span><i className="chart-legend-mean"/> Mean</span>
                                 <span><i className="chart-legend-best"/> Best</span>
                                 <span><i className="chart-legend-dnf"/> DNF</span>
                             </div>
                             <p className="statistics-chart-detail" role="status" aria-live="polite">
-                                {selected ? describePoint(selected) : "Hover over or focus a point to inspect it; select a point to open its solution."}
+                                {selected ? describePoint(selected, metric) : "Hover over or focus a point to inspect it; select a point to open its solution."}
                             </p>
                         </>
                     )}
@@ -285,20 +323,32 @@ async function loadAll(isCancelled: () => boolean): Promise<SolveHistoryEntry[] 
     return entries;
 }
 
-function makeChartPoints(entries: SolveHistoryEntry[], solveCount: number | null): ChartPoint[] {
+function makeChartPoints(entries: SolveHistoryEntry[], solveCount: number | null, metric: Metric): ChartPoint[] {
     const width = CHART_WIDTH - PLOT.left - PLOT.right;
+    const newestFirst = [...entries].reverse();
+    const rollingSeries = metric === "time" ? null : calculateRollingMetricSeries(newestFirst, metric === "ao5" ? 5 : 12);
+    const rolling = rollingSeries === null
+        ? null
+        : new Map(newestFirst.map((entry, index) => [entry.id, rollingSeries[index]]));
     return entries.map((entry, index) => {
-        const seconds = entry.dnf || entry.penalty === "dnf" || entry.officialMs === null
-            ? null
-            : entry.officialMs / 1000;
+        const rollingPoint = rolling?.get(entry.id);
+        const status: ChartPoint["status"] = metric === "time"
+            ? entry.dnf || entry.penalty === "dnf" || entry.officialMs === null ? "dnf" : "value"
+            : rollingPoint?.status ?? "insufficient";
+        const valueMs = metric === "time" ? entry.officialMs : rollingPoint?.valueMs ?? null;
         return {
             entry,
             index,
             solveNumber: Math.max(entries.length, solveCount ?? 0) - entries.length + index + 1,
             x: entries.length <= 1 ? PLOT.left + width / 2 : PLOT.left + (index / (entries.length - 1)) * width,
-            y: seconds,
+            y: status === "value" && valueMs !== null ? valueMs / 1000 : null,
+            status,
         };
     });
+}
+
+function metricLabel(metric: Metric): string {
+    return metric === "time" ? "Solve time" : metric === "ao5" ? "Ao5" : "Ao12";
 }
 
 function makeLineSegments(points: ChartPoint[], min: number, max: number): string[] {
@@ -333,9 +383,13 @@ function scaleY(value: number, min: number, max: number) {
     return PLOT.top + ((max - value) / Math.max(max - min, Number.EPSILON)) * height;
 }
 
-function describePoint(point: ChartPoint) {
-    const time = point.y === null
+function describePoint(point: ChartPoint, metric: Metric) {
+    const value = point.status === "dnf"
         ? "DNF"
-        : formatHistoryTime(point.entry.officialMs, point.entry.penalty, point.entry.dnf);
-    return `Solve ${point.solveNumber} · ${time} · ${new Date(point.entry.createdAt).toLocaleString()}`;
+            : point.status === "insufficient"
+                ? `Insufficient solves for ${metricLabel(metric)}`
+                : metric === "time"
+                ? formatHistoryTime(point.entry.officialMs, point.entry.penalty, point.entry.dnf)
+                : formatSolveTime(point.y! * 1000);
+    return `Solve ${point.solveNumber} · ${value} · ${new Date(point.entry.createdAt).toLocaleString()}`;
 }

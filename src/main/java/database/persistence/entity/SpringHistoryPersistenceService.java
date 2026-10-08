@@ -7,6 +7,7 @@ import database.SaveSolutionCommand;
 import database.SolveHistoryDetail;
 import database.SolveHistoryEntry;
 import database.SolveHistoryPage;
+import database.SolveTimeSearch;
 import database.TimedSolve;
 import database.persistence.repository.SolveJpaRepository;
 import database.persistence.repository.SolveSolutionJpaRepository;
@@ -64,21 +65,41 @@ public class SpringHistoryPersistenceService {
     }
 
     @Transactional(readOnly = true)
-    public SolveHistoryPage listPage(String userExternalId, int limit, HistoryCursor cursor) {
+    public SolveHistoryPage listPage(
+            String userExternalId,
+            int limit,
+            HistoryCursor cursor,
+            String searchTerm,
+            String penalty,
+            SolveTimeSearch timeSearch
+    ) {
         var user = requireUser(userExternalId);
         var pageSize = Math.max(1, Math.min(limit, 100));
-        var rows = solves.findHistoryPage(
+        var rows = solves.findFilteredHistoryPage(
                 user.getId(),
                 cursor == null ? null : cursor.createdAt(),
                 cursor == null ? null : cursor.id(),
+                searchTerm,
+                penalty,
+                timeSearch == null ? null : timeSearch.likePattern(),
+                timeSearch != null && timeSearch.dnfOnly(),
+                timeSearch != null && timeSearch.plusTwoOnly(),
                 pageSize + 1
+        );
+        var totalCount = solves.countFilteredHistory(
+                user.getId(),
+                searchTerm,
+                penalty,
+                timeSearch == null ? null : timeSearch.likePattern(),
+                timeSearch != null && timeSearch.dnfOnly(),
+                timeSearch != null && timeSearch.plusTwoOnly()
         );
         var hasNext = rows.size() > pageSize;
         var entries = rows.stream().limit(pageSize).map(this::toEntry).toList();
         var nextCursor = hasNext && !entries.isEmpty()
                 ? new HistoryCursor(entries.get(entries.size() - 1).createdAt(), entries.get(entries.size() - 1).id()).encode()
                 : null;
-        return new SolveHistoryPage(entries, nextCursor);
+        return new SolveHistoryPage(entries, nextCursor, totalCount);
     }
 
     @Transactional(readOnly = true)
