@@ -48,6 +48,10 @@ public class CrossSolver {
                 .concat(solveForTargetCross(cube.copy(), orientation, targetCrossForOrientation(orientation)));
     }
 
+    AdvancedCrossSearch.SearchResult solveOptimizedCross(CubeState cube, Face crossFace) {
+        return AdvancedCrossSearch.solve(cube.copy(), crossFace);
+    }
+
     public CrossSolution solveColorNeutral(CubeState cube) {
         CrossSolution best = null;
         for (var face : COLOR_NEUTRAL_FACE_ORDER) {
