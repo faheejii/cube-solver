@@ -53,6 +53,25 @@ public class CrossSolverTest {
     }
 
     @Test
+    void solve_shouldKeepBOutOfFastCrossBodyAndRemainDeterministic() {
+        for (var face : Face.values()) {
+            var cube = new CubeState();
+            MoveApplier.applyAlgorithm(cube, "R U F' L2 D B' U2 R' F D2 L B2");
+            var solver = new CrossSolver();
+
+            var first = solver.solve(cube, face);
+            var second = solver.solve(cube, face);
+
+            assertEquals(first.toString(), second.toString());
+            for (var move : crossBodyMoves(first, face)) {
+                assertTrue(move != Move.B && move != Move.B2 && move != Move.B_PRIME,
+                        "Fast cross body should not contain B moves for " + face + ": " + first);
+            }
+            assertSelectedFaceCrossSolvedAfterApplyingSolution("R U F' L2 D B' U2 R' F D2 L B2", face);
+        }
+    }
+
+    @Test
     void solve_withSelectedFace_shouldKeepAnAlreadySolvedCrossUnchanged() {
         var solver = new CrossSolver();
 

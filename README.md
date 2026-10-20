@@ -40,6 +40,7 @@ Implemented:
 - face turns, slice moves, cube rotations, and lowercase wide moves
 - selected cross-face solving
 - color-neutral cross solving
+- Fast cross solving uses IDA* with a bundled cross-only pruning table, searches without B turns, and tries four Y orientations
 - Optimized fixed-cross and color-neutral modes use advanced cross search: per face, try XXCross up to 10 face turns, then XCross up to 8, then fall back to the regular cross solver
 - Optimized CN searches all six faces; regular CN builds baselines for its three shortest advanced crosses and optimizes two, while Deep CN evaluates all six completed solutions within its 120-second budget
 - a bundled reverse-BFS cross-plus-FR-pair pruning table, rotationally reused for any F2L slot by the advanced cross search
@@ -114,6 +115,15 @@ java -Xmx1g -cp target/classes solver.pruning.GenerateCombinedPruningTable
 ```
 
 The generator writes the versioned, checksummed asset to `src/main/resources/solver/pruning/cross-fr.bin`. Runtime search loads this bundled table lazily. The configured overall solve deadline and cancellation still apply; the advanced cross search has no separate optimization time budget.
+
+Fast cross IDA* uses a separate cross-only reverse-BFS table (six goal-face orientations, 190,080 states each). It is small and generated offline when the cross coordinate or face-turn semantics change:
+
+```bash
+mvn -q -DskipTests package
+java -Xmx256m -cp target/classes solver.pruning.GenerateCrossPruningTable
+```
+
+The versioned, checksummed asset is `src/main/resources/solver/pruning/cross-only.bin` and is loaded lazily at runtime. BFS uses all 18 face turns for an admissible lower bound; the actual Fast search remains restricted to no-B turns and four Y orientations. Advanced search stays unrestricted to protect its XCross/XXCross hit rate, and continues to use the separate cross-plus-pair table.
 
 The API response includes additive F2L fields on the `f2l` stage when a trace is available:
 
