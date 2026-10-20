@@ -12,6 +12,7 @@ import cube.Algorithm;
 import cube.CubeOrientation;
 import cube.CubeState;
 import cube.Face;
+import cube.Move;
 import cube.MoveApplier;
 import cube.OrientedCube;
 import io.ScrambleParser;
@@ -158,7 +159,9 @@ public class CfopSolveService {
             var face = COLOR_NEUTRAL_FACES[index];
             publishProgress(progressListener, F2LSolver.SolvePhase.CROSS_EVALUATION, face,
                     index, COLOR_NEUTRAL_FACES.length, 0, 0, false, null);
-            crossCandidates.add(new CrossCandidate(face, crossSolver.solve(scrambledCube, face)));
+            crossCandidates.add(new CrossCandidate(
+                    face, solveAdvancedCrossOrFallback(crossSolver, scrambledCube, face)
+            ));
             publishProgress(progressListener, F2LSolver.SolvePhase.CROSS_EVALUATION, face,
                     index + 1, COLOR_NEUTRAL_FACES.length, 0, 0, false, null);
         }
@@ -200,7 +203,7 @@ public class CfopSolveService {
         }
         baselines.sort(Comparator.comparing(
                 baseline -> resultFor(baseline, baseline.continuation(), F2LMode.OPTIMIZED, 0),
-                SOLUTION_COMPARATOR
+                COLOR_NEUTRAL_OPTIMIZED_COMPARATOR
         ));
 
         var best = baselines.get(0);
@@ -230,7 +233,7 @@ public class CfopSolveService {
                     () -> System.nanoTime() >= optimizationDeadlineNanos
             );
             var optimized = baseline.withContinuation(optimizedContinuation);
-            if (SOLUTION_COMPARATOR.compare(
+            if (COLOR_NEUTRAL_OPTIMIZED_COMPARATOR.compare(
                     resultFor(optimized, optimized.continuation(), F2LMode.OPTIMIZED, 0),
                     resultFor(best, best.continuation(), F2LMode.OPTIMIZED, 0)
             ) < 0) {
@@ -261,7 +264,21 @@ public class CfopSolveService {
             Consumer<F2LSolver.F2LSearchProgress> optimizedProgressListener,
             BooleanSupplier shouldStop
     ) {
-        var baseline = prepareFixedCross(request);
+        FixedCrossBaseline baseline;
+        if (request.f2lMode() == F2LMode.OPTIMIZED) {
+            long startTime = System.nanoTime();
+            publishProgress(optimizedProgressListener, F2LSolver.SolvePhase.CROSS_EVALUATION,
+                    request.crossFace(), 0, 1, 0, 0, false, null);
+            var scrambledCube = new CubeState();
+            MoveApplier.applyAlgorithm(scrambledCube, request.scramble());
+            var crossSolver = new CrossSolver();
+            var cross = solveAdvancedCrossOrFallback(crossSolver, scrambledCube, request.crossFace());
+            publishProgress(optimizedProgressListener, F2LSolver.SolvePhase.CROSS_EVALUATION,
+                    request.crossFace(), 1, 1, 0, 0, false, null);
+            baseline = prepareFixedCross(request.scramble(), new CrossCandidate(request.crossFace(), cross), startTime);
+        } else {
+            baseline = prepareFixedCross(request);
+        }
         var continuation = baseline.continuation();
         if (request.f2lMode() == F2LMode.OPTIMIZED) {
             long deadlineNanos = optimizationDeadlineNanos(request, System.nanoTime());
@@ -278,6 +295,11 @@ public class CfopSolveService {
             }
         }
         return resultFor(baseline, continuation, request.f2lMode(), System.nanoTime() - baseline.startTimeNanos());
+    }
+
+    private static Algorithm solveAdvancedCrossOrFallback(CrossSolver crossSolver, CubeState cube, Face face) {
+        var advanced = crossSolver.solveOptimizedCross(cube, face);
+        return advanced == null ? crossSolver.solve(cube, face) : advanced.algorithm();
     }
 
     private static java.util.List<CrossCandidate> shortlistCrossCandidates(ArrayList<CrossCandidate> candidates) {
@@ -582,6 +604,22 @@ public class CfopSolveService {
             .thenComparing(result -> result.cross().moveCount())
             .thenComparing(result -> result.cross().algorithm() + "|" + result.f2l().algorithm()
                     + "|" + result.oll().algorithm() + "|" + result.pll().algorithm());
+
+    private static final Comparator<CfopSolveResult> COLOR_NEUTRAL_OPTIMIZED_COMPARATOR = Comparator
+            .comparing(CfopSolveResult::fullySolved).reversed()
+            .thenComparingInt(CfopSolveService::lastLayerRotationCount)
+            .thenComparing(SOLUTION_COMPARATOR);
+
+    private static int lastLayerRotationCount(CfopSolveResult result) {
+        return rotationCount(result.oll().algorithm()) + rotationCount(result.pll().algorithm());
+    }
+
+    private static int rotationCount(String algorithm) {
+        if (algorithm == null || algorithm.isBlank()) {
+            return 0;
+        }
+        return (int) Algorithm.parse(algorithm).getMoves().stream().filter(Move::isCubeRotation).count();
+    }
 
     private record Continuation(
             CfopStageResult f2l,

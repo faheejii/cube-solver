@@ -40,6 +40,9 @@ Implemented:
 - face turns, slice moves, cube rotations, and lowercase wide moves
 - selected cross-face solving
 - color-neutral cross solving
+- Optimized fixed-cross and color-neutral modes use advanced cross search: per face, try XXCross up to 10 face turns, then XCross up to 8, then fall back to the regular cross solver
+- Optimized CN searches all six faces; regular CN builds baselines for its three shortest advanced crosses and optimizes two, while Deep CN evaluates all six completed solutions within its 120-second budget
+- a bundled reverse-BFS cross-plus-FR-pair pruning table, rotationally reused for any F2L slot by the advanced cross search
 - shared CFOP orchestration through `CfopSolveService`
 - default two-phase F2L solving with separate setup and insert databases
 - database-only F2L production solving with fail-fast miss diagnostics
@@ -102,6 +105,15 @@ Run the focused F2L trace tests:
 ```bash
 mvn -q -Dtest=F2LTraceModelsTest,F2LGreedyTraceTest,F2LOptimizedTraceTest,F2LModeComparisonTest,F2LSolverTest test
 ```
+
+Regenerate the deterministic combined cross/pair pruning table only when its coordinate or move definition changes. This developer-only BFS uses roughly 400 MiB of heap and took about 23 seconds in the implementation environment; runtime varies by machine. It is not part of application startup or the standard test suite:
+
+```bash
+mvn -q -DskipTests package
+java -Xmx1g -cp target/classes solver.pruning.GenerateCombinedPruningTable
+```
+
+The generator writes the versioned, checksummed asset to `src/main/resources/solver/pruning/cross-fr.bin`. Runtime search loads this bundled table lazily. The configured overall solve deadline and cancellation still apply; the advanced cross search has no separate optimization time budget.
 
 The API response includes additive F2L fields on the `f2l` stage when a trace is available:
 
