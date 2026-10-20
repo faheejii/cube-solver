@@ -97,6 +97,28 @@ public final class CombinedPruningCoordinates {
         return rank * 16 + orientationBits;
     }
 
+    public static int crossIndex(int first, int second, int third, int fourth, int orientationBits) {
+        var rank = CROSS_RANK[first][second][third][fourth];
+        if (rank < 0 || orientationBits < 0 || orientationBits > 15) {
+            throw new IllegalArgumentException("Invalid cross coordinate");
+        }
+        return rank * 16 + orientationBits;
+    }
+
+    public static int crossIndex(CubeState state, int[] trackedPieces) {
+        if (trackedPieces == null || trackedPieces.length != 4) {
+            throw new IllegalArgumentException("Exactly four tracked cross edges are required");
+        }
+        var positions = new int[4];
+        var bits = 0;
+        for (var tracked = 0; tracked < trackedPieces.length; tracked++) {
+            var position = find(state.edgePerm, trackedPieces[tracked], "tracked cross edge");
+            positions[tracked] = position;
+            bits |= orientation(state.edgeOri[position], 2, "cross edge") << tracked;
+        }
+        return crossIndex(positions, bits);
+    }
+
     public static int[] crossPositions(int crossIndex) {
         check(crossIndex, CROSS_STATES, "cross");
         return CROSS_PERMUTATIONS[crossIndex / 16].clone();

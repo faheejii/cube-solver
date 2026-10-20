@@ -2,17 +2,23 @@ package solver;
 
 import cfop.F2LSlot;
 import cube.CubeState;
+import cube.Edge;
+import cube.Face;
 import solver.pruning.CombinedPruningCoordinates;
 import solver.pruning.CombinedPruningTableCodec;
+import solver.pruning.CrossPruningCoordinates;
+import solver.pruning.CrossPruningTableCodec;
 
 import java.io.IOException;
 import java.io.InputStream;
 
-/** Runtime access to the bundled cross-plus-FR-pair pattern database. */
+/** Runtime access to the bundled cross-only and cross-plus-FR-pair pattern databases. */
 public final class PruningTables {
-    private static final String RESOURCE = "/solver/pruning/cross-fr.bin";
+    private static final String COMBINED_RESOURCE = "/solver/pruning/cross-fr.bin";
+    private static final String CROSS_RESOURCE = "/solver/pruning/cross-only.bin";
     private static final F2LSlot[] SLOTS = F2LSlot.values();
     private static volatile byte[] crossFrDistances;
+    private static volatile byte[] crossDistances;
 
     private PruningTables() {
     }
@@ -21,6 +27,20 @@ public final class PruningTables {
     public static int combinedDistance(CubeState state, F2LSlot slot) {
         var coordinate = CombinedPruningCoordinates.index(state, slot);
         return CombinedPruningTableCodec.distanceAt(table(), coordinate);
+    }
+
+    /** Admissible cross-only distance for the specified face's four cross edges. */
+    public static int crossDistance(CubeState state, Edge[] crossEdges) {
+        var coordinate = CrossPruningCoordinates.index(state, crossEdges);
+        var face = CrossPruningCoordinates.faceFor(crossEdges);
+        return crossDistance(coordinate, face);
+    }
+
+    public static int crossDistance(int coordinate, Face face) {
+        if (coordinate < 0 || coordinate >= CrossPruningCoordinates.STATE_COUNT || face == null) {
+            throw new IllegalArgumentException("Invalid cross pruning lookup");
+        }
+        return Byte.toUnsignedInt(crossTable()[face.ordinal() * CrossPruningCoordinates.STATE_COUNT + coordinate]);
     }
 
     /** Returns exact relaxed distances to the four possible XCross goals, indexed by F2LSlot ordinal. */
@@ -78,11 +98,31 @@ public final class PruningTables {
     }
 
     private static byte[] load() {
-        try (InputStream input = PruningTables.class.getResourceAsStream(RESOURCE)) {
-            if (input == null) throw new IllegalStateException("Missing pruning table resource: " + RESOURCE);
+        try (InputStream input = PruningTables.class.getResourceAsStream(COMBINED_RESOURCE)) {
+            if (input == null) throw new IllegalStateException("Missing pruning table resource: " + COMBINED_RESOURCE);
             return CombinedPruningTableCodec.read(input);
         } catch (IOException e) {
-            throw new IllegalStateException("Unable to load pruning table resource: " + RESOURCE, e);
+            throw new IllegalStateException("Unable to load pruning table resource: " + COMBINED_RESOURCE, e);
+        }
+    }
+
+    private static byte[] crossTable() {
+        var distances = crossDistances;
+        if (distances == null) {
+            synchronized (PruningTables.class) {
+                distances = crossDistances;
+                if (distances == null) crossDistances = distances = loadCrossTable();
+            }
+        }
+        return distances;
+    }
+
+    private static byte[] loadCrossTable() {
+        try (InputStream input = PruningTables.class.getResourceAsStream(CROSS_RESOURCE)) {
+            if (input == null) throw new IllegalStateException("Missing pruning table resource: " + CROSS_RESOURCE);
+            return CrossPruningTableCodec.read(input);
+        } catch (IOException e) {
+            throw new IllegalStateException("Unable to load pruning table resource: " + CROSS_RESOURCE, e);
         }
     }
 }
