@@ -33,6 +33,24 @@ public class SolveApiRequestTest {
     }
 
     @Test
+    void crossPreferences_shouldDefaultByModeForOlderClients() {
+        var fast = new SolveApiRequest("R U", "U", "fast").toSolveRequest().crossSearchOptions();
+        var optimized = new SolveApiRequest("R U", "U", "optimized").toSolveRequest().crossSearchOptions();
+
+        assertTrue(fast.avoidBTurns());
+        assertFalse(optimized.avoidBTurns());
+    }
+
+    @Test
+    void crossPreferences_shouldReachSolverFromSolveJobRequest() {
+        var request = new CreateSolveJobRequest(
+                "R U", "CN", "optimized", null, false, null, true, true
+        ).solveRequest().toSolveRequest().crossSearchOptions();
+
+        assertTrue(request.avoidBTurns());
+    }
+
+    @Test
     void deadline_shouldDefaultTo15SecondsWhenOmitted() {
         var request = new SolveApiRequest("R U R'", "U");
 

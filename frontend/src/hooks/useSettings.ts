@@ -1,5 +1,6 @@
 import {useCallback, useEffect, useState} from "react";
 import type {CubePreviewMode} from "../CubePreviewModeContext";
+import type {SolveJobRequest} from "../types";
 
 export const SETTINGS_STORAGE_KEY = "cube-solver-settings";
 export const DEFAULT_SOLVE_DEADLINE_SECONDS = 15;
@@ -11,6 +12,8 @@ export type AppSettings = {
     solveDeadlineSeconds: number;
     inspectionEnabled: boolean;
     deepColorNeutralOptimization: boolean;
+    fastAvoidBTurns: boolean;
+    optimizedAvoidBTurns: boolean;
     theme: Theme;
     cubePreviewMode: CubePreviewMode;
     cubePlaybackMode: CubePreviewMode;
@@ -20,6 +23,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
     solveDeadlineSeconds: DEFAULT_SOLVE_DEADLINE_SECONDS,
     inspectionEnabled: true,
     deepColorNeutralOptimization: false,
+    fastAvoidBTurns: true,
+    optimizedAvoidBTurns: false,
     theme: "dark",
     cubePreviewMode: "3d",
     cubePlaybackMode: "3d",
@@ -43,6 +48,12 @@ export function normalizeSettings(value: unknown): AppSettings {
         deepColorNeutralOptimization: typeof candidate.deepColorNeutralOptimization === "boolean"
             ? candidate.deepColorNeutralOptimization
             : DEFAULT_SETTINGS.deepColorNeutralOptimization,
+        fastAvoidBTurns: typeof candidate.fastAvoidBTurns === "boolean"
+            ? candidate.fastAvoidBTurns
+            : DEFAULT_SETTINGS.fastAvoidBTurns,
+        optimizedAvoidBTurns: typeof candidate.optimizedAvoidBTurns === "boolean"
+            ? candidate.optimizedAvoidBTurns
+            : DEFAULT_SETTINGS.optimizedAvoidBTurns,
         theme: candidate.theme === "light" || candidate.theme === "dark"
             ? candidate.theme
             : DEFAULT_SETTINGS.theme,
@@ -52,6 +63,15 @@ export function normalizeSettings(value: unknown): AppSettings {
         cubePlaybackMode: candidate.cubePlaybackMode === "2d" || candidate.cubePlaybackMode === "3d"
             ? candidate.cubePlaybackMode
             : DEFAULT_SETTINGS.cubePlaybackMode,
+    };
+}
+
+export function crossSearchRequestPreferences(
+    settings: AppSettings,
+    f2lMode: "greedy" | "optimized",
+): Pick<SolveJobRequest, "avoidBTurns"> {
+    return {
+        avoidBTurns: f2lMode === "optimized" ? settings.optimizedAvoidBTurns : settings.fastAvoidBTurns,
     };
 }
 

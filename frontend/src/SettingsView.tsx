@@ -31,6 +31,14 @@ export default function SettingsView({settings, onChange}: Props) {
                         <span><strong>Deep color-neutral optimization</strong><small>Evaluate all six cross colors for the best Optimized solution. May take up to 2 minutes.</small></span>
                         <input type="checkbox" role="switch" aria-label="Deep color-neutral optimization" checked={settings.deepColorNeutralOptimization} onChange={(event) => onChange({deepColorNeutralOptimization: event.target.checked})}/>
                     </label>
+                    <label className="settings-control">
+                        <span><strong>Avoid B turns in Fast</strong><small>Skip B turns in Fast cross solutions.</small></span>
+                        <input type="checkbox" role="switch" aria-label="Avoid B turns in Fast" checked={settings.fastAvoidBTurns} onChange={(event) => onChange({fastAvoidBTurns: event.target.checked})}/>
+                    </label>
+                    <label className="settings-control">
+                        <span><strong>Avoid B turns in Optimized</strong><small>Skip B turns in Optimized cross searches.</small></span>
+                        <input type="checkbox" role="switch" aria-label="Avoid B turns in Optimized" checked={settings.optimizedAvoidBTurns} onChange={(event) => onChange({optimizedAvoidBTurns: event.target.checked})}/>
+                    </label>
                 </section>
                 <section className="settings-card" aria-labelledby="appearance-settings-title">
                     <h2 id="appearance-settings-title">Theme</h2>

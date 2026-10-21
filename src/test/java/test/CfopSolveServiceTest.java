@@ -34,6 +34,14 @@ public class CfopSolveServiceTest {
     }
 
     @Test
+    void fastCrossReportsPairsAlreadySolvedAfterItsAlgorithm() {
+        var result = SERVICE.solve(new CfopSolveRequest("U", cube.Face.D));
+
+        assertTrue(result.cross().solved());
+        assertEquals(4, result.cross().solvedF2lPairCount());
+    }
+
+    @Test
     void solve_withOptimizedF2LMode_shouldReturnSolvedResultNoLongerThanFastCfop() {
         var scramble = "R D R' D2 R D' R'";
 

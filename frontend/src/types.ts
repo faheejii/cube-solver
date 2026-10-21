@@ -4,6 +4,7 @@ export type SolveStage = {
     moveCount: number;
     solved: boolean;
     status: string;
+    solvedF2lPairCount?: number | null;
 };
 
 export type CubeStateSnapshot = {
@@ -162,6 +163,7 @@ export type AlgorithmCatalogResponse = {
 export type SolveJobRequest = SolveRequest & {
     deadlineSeconds?: number;
     deepColorNeutral?: boolean;
+    avoidBTurns?: boolean;
     solveId?: number;
     saveOnComplete?: boolean;
 };

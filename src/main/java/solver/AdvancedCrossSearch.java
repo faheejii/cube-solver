@@ -21,14 +21,6 @@ final class AdvancedCrossSearch {
     private static final int XXCROSS_MAX_DEPTH = 10;
     private static final int CROSS_MAX_DEPTH = 8;
     private static final F2LSlot[] SLOTS = F2LSlot.values();
-    private static final Move[] FACE_TURNS = {
-            Move.U, Move.U2, Move.U_PRIME,
-            Move.R, Move.R2, Move.R_PRIME,
-            Move.F, Move.F2, Move.F_PRIME,
-            Move.D, Move.D2, Move.D_PRIME,
-            Move.L, Move.L2, Move.L_PRIME,
-            Move.B, Move.B2, Move.B_PRIME
-    };
     private static final Edge[] D_CROSS = {Edge.DF, Edge.DR, Edge.DB, Edge.DL};
     private static final Edge[] TRACKED_EDGES = {
             Edge.DF, Edge.DR, Edge.DB, Edge.DL, Edge.FR, Edge.FL, Edge.BL, Edge.BR
@@ -41,20 +33,73 @@ final class AdvancedCrossSearch {
     }
 
     static SearchResult solve(CubeState input, Face crossFace) {
-        var prefix = OrientationFrames.orientationToD(crossFace);
-        var orientation = OrientationFrames.orientedFrameFor(crossFace);
-        var normalized = normalizeToFrame(input, orientation);
+        return solve(input, crossFace, SearchPolicy.UNRESTRICTED);
+    }
 
-        var xxcross = search(normalized, true, XXCROSS_MAX_DEPTH);
+    static SearchResult solve(CubeState input, Face crossFace, CrossSearchOptions options) {
+        if (options == null) throw new IllegalArgumentException("Cross search options are required");
+        var policy = SearchPolicy.forOptions(options);
+        return solve(input, crossFace, policy, XXCROSS_MAX_DEPTH, CROSS_MAX_DEPTH);
+    }
+
+    static SearchResult solve(CubeState input, Face crossFace, SearchPolicy policy) {
+        return solve(input, crossFace, policy, XXCROSS_MAX_DEPTH, CROSS_MAX_DEPTH);
+    }
+
+    static SearchResult solve(
+            CubeState input,
+            Face crossFace,
+            SearchPolicy policy,
+            int xxcrossMaxDepth,
+            int xcrossMaxDepth
+    ) {
+        if (input == null || crossFace == null || policy == null) {
+            throw new IllegalArgumentException("Cube state, cross face, and search policy are required");
+        }
+        if (xxcrossMaxDepth < 0 || xcrossMaxDepth < 0) {
+            throw new IllegalArgumentException("Search depth limits cannot be negative");
+        }
+        var prefix = OrientationFrames.orientationToD(crossFace);
+        var initialOrientation = OrientationFrames.orientedFrameFor(crossFace);
+        var trials = policy.yawTrials();
+        var moves = policy.faceTurns();
+
+        var xxcross = searchAcrossTrials(input, initialOrientation, trials, moves, true,
+                xxcrossMaxDepth);
         if (xxcross != null) {
-            return new SearchResult(prefix.concat(xxcross), Goal.XXCROSS);
+            return new SearchResult(prefix.concat(xxcross.algorithm()), Goal.XXCROSS);
         }
 
-        var xcross = search(normalized, false, CROSS_MAX_DEPTH);
+        var xcross = searchAcrossTrials(input, initialOrientation, trials, moves, false,
+                xcrossMaxDepth);
         if (xcross != null) {
-            return new SearchResult(prefix.concat(xcross), Goal.XCROSS);
+            return new SearchResult(prefix.concat(xcross.algorithm()), Goal.XCROSS);
         }
         return null;
+    }
+
+    private static TrialResult searchAcrossTrials(
+            CubeState input,
+            cube.CubeOrientation initialOrientation,
+            YawTrial[] trials,
+            Move[] moves,
+            boolean requireTwoPairs,
+            int maxDepth
+    ) {
+        TrialResult best = null;
+        for (var trial : trials) {
+            SolveCancellation.throwIfCancelled();
+            var orientation = initialOrientation.copy();
+            var orientedCube = new cube.OrientedCube(new CubeState(), orientation);
+            orientedCube.applyMoves(trial.rotation().getMoves());
+            var normalized = normalizeToFrame(input, orientedCube.orientation());
+            var solution = search(normalized, requireTwoPairs, maxDepth, moves);
+            if (solution == null) continue;
+
+            var candidate = new TrialResult(trial.rotation().concat(solution), solution.getMoveCount());
+            if (best == null || candidate.faceTurnCount() < best.faceTurnCount()) best = candidate;
+        }
+        return best;
     }
 
     /** Maps stickers through the same logical-frame view used by the CFOP analyzers. */
@@ -69,7 +114,12 @@ final class AdvancedCrossSearch {
         return CubeConverter.toCubeState(new FaceletState(stickers));
     }
 
-    private static Algorithm search(CubeState start, boolean requireTwoPairs, int maxDepth) {
+    private static Algorithm search(
+            CubeState start,
+            boolean requireTwoPairs,
+            int maxDepth,
+            Move[] faceTurns
+    ) {
         if (isGoal(start, requireTwoPairs)) {
             return new Algorithm();
         }
@@ -78,7 +128,7 @@ final class AdvancedCrossSearch {
             SolveCancellation.throwIfCancelled();
             var path = new Move[depth];
             var visited = new HashMap<Long, Integer>();
-            if (depthFirst(start, requireTwoPairs, path, 0, depth, -1, visited)) {
+            if (depthFirst(start, requireTwoPairs, path, 0, depth, -1, visited, faceTurns)) {
                 var moves = new java.util.ArrayList<Move>(depth);
                 for (var move : path) {
                     if (move == null) break;
@@ -97,7 +147,8 @@ final class AdvancedCrossSearch {
             int pathLength,
             int remainingDepth,
             int lastFace,
-            Map<Long, Integer> visited
+            Map<Long, Integer> visited,
+            Move[] faceTurns
     ) {
         SolveCancellation.throwIfCancelled();
         if (isGoal(cube, requireTwoPairs)) {
@@ -117,15 +168,13 @@ final class AdvancedCrossSearch {
             return false;
         }
 
-        for (var move : FACE_TURNS) {
-            int face = faceFamily(move);
-            if (face == lastFace || commutesOutOfOrder(lastFace, face)) {
-                continue;
-            }
+        for (var move : faceTurns) {
+            int face = CrossSearchMovePolicy.faceFamily(move);
+            if (CrossSearchMovePolicy.shouldSkip(lastFace, face)) continue;
             MoveApplier.applyMove(cube, move);
             path[pathLength] = move;
             if (depthFirst(cube, requireTwoPairs, path, pathLength + 1,
-                    remainingDepth - 1, face, visited)) {
+                    remainingDepth - 1, face, visited, faceTurns)) {
                 MoveApplier.applyMove(cube, move.inverse());
                 return true;
             }
@@ -180,47 +229,8 @@ final class AdvancedCrossSearch {
                 }
             }
         }
-        return key | ((long) (lastFace + 1) << offset);
-    }
-
-    private static int faceFamily(Move move) {
-        return switch (move) {
-            case U, U2, U_PRIME -> 0;
-            case R, R2, R_PRIME -> 1;
-            case F, F2, F_PRIME -> 2;
-            case D, D2, D_PRIME -> 3;
-            case L, L2, L_PRIME -> 4;
-            case B, B2, B_PRIME -> 5;
-            default -> throw new IllegalArgumentException("Unexpected search move: " + move);
-        };
-    }
-
-    private static boolean commutesOutOfOrder(int previous, int current) {
-        if (previous < 0 || axis(previous) != axis(current) || previous == current) {
-            return false;
-        }
-        return rankOnAxis(current) < rankOnAxis(previous);
-    }
-
-    private static int axis(int face) {
-        return switch (face) {
-            case 0, 3 -> 0;
-            case 1, 4 -> 1;
-            case 2, 5 -> 2;
-            default -> throw new IllegalArgumentException("Unknown face family: " + face);
-        };
-    }
-
-    private static int rankOnAxis(int face) {
-        return switch (face) {
-            case 0 -> 1; // U after D
-            case 3 -> 0;
-            case 1 -> 1; // R after L
-            case 4 -> 0;
-            case 2 -> 1; // F after B
-            case 5 -> 0;
-            default -> throw new IllegalArgumentException("Unknown face family: " + face);
-        };
+        key |= (long) (lastFace + 1) << offset;
+        return key;
     }
 
     enum Goal {
@@ -229,5 +239,40 @@ final class AdvancedCrossSearch {
     }
 
     record SearchResult(Algorithm algorithm, Goal goal) {
+    }
+
+    enum SearchPolicy {
+        UNRESTRICTED(new CrossSearchOptions(false)),
+        NO_B_FOUR_Y(new CrossSearchOptions(true));
+
+        private final Move[] faceTurns;
+        private final YawTrial[] yawTrials;
+
+        SearchPolicy(CrossSearchOptions options) {
+            this.faceTurns = CrossSearchMovePolicy.moves(options);
+            this.yawTrials = CrossSearchMovePolicy.advancedYawTrials(options).stream()
+                    .map(YawTrial::new).toArray(YawTrial[]::new);
+        }
+
+        static SearchPolicy forOptions(CrossSearchOptions options) {
+            for (var policy : values()) {
+                if ((policy == NO_B_FOUR_Y) == options.avoidBTurns()) return policy;
+            }
+            throw new IllegalStateException("No advanced cross policy for " + options);
+        }
+
+        Move[] faceTurns() {
+            return faceTurns;
+        }
+
+        YawTrial[] yawTrials() {
+            return yawTrials;
+        }
+    }
+
+    private record YawTrial(Algorithm rotation) {
+    }
+
+    private record TrialResult(Algorithm algorithm, int faceTurnCount) {
     }
 }

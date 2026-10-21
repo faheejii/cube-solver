@@ -110,7 +110,9 @@ public class CfopSolveService {
         var crossCandidates = new ArrayList<CrossCandidate>();
         for (var face : COLOR_NEUTRAL_FACES) {
             SolveCancellation.throwIfCancelled();
-            crossCandidates.add(new CrossCandidate(face, crossSolver.solve(scrambledCube, face)));
+            crossCandidates.add(new CrossCandidate(
+                    face, crossSolver.solve(scrambledCube, face, request.crossSearchOptions())
+            ));
         }
         crossCandidates.sort(Comparator
                 .comparingInt((CrossCandidate candidate) -> candidate.algorithm().getMoveCount())
@@ -160,7 +162,7 @@ public class CfopSolveService {
             publishProgress(progressListener, F2LSolver.SolvePhase.CROSS_EVALUATION, face,
                     index, COLOR_NEUTRAL_FACES.length, 0, 0, false, null);
             crossCandidates.add(new CrossCandidate(
-                    face, solveAdvancedCrossOrFallback(crossSolver, scrambledCube, face)
+                    face, solveAdvancedCrossOrFallback(crossSolver, scrambledCube, face, request.crossSearchOptions())
             ));
             publishProgress(progressListener, F2LSolver.SolvePhase.CROSS_EVALUATION, face,
                     index + 1, COLOR_NEUTRAL_FACES.length, 0, 0, false, null);
@@ -272,7 +274,9 @@ public class CfopSolveService {
             var scrambledCube = new CubeState();
             MoveApplier.applyAlgorithm(scrambledCube, request.scramble());
             var crossSolver = new CrossSolver();
-            var cross = solveAdvancedCrossOrFallback(crossSolver, scrambledCube, request.crossFace());
+            var cross = solveAdvancedCrossOrFallback(
+                    crossSolver, scrambledCube, request.crossFace(), request.crossSearchOptions()
+            );
             publishProgress(optimizedProgressListener, F2LSolver.SolvePhase.CROSS_EVALUATION,
                     request.crossFace(), 1, 1, 0, 0, false, null);
             baseline = prepareFixedCross(request.scramble(), new CrossCandidate(request.crossFace(), cross), startTime);
@@ -297,9 +301,14 @@ public class CfopSolveService {
         return resultFor(baseline, continuation, request.f2lMode(), System.nanoTime() - baseline.startTimeNanos());
     }
 
-    private static Algorithm solveAdvancedCrossOrFallback(CrossSolver crossSolver, CubeState cube, Face face) {
-        var advanced = crossSolver.solveOptimizedCross(cube, face);
-        return advanced == null ? crossSolver.solve(cube, face) : advanced.algorithm();
+    private static Algorithm solveAdvancedCrossOrFallback(
+            CrossSolver crossSolver,
+            CubeState cube,
+            Face face,
+            CrossSearchOptions options
+    ) {
+        var advanced = crossSolver.solveOptimizedCross(cube, face, options);
+        return advanced == null ? crossSolver.solve(cube, face, options) : advanced.algorithm();
     }
 
     private static java.util.List<CrossCandidate> shortlistCrossCandidates(ArrayList<CrossCandidate> candidates) {
@@ -346,7 +355,7 @@ public class CfopSolveService {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, request.scramble());
         return prepareFixedCross(request.scramble(), new CrossCandidate(
-                request.crossFace(), new CrossSolver().solve(cube, request.crossFace())
+                request.crossFace(), new CrossSolver().solve(cube, request.crossFace(), request.crossSearchOptions())
         ), startTime);
     }
 
@@ -369,12 +378,14 @@ public class CfopSolveService {
         // consumed by F2L exactly the orientation the user sees.
         var orientedCube = new OrientedCube(cube);
         orientedCube.applyMoves(crossSolution.getMoves());
+        var solvedF2lPairCount = CrossQualityAnalyzer.solvedF2lPairCount(orientedCube);
         var crossResult = new CfopStageResult(
                 "cross",
                 crossSolution.toString(),
                 crossSolution.getMoveCount(),
-                CrossAnalyzer.isCrossSolved(cube, orientedCube.orientation()),
-                "ok"
+                solvedF2lPairCount != null,
+                "ok",
+                solvedF2lPairCount
         );
 
         var postCrossCube = orientedCube.cubeState().copy();

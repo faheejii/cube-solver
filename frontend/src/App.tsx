@@ -24,7 +24,7 @@ import {
 } from "./format";
 import {useHistoryData} from "./hooks/useHistoryData";
 import {useSolveProcesses} from "./hooks/useSolveProcesses";
-import {useSettings} from "./hooks/useSettings";
+import {crossSearchRequestPreferences, useSettings} from "./hooks/useSettings";
 import {generateScramble} from "./scrambleGenerator";
 import {INSPECTION_DNF_MS, INSPECTION_PLUS_TWO_MS, useTimer, type CompletedAttemptSnapshot, type TimerPenalty, type TimerPhase} from "./hooks/useTimer";
 import {isTerminalProcess} from "./jobs";
@@ -213,6 +213,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
             crossFace,
             f2lMode,
             deadlineSeconds: settings.solveDeadlineSeconds,
+            ...crossSearchRequestPreferences(settings, f2lMode),
             ...deepColorNeutralRequest(crossFace, f2lMode, settings.deepColorNeutralOptimization),
         };
 
@@ -247,7 +248,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 void cancelSolveJob(jobId);
             }
         };
-    }, [committedScramble, crossFace, f2lMode, settings.solveDeadlineSeconds, settings.deepColorNeutralOptimization]);
+    }, [committedScramble, crossFace, f2lMode, settings.solveDeadlineSeconds, settings.deepColorNeutralOptimization, settings.fastAvoidBTurns, settings.optimizedAvoidBTurns]);
 
     useEffect(() => {
         if (timerPhase !== "stopped" || stoppedElapsedMs === null) {
@@ -405,6 +406,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 crossFace: requestedCross,
                 f2lMode: mode,
                 deadlineSeconds: settings.solveDeadlineSeconds,
+                ...crossSearchRequestPreferences(settings, mode),
                 ...deepColorNeutralRequest(requestedCross, mode, settings.deepColorNeutralOptimization),
                 solveId: autoSave ? detail.id : undefined,
                 saveOnComplete: autoSave,
@@ -665,6 +667,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                     crossFace: snapshot.crossFace,
                     f2lMode: snapshot.f2lMode,
                     deadlineSeconds: settings.solveDeadlineSeconds,
+                    ...crossSearchRequestPreferences(settings, snapshot.f2lMode),
                     ...deepColorNeutralRequest(snapshot.crossFace, snapshot.f2lMode, settings.deepColorNeutralOptimization),
                     solveId: savedAttempt.id,
                     saveOnComplete: true,
