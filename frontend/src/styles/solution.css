@@ -216,6 +216,13 @@
     letter-spacing: 0.1em;
 }
 
+.solution-stage-row > button .solution-cross-quality {
+    color: var(--blue);
+    font-size: 0.69rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
 .solution-stage-row > button i {
     display: inline-flex;
     align-items: center;
