@@ -107,6 +107,7 @@ export type SolveResponse = {
     totalMoveCount: number;
     elapsedMs: number;
     comparison?: F2LModeComparison | null;
+    disabledAlgorithms?: string[] | null;
 };
 
 export type SolveRequest = {
@@ -159,6 +160,10 @@ export type AlgorithmCatalogResponse = {
     items: AlgorithmCatalogEntry[];
 };
 
+export type SolverProfileResponse = {
+    disabledAlgorithms: string[];
+};
+
 
 export type SolveJobRequest = SolveRequest & {
     deadlineSeconds?: number;
@@ -203,6 +208,7 @@ export type SolveJob = {
     optimizationBudgetExpired: boolean;
     result: SolveResponse | null;
     error: string | null;
+    disabledAlgorithms?: string[];
 };
 
 export type SolutionProcessSource = "timer" | "history" | "background";
@@ -284,6 +290,7 @@ export type SavedSolution = Omit<SolveResponse, "scramble"> & {
     crossFaceRequested: string;
     solverVersion: string | null;
     updatedAt: string;
+    disabledAlgorithms?: string[] | null;
 };
 
 export type SolveHistoryDetail = {
@@ -331,4 +338,5 @@ export type SaveSolutionRequest = {
         pairs: F2LPair[];
     };
     comparisonJson?: F2LModeComparison | null;
+    disabledAlgorithms?: string[] | null;
 };

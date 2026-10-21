@@ -72,6 +72,14 @@
 .algorithm-row-details > div { display: grid; gap: 5px; margin-top: 8px; color: var(--muted); line-height: 1.45; }
 .algorithm-row-details code { font-family: "Space Mono", monospace; overflow-wrap: anywhere; }
 .algorithm-row-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.algorithm-profile-status { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; min-height: 32px; margin: -8px 0 14px; color: var(--muted); font-size: 0.78rem; }
+.algorithm-profile-status.has-error { color: var(--red); }
+.algorithm-profile-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; color: var(--text-soft); font-size: 0.72rem; cursor: pointer; }
+.algorithm-profile-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--blue-bright); cursor: pointer; }
+.algorithm-profile-toggle input:focus-visible { outline: 2px solid var(--blue-bright); outline-offset: 3px; }
+.algorithm-profile-toggle input:disabled { cursor: not-allowed; }
+.algorithm-profile-toggle:has(input:disabled) { cursor: not-allowed; opacity: 0.65; }
+.algorithm-profile-readonly { align-self: center; color: var(--muted); font-size: 0.72rem; }
 .algorithm-preview-backdrop { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgb(0 0 0 / 62%); padding: 20px; }
 .algorithm-preview-dialog { width: min(760px, 100%); max-height: min(850px, 92vh); overflow: auto; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--panel); padding: 20px; box-shadow: none; }
 .algorithm-preview-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }

@@ -98,6 +98,7 @@ export type MockApiOptions = {
     algorithms?: typeof catalogEntries;
     penaltyUpdateFailure?: boolean;
     deleteFailures?: number;
+    disabledAlgorithms?: string[];
 };
 
 export type MockApiHandle = {
@@ -110,6 +111,7 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
     let entries = [...(options.historyEntries ?? [historyEntry])];
     let nextSolveId = Math.max(1, ...entries.map((entry) => entry.id)) + 1;
     let deleteFailuresRemaining = options.deleteFailures ?? 0;
+    let disabledAlgorithms = [...(options.disabledAlgorithms ?? [])];
     const algorithms = options.algorithms ?? catalogEntries;
     const requests: MockApiHandle["requests"] = [];
     const jobs = new Map<string, unknown>();
@@ -142,6 +144,25 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
         if (url.pathname === "/api/auth/logout") {
             authenticated = false;
             await route.fulfill({status: 204, body: ""});
+            return;
+        }
+        if (url.pathname === "/api/admin/solver-profile" && request.method() === "GET") {
+            if (user.role !== "admin") {
+                await json(route, {error: "Forbidden"}, 403);
+                return;
+            }
+            await json(route, {disabledAlgorithms});
+            return;
+        }
+        if (url.pathname === "/api/admin/solver-profile" && request.method() === "PUT") {
+            if (user.role !== "admin") {
+                await json(route, {error: "Forbidden"}, 403);
+                return;
+            }
+            disabledAlgorithms = Array.isArray((body as {disabledAlgorithms?: unknown} | null)?.disabledAlgorithms)
+                ? [...new Set((body as {disabledAlgorithms: string[]}).disabledAlgorithms)]
+                : [];
+            await json(route, {disabledAlgorithms});
             return;
         }
         if (url.pathname === "/api/stats") {

@@ -42,6 +42,12 @@ export default function SolutionResultBody({result, requestedCross}: Props) {
                 <SummaryItem label="Total" value={`${result.totalMoveCount} moves`}/>
                 <SummaryItem label="Solver time" value={`${result.elapsedMs.toFixed(1)} ms`}/>
                 {crossDiffers ? <SummaryItem label="Chosen cross" value={result.crossFace}/> : null}
+                {result.disabledAlgorithms && result.disabledAlgorithms.length > 0 ? (
+                    <SummaryItem
+                        label="Solver profile"
+                        value={`Custom · ${result.disabledAlgorithms.length} disabled`}
+                    />
+                ) : null}
             </div>
 
             <div className="solution-result-layout">

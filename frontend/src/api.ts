@@ -12,6 +12,7 @@ import type {
     LoginRequest,
     RegisterRequest,
     AlgorithmCatalogResponse,
+    SolverProfileResponse,
 } from "./types";
 import type {TimerPenalty} from "./hooks/useTimer";
 
@@ -210,4 +211,12 @@ export async function fetchAlgorithms(filters?: {
     return requestJson<AlgorithmCatalogResponse>(
         `/api/algorithms${query ? `?${query}` : ""}`
     );
+}
+
+export async function fetchAdminSolverProfile(): Promise<SolverProfileResponse> {
+    return requestJson<SolverProfileResponse>("/api/admin/solver-profile");
+}
+
+export async function updateAdminSolverProfile(disabledAlgorithms: string[]): Promise<SolverProfileResponse> {
+    return requestJson<SolverProfileResponse>("/api/admin/solver-profile", jsonRequest("PUT", {disabledAlgorithms}));
 }

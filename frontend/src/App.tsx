@@ -1213,6 +1213,7 @@ function buildSaveSolutionRequest(
             pairs: result.f2l.pairs,
         },
         comparisonJson: result.comparison ?? null,
+        disabledAlgorithms: result.disabledAlgorithms ?? null,
     };
 }
 
@@ -1246,6 +1247,7 @@ function savedSolutionResult(scramble: string, saved: SavedSolution): SolveRespo
         totalMoveCount: saved.totalMoveCount,
         elapsedMs: saved.elapsedMs,
         comparison: saved.comparison ?? null,
+        disabledAlgorithms: saved.disabledAlgorithms ?? null,
     };
 }
 
