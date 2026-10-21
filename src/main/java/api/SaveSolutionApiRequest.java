@@ -3,6 +3,8 @@ package api;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
+import java.util.List;
+
 public record SaveSolutionApiRequest(
         String crossFaceRequested,
         String crossFaceChosen,
@@ -30,11 +32,13 @@ public record SaveSolutionApiRequest(
         boolean pllSolved,
         String pllStatus,
         String f2lTraceJson,
-        String comparisonJson
+        String comparisonJson,
+        List<String> disabledAlgorithms
 ) {
     private static final ObjectMapper JSON = new ObjectMapper();
 
     public SaveSolutionApiRequest {
+        disabledAlgorithms = disabledAlgorithms == null ? null : List.copyOf(disabledAlgorithms);
         requireText(crossFaceRequested, "crossFaceRequested");
         requireText(crossFaceChosen, "crossFaceChosen");
         requireText(f2lMode, "f2lMode");
@@ -58,6 +62,22 @@ public record SaveSolutionApiRequest(
         }
         requireMetadata(f2lTraceJson, "f2lTraceJson");
         validateMetadata(comparisonJson, "comparisonJson");
+    }
+
+    public SaveSolutionApiRequest(
+            String crossFaceRequested, String crossFaceChosen, String f2lMode,
+            Integer f2lSetupCaseCount, Integer f2lInsertCaseCount, String solvedF2LSlots,
+            Integer totalMoves, boolean fullySolved, Double solveElapsedMs,
+            String crossAlgorithm, Integer crossMoves, boolean crossSolved, String crossStatus,
+            String f2lAlgorithm, Integer f2lMoves, boolean f2lSolved, String f2lStatus,
+            String ollAlgorithm, Integer ollMoves, boolean ollSolved, String ollStatus,
+            String pllAlgorithm, Integer pllMoves, boolean pllSolved, String pllStatus,
+            String f2lTraceJson, String comparisonJson
+    ) {
+        this(crossFaceRequested, crossFaceChosen, f2lMode, f2lSetupCaseCount, f2lInsertCaseCount, solvedF2LSlots,
+                totalMoves, fullySolved, solveElapsedMs, crossAlgorithm, crossMoves, crossSolved, crossStatus,
+                f2lAlgorithm, f2lMoves, f2lSolved, f2lStatus, ollAlgorithm, ollMoves, ollSolved, ollStatus,
+                pllAlgorithm, pllMoves, pllSolved, pllStatus, f2lTraceJson, comparisonJson, null);
     }
 
     private static void requireText(String value, String field) {

@@ -20,6 +20,7 @@ public final class SolveSolutionJpaRepositoryImpl implements SolveSolutionUpsert
                     oll_algorithm, oll_moves, oll_solved, oll_status,
                     pll_algorithm, pll_moves, pll_solved, pll_status,
                     solved_f2l_slots, total_moves, solve_elapsed_ms, fully_solved, solver_version,
+                    disabled_algorithms_json,
                     updated_at
                 ) VALUES (
                     :solveId, :mode, :status, :crossFaceRequested, :crossFaceChosen,
@@ -30,6 +31,7 @@ public final class SolveSolutionJpaRepositoryImpl implements SolveSolutionUpsert
                     :ollAlgorithm, :ollMoves, :ollSolved, :ollStatus,
                     :pllAlgorithm, :pllMoves, :pllSolved, :pllStatus,
                     :solvedF2LSlots, :totalMoves, :solveElapsedMs, :fullySolved, :solverVersion,
+                    CAST(:disabledAlgorithmsJson AS jsonb),
                     NOW()
                 )
                 ON CONFLICT (solve_id, mode) DO UPDATE SET
@@ -63,6 +65,7 @@ public final class SolveSolutionJpaRepositoryImpl implements SolveSolutionUpsert
                     solve_elapsed_ms = EXCLUDED.solve_elapsed_ms,
                     fully_solved = EXCLUDED.fully_solved,
                     solver_version = EXCLUDED.solver_version,
+                    disabled_algorithms_json = EXCLUDED.disabled_algorithms_json,
                     updated_at = NOW()
                 """)
                 .setParameter("solveId", solution.getSolve().getId())
@@ -97,6 +100,7 @@ public final class SolveSolutionJpaRepositoryImpl implements SolveSolutionUpsert
                 .setParameter("solveElapsedMs", solution.getSolveElapsedMs())
                 .setParameter("fullySolved", solution.isFullySolved())
                 .setParameter("solverVersion", solution.getSolverVersion())
+                .setParameter("disabledAlgorithmsJson", solution.getDisabledAlgorithmsJson())
                 .executeUpdate();
     }
 }

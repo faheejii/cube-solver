@@ -27,10 +27,14 @@ public final class AlgorithmCaseCatalog {
     }
 
     public static F2LSetupCaseDatabase setupDatabase() {
+        return setupDatabase(Set.of());
+    }
+
+    public static F2LSetupCaseDatabase setupDatabase(Set<String> disabledIds) {
         var corpus = readCorpus();
         var database = F2LSetupCaseDatabase.empty();
         for (var definition : corpus.setupDefinitions()) {
-            if (!"canonical".equals(definition.status())) {
+            if (!"canonical".equals(definition.status()) || disabledIds.contains(id("setup", definition.name()))) {
                 continue;
             }
             database.register(
@@ -45,10 +49,14 @@ public final class AlgorithmCaseCatalog {
     }
 
     public static F2LInsertCaseDatabase insertDatabase() {
+        return insertDatabase(Set.of());
+    }
+
+    public static F2LInsertCaseDatabase insertDatabase(Set<String> disabledIds) {
         var corpus = readCorpus();
         var database = F2LInsertCaseDatabase.empty();
         for (var definition : corpus.insertDefinitions()) {
-            if (!"canonical".equals(definition.status())) {
+            if (!"canonical".equals(definition.status()) || disabledIds.contains(id("insert", definition.name()))) {
                 continue;
             }
             database.register(definition.algorithm(), definition.slot(), definition.name());
@@ -58,9 +66,13 @@ public final class AlgorithmCaseCatalog {
     }
 
     public static OLLCaseDatabase ollDatabase() {
+        return ollDatabase(Set.of());
+    }
+
+    public static OLLCaseDatabase ollDatabase(Set<String> disabledIds) {
         var database = OLLCaseDatabase.empty();
         for (var definition : readCases(OLL_RESOURCE)) {
-            if ("canonical".equals(definition.status())) {
+            if ("canonical".equals(definition.status()) && !disabledIds.contains(id("oll", definition.name()))) {
                 database.register(definition.algorithm(), definition.name());
             }
         }
@@ -69,14 +81,36 @@ public final class AlgorithmCaseCatalog {
     }
 
     public static PLLCaseDatabase pllDatabase() {
+        return pllDatabase(Set.of());
+    }
+
+    public static PLLCaseDatabase pllDatabase(Set<String> disabledIds) {
         var database = PLLCaseDatabase.empty();
         for (var definition : readCases(PLL_RESOURCE)) {
-            if ("canonical".equals(definition.status())) {
+            if ("canonical".equals(definition.status()) && !disabledIds.contains(id("pll", definition.name()))) {
                 database.register(definition.algorithm(), definition.name());
             }
         }
         database.validate();
         return database;
+    }
+
+    public static Set<String> canonicalIds() {
+        var ids = new HashSet<String>();
+        var corpus = readCorpus();
+        corpus.setupDefinitions().stream().filter(definition -> "canonical".equals(definition.status()))
+                .map(definition -> id("setup", definition.name())).forEach(ids::add);
+        corpus.insertDefinitions().stream().filter(definition -> "canonical".equals(definition.status()))
+                .map(definition -> id("insert", definition.name())).forEach(ids::add);
+        readCases(OLL_RESOURCE).stream().filter(definition -> "canonical".equals(definition.status()))
+                .map(definition -> id("oll", definition.name())).forEach(ids::add);
+        readCases(PLL_RESOURCE).stream().filter(definition -> "canonical".equals(definition.status()))
+                .map(definition -> id("pll", definition.name())).forEach(ids::add);
+        return Set.copyOf(ids);
+    }
+
+    public static String id(String phase, String name) {
+        return phase + ":" + name;
     }
 
     public static List<CatalogEntry> entries(boolean includeNonCanonical) {
