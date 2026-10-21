@@ -1,0 +1,82 @@
+package test.api;
+
+import api.SaveSolutionApiRequest;
+import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+public class SaveSolutionApiRequestTest {
+    @Test
+    void constructor_shouldAcceptCompleteSolution() {
+        assertDoesNotThrow(() -> validRequest("optimized"));
+    }
+
+    @Test
+    void constructor_shouldRequireMode() {
+        assertThrows(IllegalArgumentException.class, () -> validRequest(""));
+    }
+
+    @Test
+    void constructor_shouldRejectNegativeMetrics() {
+        assertThrows(IllegalArgumentException.class, () -> validRequestWithTotalMoves(-1));
+    }
+
+    @Test
+    void constructor_shouldRejectMalformedMetadata() {
+        assertThrows(IllegalArgumentException.class, () -> new SaveSolutionApiRequest(
+                "CN", "U", "optimized", 121, 14, "[FR]", 52, true, 42.5,
+                "z2 R", 1, true, "ok", "R U", 3, true, "ok", "R U", 3, true, "ok",
+                "U", 1, true, "ok", "{bad", "{}"
+        ));
+    }
+
+    @Test
+    void constructor_shouldRequireF2LTraceMetadata() {
+        assertThrows(IllegalArgumentException.class, () -> new SaveSolutionApiRequest(
+                "CN", "U", "optimized", 121, 14, "[FR]", 52, true, 42.5,
+                "z2 R", 1, true, "ok", "R U", 3, true, "ok", "R U", 3, true, "ok",
+                "U", 1, true, "ok", null, null
+        ));
+    }
+
+    private static SaveSolutionApiRequest validRequest(String mode) {
+        return validRequestWithTotalMoves(52, mode);
+    }
+
+    private static SaveSolutionApiRequest validRequestWithTotalMoves(int totalMoves) {
+        return validRequestWithTotalMoves(totalMoves, "optimized");
+    }
+
+    private static SaveSolutionApiRequest validRequestWithTotalMoves(int totalMoves, String mode) {
+        return new SaveSolutionApiRequest(
+                "CN",
+                "U",
+                mode,
+                121,
+                14,
+                "[FR, FL, BL, BR]",
+                totalMoves,
+                true,
+                42.5,
+                "z2 R",
+                1,
+                true,
+                "ok",
+                "R U R'",
+                3,
+                true,
+                "ok",
+                "R U R'",
+                3,
+                true,
+                "ok",
+                "U",
+                1,
+                true,
+                "ok",
+                "{\"traceComplete\":true,\"pairs\":[]}",
+                null
+        );
+    }
+}

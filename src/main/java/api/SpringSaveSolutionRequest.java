@@ -2,6 +2,8 @@ package api;
 
 import tools.jackson.databind.JsonNode;
 
+import java.util.List;
+
 /** Jackson-bound Spring request preserving the API's structured metadata fields. */
 public record SpringSaveSolutionRequest(
         String crossFaceRequested,
@@ -30,7 +32,8 @@ public record SpringSaveSolutionRequest(
         boolean pllSolved,
         String pllStatus,
         JsonNode f2lTraceJson,
-        JsonNode comparisonJson
+        JsonNode comparisonJson,
+        List<String> disabledAlgorithms
 ) {
     public SaveSolutionApiRequest toApiRequest() {
         return new SaveSolutionApiRequest(
@@ -41,7 +44,7 @@ public record SpringSaveSolutionRequest(
                 f2lAlgorithm, f2lMoves, f2lSolved, f2lStatus,
                 ollAlgorithm, ollMoves, ollSolved, ollStatus,
                 pllAlgorithm, pllMoves, pllSolved, pllStatus,
-                metadata(f2lTraceJson), metadata(comparisonJson)
+                metadata(f2lTraceJson), metadata(comparisonJson), disabledAlgorithms
         );
     }
 

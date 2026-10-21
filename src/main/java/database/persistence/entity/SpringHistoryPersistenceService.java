@@ -191,6 +191,7 @@ public class SpringHistoryPersistenceService {
         solution.setSolveElapsedMs(command.solveElapsedMs());
         solution.setFullySolved(command.fullySolved());
         solution.setSolverVersion(command.solverVersion());
+        solution.setDisabledAlgorithmsJson(command.disabledAlgorithmsJson());
         solutions.upsert(solution);
         return solutions.findBySolveIdAndMode(command.solveId(), command.mode())
                 .map(saved -> toSavedSolution(saved, solve.getScramble()))
@@ -256,7 +257,8 @@ public class SpringHistoryPersistenceService {
                 stage("oll", solution.getOllAlgorithm(), solution.getOllMoves(), solution.isOllSolved(), solution.getOllStatus()),
                 stage("pll", solution.getPllAlgorithm(), solution.getPllMoves(), solution.isPllSolved(), solution.getPllStatus()),
                 solution.getSolvedF2LSlots(), solution.isFullySolved(), solution.getTotalMoves(), solution.getSolveElapsedMs(),
-                solution.getSolverVersion(), solution.getUpdatedAt(), solution.getF2lTraceJson(), solution.getComparisonJson()
+                solution.getSolverVersion(), solution.getUpdatedAt(), solution.getF2lTraceJson(), solution.getComparisonJson(),
+                solution.getDisabledAlgorithmsJson()
         );
     }
 

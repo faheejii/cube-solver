@@ -24,7 +24,7 @@ The solver works on a cubie model, which means it tracks where the pieces are an
 
 Cross, F2L, OLL, and PLL all keep the live `OrientedCube` frame. The OLL and PLL databases expand logical cases into all 24 cube orientations at startup, so last-layer lookup stays frame-aware without a runtime canonicalization bridge. Low-level physical face-turn execution still happens through `MoveApplier.applyMove`.
 
-The application has two database-backed roles: `user` and `admin`. Normal users can solve, save, and review their own history. Administrators additionally receive the Algorithms tab and may read the canonical algorithm catalog. Role checks are enforced by the backend; hiding the navigation item is only a frontend convenience.
+The application has two database-backed roles: `user` and `admin`. Normal users can solve, save, and review their own history. Administrators additionally receive the Algorithms tab and may read the canonical algorithm catalog. Each administrator can disable canonical cases for their own solver profile; the selection affects only solves submitted by that administrator. Role checks are enforced by the backend; hiding the navigation item is only a frontend convenience.
 
 ## CFOP stages
 
@@ -242,7 +242,7 @@ algorithms/
 
 Each resource is versioned as `{ "version": "1", "cases": [...] }`. JSON is the source of algorithm identity and metadata; startup validation executes the algorithms to derive signatures and checks notation, duplicate names/signatures, preservation, completion, and orientation behavior. Production solving loads canonical cases only. Add a case to the appropriate resource, run the catalog/solver tests, review its derived metadata and cube preview in the admin Algorithms tab, and only then mark it canonical.
 
-The Algorithms tab is visible only to administrators. It supports phase, F2L slot, status, and text filters; copy-to-clipboard; expandable source/signature details; and `Test on cube`. Setup previews use their recorded source setup. OLL and PLL previews use generated inverse algorithms, while insert previews start from a solved cube when no setup is available.
+The Algorithms tab is visible only to administrators. It supports phase, F2L slot, status, and text filters; copy-to-clipboard; expandable source/signature details; and `Test on cube`. Setup previews use their recorded source setup. OLL and PLL previews use generated inverse algorithms, while insert previews start from a solved cube when no setup is available. Canonical cases have a per-admin disable control; noncanonical entries are view-only. The profile is served by `GET`/`PUT /api/admin/solver-profile`, with IDs such as `oll:case-1`. Only these IDs are stored in `user_disabled_algorithms`; the canonical definitions remain in JSON. A profile is captured when a solve job is submitted and included in saved-solution metadata so existing solves remain identifiable after settings change. An intentionally incomplete profile may cause an actual solve to report a lookup gap; the application does not preflight or prevent that experiment.
 
 The app supports any PostgreSQL database, not just Neon. You can use:
 
@@ -561,15 +561,12 @@ API and server:
 
 - [`src/main/java/api/SolveApiRequest.java`](src/main/java/api/SolveApiRequest.java)
 - [`src/main/java/server/SpringCubeApplication.java`](src/main/java/server/SpringCubeApplication.java)
-- [`src/main/java/server/SpringAuthController.java`](src/main/java/server/SpringAuthController.java)
-- [`src/main/java/server/SpringHistoryController.java`](src/main/java/server/SpringHistoryController.java)
-- [`src/main/java/server/SpringSolveJobController.java`](src/main/java/server/SpringSolveJobController.java)
-- [`src/main/java/server/SpringStatisticsController.java`](src/main/java/server/SpringStatisticsController.java)
-- [`src/main/java/server/SpringAlgorithmController.java`](src/main/java/server/SpringAlgorithmController.java)
-- [`src/main/java/server/SpringSecurityConfiguration.java`](src/main/java/server/SpringSecurityConfiguration.java)
+- [`src/main/java/server/web/`](src/main/java/server/web/) contains package-private Spring MVC route handlers, security adapters, request/response policy, JSON serialization, and server wiring.
+- [`src/main/java/server/auth/`](src/main/java/server/auth/) contains authentication/session implementation behind `AuthOperations`.
+- [`src/main/java/server/solve/`](src/main/java/server/solve/) contains asynchronous solve-job orchestration behind `SolveJobOperations` and its persistence/executor implementation.
 - [`src/main/java/database/persistence/`](src/main/java/database/persistence/)
 
-The production backend runs through Spring Boot. Spring MVC owns request routing, Spring Security owns cookie authentication, Spring Data JPA owns persistence, and Flyway owns schema startup. `F2LSolver` owns F2L orchestration and trace flow, while `F2LOptimizedSearch` owns bounded optimized search and `F2LStateCodec` owns compact state encoding and frame execution. `LastLayerSolver` owns OLL/PLL stage execution and status handling.
+The production backend runs through Spring Boot, whose `server` component scan includes the server subpackages. Spring MVC owns request routing, Spring Security owns cookie authentication, Spring Data JPA owns persistence, and Flyway owns schema startup. Route handlers remain package-private in `server.web`; authentication and solve-job implementations cross package boundaries only through their focused operations contracts. Solver entry points and tightly coupled package-private search collaborators remain in `solver` to preserve their existing public names and visibility; pruning-table tooling stays in `solver.pruning`. `F2LSolver` owns F2L orchestration and trace flow, while `F2LOptimizedSearch` owns bounded optimized search and `F2LStateCodec` owns compact state encoding and frame execution. `LastLayerSolver` owns OLL/PLL stage execution and status handling.
 
 Frontend structure:
 
