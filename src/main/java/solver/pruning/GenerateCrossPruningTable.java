@@ -32,6 +32,7 @@ public final class GenerateCrossPruningTable {
 
     static byte[] generate() {
         var transitions = buildTransitions();
+        var moves = CrossPruningCoordinates.MOVES;
         var stateCount = CrossPruningCoordinates.STATE_COUNT;
         var distances = new byte[CrossPruningCoordinates.FACE_COUNT * stateCount];
         var queue = new int[stateCount];
@@ -46,8 +47,8 @@ public final class GenerateCrossPruningTable {
             while (head < tail) {
                 var state = queue[head++];
                 var nextDistance = (byte) (Byte.toUnsignedInt(distances[offset + state]) + 1);
-                var transitionOffset = state * CrossPruningCoordinates.MOVES.length;
-                for (var move = 0; move < CrossPruningCoordinates.MOVES.length; move++) {
+                var transitionOffset = state * moves.length;
+                for (var move = 0; move < moves.length; move++) {
                     var next = transitions[transitionOffset + move];
                     if (distances[offset + next] == (byte) UNVISITED) {
                         distances[offset + next] = nextDistance;
@@ -63,14 +64,14 @@ public final class GenerateCrossPruningTable {
     }
 
     private static int[] buildTransitions() {
+        var moves = CrossPruningCoordinates.MOVES;
         var stateCount = CrossPruningCoordinates.STATE_COUNT;
-        var moveCount = CrossPruningCoordinates.MOVES.length;
+        var moveCount = moves.length;
         var transitions = new int[stateCount * moveCount];
         for (var state = 0; state < stateCount; state++) {
             var transitionOffset = state * moveCount;
             for (var move = 0; move < moveCount; move++) {
-                transitions[transitionOffset + move] = CrossPruningCoordinates.transition(
-                        state, CrossPruningCoordinates.MOVES[move]);
+                transitions[transitionOffset + move] = CrossPruningCoordinates.transition(state, moves[move]);
             }
         }
         return transitions;

@@ -21,7 +21,6 @@ public final class CombinedPruningCoordinates {
             Move.F, Move.F2, Move.F_PRIME, Move.D, Move.D2, Move.D_PRIME,
             Move.L, Move.L2, Move.L_PRIME, Move.B, Move.B2, Move.B_PRIME
     };
-
     private static final int[][] CROSS_PERMUTATIONS = new int[11_880][4];
     private static final int[][][][] CROSS_RANK = new int[12][12][12][12];
     private static final int[] CROSS_PIECES = {Edge.DF.ordinal(), Edge.DR.ordinal(), Edge.DB.ordinal(), Edge.DL.ordinal()};

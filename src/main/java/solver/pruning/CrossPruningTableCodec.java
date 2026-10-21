@@ -13,6 +13,7 @@ import java.util.zip.CRC32;
 public final class CrossPruningTableCodec {
     private static final int MAGIC = 0x43525054; // CRPT
     private static final int VERSION = 1;
+    private static final int OUTER_METRIC = 0;
     private static final int HEADER_BYTES = 20;
     private static final int DISTANCE_COUNT = CrossPruningCoordinates.FACE_COUNT * CrossPruningCoordinates.STATE_COUNT;
 
@@ -22,7 +23,7 @@ public final class CrossPruningTableCodec {
     public static byte[] encode(byte[] distances) {
         validate(distances);
         var header = ByteBuffer.allocate(HEADER_BYTES).order(ByteOrder.BIG_ENDIAN);
-        putHeader(header, checksum(distances));
+        putHeader(header, VERSION, OUTER_METRIC, checksum(distances));
         var encoded = Arrays.copyOf(header.array(), HEADER_BYTES + distances.length);
         System.arraycopy(distances, 0, encoded, HEADER_BYTES, distances.length);
         return encoded;
@@ -31,7 +32,7 @@ public final class CrossPruningTableCodec {
     public static void write(OutputStream output, byte[] distances) throws IOException {
         validate(distances);
         var header = ByteBuffer.allocate(HEADER_BYTES).order(ByteOrder.BIG_ENDIAN);
-        putHeader(header, checksum(distances));
+        putHeader(header, VERSION, OUTER_METRIC, checksum(distances));
         output.write(header.array());
         output.write(distances);
     }
@@ -47,7 +48,7 @@ public final class CrossPruningTableCodec {
         if (Byte.toUnsignedInt(header.get()) != CrossPruningCoordinates.FACE_COUNT) {
             throw new IllegalArgumentException("Unexpected cross pruning table face count");
         }
-        if (header.get() != 0) throw new IllegalArgumentException("Unexpected cross pruning table format marker");
+        if (Byte.toUnsignedInt(header.get()) != OUTER_METRIC) throw new IllegalArgumentException("Unexpected cross pruning table metric marker");
         if (header.getInt() != DISTANCE_COUNT) throw new IllegalArgumentException("Unexpected cross pruning coordinate count");
         var expectedChecksum = Integer.toUnsignedLong(header.getInt());
         if (header.getInt() != CrossPruningCoordinates.STATE_COUNT) {
@@ -62,8 +63,8 @@ public final class CrossPruningTableCodec {
         return distances;
     }
 
-    private static void putHeader(ByteBuffer header, long checksum) {
-        header.putInt(MAGIC).putShort((short) VERSION).put((byte) CrossPruningCoordinates.FACE_COUNT).put((byte) 0)
+    private static void putHeader(ByteBuffer header, int version, int metric, long checksum) {
+        header.putInt(MAGIC).putShort((short) version).put((byte) CrossPruningCoordinates.FACE_COUNT).put((byte) metric)
                 .putInt(DISTANCE_COUNT).putInt((int) checksum).putInt(CrossPruningCoordinates.STATE_COUNT);
     }
 

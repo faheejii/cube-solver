@@ -40,7 +40,7 @@ Implemented:
 - face turns, slice moves, cube rotations, and lowercase wide moves
 - selected cross-face solving
 - color-neutral cross solving
-- Fast cross solving uses IDA* with a bundled cross-only pruning table, searches without B turns, and tries four Y orientations
+- Fast cross solving uses IDA* with a bundled cross-only pruning table; its B-turn restriction is configurable in Settings
 - Optimized fixed-cross and color-neutral modes use advanced cross search: per face, try XXCross up to 10 face turns, then XCross up to 8, then fall back to the regular cross solver
 - Optimized CN searches all six faces; regular CN builds baselines for its three shortest advanced crosses and optimizes two, while Deep CN evaluates all six completed solutions within its 120-second budget
 - a bundled reverse-BFS cross-plus-FR-pair pruning table, rotationally reused for any F2L slot by the advanced cross search
@@ -67,7 +67,7 @@ Implemented:
 - versioned PostgreSQL schema migrations through Flyway
 - pooled PostgreSQL connections and aggregate-based solve statistics
 - Java HTTP API and Vite/React frontend
-- browser-local Settings for the solver processing deadline, inspection behavior, deep color-neutral optimization, theme, and independent 2D/3D modes for the timer cube preview and solution playback
+- browser-local Settings for the solver processing deadline, inspection behavior, deep color-neutral optimization, independent B-turn restrictions for Fast and Optimized cross search, theme, and independent 2D/3D modes for the timer cube preview and solution playback
 - post-solve penalty controls in the Timer and History/solution views, allowing a saved solve to be changed between no penalty, +2, and DNF with statistics recalculated immediately; the Timer also lets users delete its displayed saved solve through the same confirmation flow as History
 - application-owned cube previews and playback driven by one authoritative cubie/sticker model, with WCA/cubing.js-compatible face, wide, slice, and rotation notation; previews can use the interactive Three.js renderer or a lightweight project-owned six-face SVG net
 
@@ -123,7 +123,9 @@ mvn -q -DskipTests package
 java -Xmx256m -cp target/classes solver.pruning.GenerateCrossPruningTable
 ```
 
-The versioned, checksummed asset is `src/main/resources/solver/pruning/cross-only.bin` and is loaded lazily at runtime. BFS uses all 18 face turns for an admissible lower bound; the actual Fast search remains restricted to no-B turns and four Y orientations. Advanced search stays unrestricted to protect its XCross/XXCross hit rate, and continues to use the separate cross-plus-pair table.
+The versioned, checksummed asset is `src/main/resources/solver/pruning/cross-only.bin` and is loaded lazily at runtime. BFS uses all 18 face turns for an admissible lower bound. The default Fast policy avoids B turns and tests four Y orientations; the default Optimized policy allows B turns and uses the existing unrestricted orientation. These defaults preserve previous solver behavior. Settings can independently enable B-turn avoidance for each mode.
+
+Cross search uses outer face turns only. The solver's general notation and playback still support wide turns for algorithm data and other cube workflows; cross-search algorithms never contain them.
 
 The API response includes additive F2L fields on the `f2l` stage when a trace is available:
 
@@ -315,6 +317,8 @@ Deleting a solve uses `DELETE /api/solves/{id}`. The API derives ownership from 
 
 `GET /api/solves` accepts the existing `limit` and opaque `cursor` parameters plus optional `q`, `time`, and `penalty` filters. `q` is a literal, case-insensitive substring of the scramble. `time` matches displayed official times (`S.CC` or `M:SS.CC`), supports `*` wildcards and `DNF`, and a trailing `+` restricts a match to +2 solves; `q` and `time` cannot be combined. `penalty` is `all` (default), `none`, `+2`, or `dnf`. Results remain user-scoped and ordered newest-first by timestamp and ID. Responses include `totalCount` for the active filters alongside `items` and `nextCursor`.
 
+Solve and saved-solution responses include nullable `cross.solvedF2lPairCount`, derived by replaying the scramble and cross algorithm and counting solved F2L slots in the resulting frame. The value is `0` through `4`; the solution view labels these as Cross, XCross, XXCross, XXXCross, and Full F2L. A null value means the cross was not solved or its classification could not be derived. Saved responses derive it at read time, so existing records need no migration.
+
 ## Docker
 
 Build and run the complete app with PostgreSQL:
@@ -413,7 +417,7 @@ Current frontend behavior:
 - optionally evaluates all six cross colors for Optimized + Color Neutral solves; this deep mode is disabled by default and uses a fixed two-minute budget
 - includes a timer with inspection behavior similar to common cube timers
 - presents solution dialogs as near-full-screen utility inspectors with joined cube/stage panes, bottom playback controls, stage navigation, and a speed dropdown
-- includes a Settings view where the processing deadline can be set from 5 to 120 seconds, inspection can be enabled or disabled, deep color-neutral optimization can be enabled, and the timer preview and solution playback can each be switched between 3D and a 2D six-face net; preferences are stored in the current browser
+- includes a Settings view where the processing deadline can be set from 5 to 120 seconds, inspection and deep color-neutral optimization can be toggled, Fast and Optimized B-turn avoidance can be configured independently, and the timer preview and solution playback can each be switched between 3D and a 2D six-face net; preferences are stored in the current browser
 - displays the current scramble and solution playback using their independently selected 3D or 2D cube modes
 - calculates best time, Ao5, Ao12, mean time, solve count, and DNF count from saved attempts; the global summary is shown above History, while the Statistics modal charts the latest 50 or all solves with metrics scoped to the selected range
 - saves completed attempts to Postgres and advances to the next scramble automatically

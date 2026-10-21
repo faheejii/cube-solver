@@ -52,7 +52,11 @@ public final class PruningTables {
     }
 
     public static int xcrossLowerBound(CubeState state) {
-        var distances = distancesPacked(state);
+        return xcrossLowerBound(state, table());
+    }
+
+    static int xcrossLowerBound(CubeState state, byte[] packedTable) {
+        var distances = distancesPacked(state, packedTable);
         var first = distances & 0x0f;
         var second = (distances >>> 4) & 0x0f;
         var third = (distances >>> 8) & 0x0f;
@@ -62,7 +66,11 @@ public final class PruningTables {
 
     /** Admissible lower bound for solving any two distinct cross-plus-pair goals. */
     public static int xxcrossLowerBound(CubeState state) {
-        var distances = distancesPacked(state);
+        return xxcrossLowerBound(state, table());
+    }
+
+    static int xxcrossLowerBound(CubeState state, byte[] packedTable) {
+        var distances = distancesPacked(state, packedTable);
         var best = Integer.MAX_VALUE;
         for (var first = 0; first < 4; first++) {
             for (var second = first + 1; second < 4; second++) {
@@ -74,12 +82,12 @@ public final class PruningTables {
         return best;
     }
 
-    private static int distancesPacked(CubeState state) {
+    private static int distancesPacked(CubeState state, byte[] packedTable) {
         if (state == null) throw new IllegalArgumentException("Cube state is required");
-        var table = table();
+        if (packedTable == null) throw new IllegalArgumentException("Pruning table is required");
         var packed = 0;
         for (var slot : SLOTS) {
-            var distance = CombinedPruningTableCodec.distanceAt(table,
+            var distance = CombinedPruningTableCodec.distanceAt(packedTable,
                     CombinedPruningCoordinates.index(state, slot));
             packed |= distance << (slot.ordinal() * 4);
         }
@@ -125,4 +133,5 @@ public final class PruningTables {
             throw new IllegalStateException("Unable to load pruning table resource: " + CROSS_RESOURCE, e);
         }
     }
+
 }

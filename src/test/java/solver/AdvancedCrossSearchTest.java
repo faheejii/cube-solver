@@ -66,4 +66,54 @@ class AdvancedCrossSearchTest {
                 "CN optimized should use the advanced candidate for the selected face");
         assertTrue(result.fullySolved());
     }
+
+    @Test
+    void restrictedPolicyReturnsAValidNoBCandidateWhenItFindsOne() {
+        var scrambled = new CubeState();
+        MoveApplier.applyAlgorithm(scrambled, "R U2 F' L D B2 R' F2 U L2 D' B U' F R2 D2");
+
+        var result = AdvancedCrossSearch.solve(
+                scrambled,
+                Face.D,
+                AdvancedCrossSearch.SearchPolicy.NO_B_FOUR_Y
+        );
+        assertTrue(result == null || result.algorithm().getMoveCount() <=
+                (result.goal() == AdvancedCrossSearch.Goal.XXCROSS ? 10 : 8));
+        if (result == null) return;
+
+        assertTrue(result.algorithm().getMoves().stream().noneMatch(move ->
+                        move == cube.Move.B || move == cube.Move.B2 || move == cube.Move.B_PRIME),
+                "restricted candidate must not contain B turns: " + result.algorithm());
+        assertTrue(result.algorithm().getMoves().stream().filter(cube.Move::isCubeRotation)
+                        .allMatch(move -> move == cube.Move.Y || move == cube.Move.Y2 || move == cube.Move.Y_PRIME),
+                "restricted candidate may use only a Y orientation: " + result.algorithm());
+        assertTrue(result.algorithm().getMoves().stream().filter(cube.Move::isCubeRotation).count() <= 1,
+                "candidate should use at most one leading Y rotation: " + result.algorithm());
+        assertCandidateSolvesGoal(scrambled, result);
+    }
+
+    @Test
+    void productionSearchMatchesExplicitUnrestrictedPolicy() {
+        var scrambled = new CubeState();
+        MoveApplier.applyAlgorithm(scrambled, "F R U2 B' L2 D F2 R' U L B2 D'");
+
+        var production = AdvancedCrossSearch.solve(scrambled, Face.D);
+        var explicit = AdvancedCrossSearch.solve(
+                scrambled,
+                Face.D,
+                AdvancedCrossSearch.SearchPolicy.UNRESTRICTED
+        );
+
+        assertEquals(explicit.goal(), production.goal());
+        assertEquals(explicit.algorithm().toString(), production.algorithm().toString());
+    }
+
+    private static void assertCandidateSolvesGoal(CubeState scrambled, AdvancedCrossSearch.SearchResult result) {
+        var replay = new OrientedCube(scrambled.copy());
+        replay.applyMoves(result.algorithm().getMoves());
+        assertTrue(CrossAnalyzer.isCrossSolved(replay.cubeState(), replay.orientation()), result.algorithm().toString());
+        var requiredPairs = result.goal() == AdvancedCrossSearch.Goal.XXCROSS ? 2 : 1;
+        assertTrue(cfop.F2LAnalyzer.countSolvedSlots(replay.cubeState(), replay.orientation()) >= requiredPairs,
+                result.goal() + " candidate failed pair goal: " + result.algorithm());
+    }
 }

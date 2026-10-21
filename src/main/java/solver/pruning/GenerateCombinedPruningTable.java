@@ -53,9 +53,11 @@ public final class GenerateCombinedPruningTable {
         var distances = new byte[coordinateCount];
         Arrays.fill(distances, (byte) UNVISITED);
         var queue = new int[coordinateCount];
-        var crossMoves = buildCrossTransitions();
-        var cornerMoves = buildCornerTransitions();
-        var edgeMoves = buildEdgeTransitions();
+        var moves = CombinedPruningCoordinates.MOVES;
+        var moveCount = moves.length;
+        var crossMoves = buildCrossTransitions(moves);
+        var cornerMoves = buildCornerTransitions(moves);
+        var edgeMoves = buildEdgeTransitions(moves);
         var complementRanks = buildComplementRanks();
         var goal = CombinedPruningCoordinates.solvedIndex();
         var head = 0;
@@ -76,11 +78,11 @@ public final class GenerateCombinedPruningTable {
             var crossRank = crossIndex / 16;
             var actualEdgePosition = CombinedPruningCoordinates.complementPositionFromRank(crossRank, edgeRank);
             var edgeCoordinate = actualEdgePosition * 2 + edgeOrientation;
-            var crossOffset = crossIndex * CombinedPruningCoordinates.MOVE_COUNT;
-            var cornerOffset = cornerCoordinate * CombinedPruningCoordinates.MOVE_COUNT;
-            var edgeOffset = edgeCoordinate * CombinedPruningCoordinates.MOVE_COUNT;
+            var crossOffset = crossIndex * moveCount;
+            var cornerOffset = cornerCoordinate * moveCount;
+            var edgeOffset = edgeCoordinate * moveCount;
             var nextDistance = (byte) (distance + 1);
-            for (var move = 0; move < CombinedPruningCoordinates.MOVE_COUNT; move++) {
+            for (var move = 0; move < moveCount; move++) {
                 var nextCross = crossMoves[crossOffset + move];
                 var nextCorner = Byte.toUnsignedInt(cornerMoves[cornerOffset + move]);
                 var nextEdge = Byte.toUnsignedInt(edgeMoves[edgeOffset + move]);
@@ -98,28 +100,30 @@ public final class GenerateCombinedPruningTable {
         return distances;
     }
 
-    private static int[] buildCrossTransitions() {
-        var transitions = new int[CombinedPruningCoordinates.CROSS_STATES * CombinedPruningCoordinates.MOVE_COUNT];
+    private static int[] buildCrossTransitions(Move[] moves) {
+        var moveCount = moves.length;
+        var transitions = new int[CombinedPruningCoordinates.CROSS_STATES * moveCount];
         for (var index = 0; index < CombinedPruningCoordinates.CROSS_STATES; index++) {
             var state = crossRepresentative(index);
-            var offset = index * CombinedPruningCoordinates.MOVE_COUNT;
-            for (var move = 0; move < CombinedPruningCoordinates.MOVE_COUNT; move++) {
+            var offset = index * moveCount;
+            for (var move = 0; move < moveCount; move++) {
                 var moved = state.copy();
-                MoveApplier.applyMove(moved, CombinedPruningCoordinates.MOVES[move]);
+                applyTableMove(moved, moves[move]);
                 transitions[offset + move] = crossIndex(moved);
             }
         }
         return transitions;
     }
 
-    private static byte[] buildCornerTransitions() {
-        var transitions = new byte[CombinedPruningCoordinates.CORNER_STATES * CombinedPruningCoordinates.MOVE_COUNT];
+    private static byte[] buildCornerTransitions(Move[] moves) {
+        var moveCount = moves.length;
+        var transitions = new byte[CombinedPruningCoordinates.CORNER_STATES * moveCount];
         for (var coordinate = 0; coordinate < CombinedPruningCoordinates.CORNER_STATES; coordinate++) {
             var state = cornerRepresentative(coordinate);
-            var offset = coordinate * CombinedPruningCoordinates.MOVE_COUNT;
-            for (var move = 0; move < CombinedPruningCoordinates.MOVE_COUNT; move++) {
+            var offset = coordinate * moveCount;
+            for (var move = 0; move < moveCount; move++) {
                 var moved = state.copy();
-                MoveApplier.applyMove(moved, CombinedPruningCoordinates.MOVES[move]);
+                applyTableMove(moved, moves[move]);
                 var position = find(moved.cornerPerm, Corner.DFR.ordinal());
                 transitions[offset + move] = (byte) (position * 3 + moved.cornerOri[position]);
             }
@@ -127,19 +131,24 @@ public final class GenerateCombinedPruningTable {
         return transitions;
     }
 
-    private static byte[] buildEdgeTransitions() {
-        var transitions = new byte[24 * CombinedPruningCoordinates.MOVE_COUNT];
+    private static byte[] buildEdgeTransitions(Move[] moves) {
+        var moveCount = moves.length;
+        var transitions = new byte[24 * moveCount];
         for (var coordinate = 0; coordinate < 24; coordinate++) {
             var state = edgeRepresentative(coordinate);
-            var offset = coordinate * CombinedPruningCoordinates.MOVE_COUNT;
-            for (var move = 0; move < CombinedPruningCoordinates.MOVE_COUNT; move++) {
+            var offset = coordinate * moveCount;
+            for (var move = 0; move < moveCount; move++) {
                 var moved = state.copy();
-                MoveApplier.applyMove(moved, CombinedPruningCoordinates.MOVES[move]);
+                applyTableMove(moved, moves[move]);
                 var position = find(moved.edgePerm, Edge.FR.ordinal());
                 transitions[offset + move] = (byte) (position * 2 + moved.edgeOri[position]);
             }
         }
         return transitions;
+    }
+
+    static void applyTableMove(CubeState state, Move move) {
+        MoveApplier.applyMove(state, move);
     }
 
     private static byte[] buildComplementRanks() {
@@ -231,13 +240,13 @@ public final class GenerateCombinedPruningTable {
         throw new IllegalStateException("Tracked piece is missing from representative state");
     }
 
-    private static int maxDistance(byte[] distances) {
+    static int maxDistance(byte[] distances) {
         var max = 0;
         for (byte distance : distances) max = Math.max(max, Byte.toUnsignedInt(distance));
         return max;
     }
 
-    private static void writeAtomically(Path output, byte[] distances) throws IOException {
+    static void writeAtomically(Path output, byte[] distances) throws IOException {
         var absolute = output.toAbsolutePath();
         Files.createDirectories(absolute.getParent());
         var temporary = Files.createTempFile(absolute.getParent(), absolute.getFileName().toString(), ".tmp");

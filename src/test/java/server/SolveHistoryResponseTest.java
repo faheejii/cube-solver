@@ -21,7 +21,8 @@ class SolveHistoryResponseTest {
                 41, "attempt-41", "R U2 F'", "D", 1500, 1500, "none", false,
                 OffsetDateTime.now(), List.of(new SavedSolution(
                         "greedy", "D", "D", 1, 2,
-                        stage("cross", "D"), stage("f2l", "R U R'"), stage("oll", "F R U"), stage("pll", "R2"),
+                        new CfopStageResult("cross", "D", 1, true, "solved", 2),
+                        stage("f2l", "R U R'"), stage("oll", "F R U"), stage("pll", "R2"),
                         "[FR]", true, 10, 20.0, "cfop-web-v1", OffsetDateTime.now(), trace, null
                 ))
         );
@@ -31,6 +32,7 @@ class SolveHistoryResponseTest {
 
         assertEquals("R U2 F'", json.get("scramble").textValue());
         assertEquals("D", solution.get("cross").get("algorithm").textValue());
+        assertEquals(2, solution.get("cross").get("solvedF2lPairCount").intValue());
         assertEquals("R U R'", solution.get("f2l").get("algorithm").textValue());
         assertEquals("R U", solution.get("f2l").get("pairs").get(0).get("algorithm").textValue());
     }

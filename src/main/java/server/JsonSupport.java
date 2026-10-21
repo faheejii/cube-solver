@@ -322,7 +322,8 @@ final class JsonSupport {
                 + "\"algorithm\":\"" + escape(stage.algorithm()) + "\","
                 + "\"moveCount\":" + stage.moveCount() + ","
                 + "\"solved\":" + stage.solved() + ","
-                + "\"status\":\"" + escape(stage.status()) + "\""
+                + "\"status\":\"" + escape(stage.status()) + "\","
+                + "\"solvedF2lPairCount\":" + nullableInteger(stage.solvedF2lPairCount())
                 + "}";
     }
 

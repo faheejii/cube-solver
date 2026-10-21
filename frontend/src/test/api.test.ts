@@ -79,6 +79,7 @@ describe("API session handling", () => {
             f2lMode: "optimized",
             deadlineSeconds: 15,
             deepColorNeutral: true,
+            avoidBTurns: true,
         });
 
         expect(fetchMock).toHaveBeenCalledWith("/api/solve-jobs", expect.objectContaining({
@@ -88,6 +89,7 @@ describe("API session handling", () => {
                 f2lMode: "optimized",
                 deadlineSeconds: 15,
                 deepColorNeutral: true,
+                avoidBTurns: true,
             }),
         }));
     });
