@@ -43,6 +43,28 @@ const result: SolveResponse = {
 };
 
 describe("SolutionResultBody F2L explanation", () => {
+    it.each([
+        [0, "Cross"],
+        [1, "XCross"],
+        [2, "XXCross"],
+        [3, "XXXCross"],
+        [4, "Full F2L"],
+    ])("shows the cross quality label for %i solved pairs", (pairCount, label) => {
+        render(<SolutionResultBody
+            result={{...result, cross: {...result.cross, solvedF2lPairCount: pairCount}}}
+            requestedCross="D"
+        />);
+
+        expect(screen.getByText(label)).toBeInTheDocument();
+    });
+
+    it("does not show a cross quality label when metadata is unavailable", () => {
+        render(<SolutionResultBody result={result} requestedCross="D"/>);
+
+        expect(screen.queryByText("Cross", {selector: ".solution-cross-quality"})).not.toBeInTheDocument();
+        expect(screen.queryByText("XCross")).not.toBeInTheDocument();
+    });
+
     it("renders pair cards without the removed comparison panel", () => {
         render(<SolutionResultBody result={result} requestedCross="D"/>);
 
@@ -85,7 +107,10 @@ describe("SolutionResultBody F2L explanation", () => {
 });
 
 function stage(name: string, algorithm: string) {
-    return {name, algorithm, moveCount: algorithm ? algorithm.split(" ").length : 0, solved: true, status: "ok"};
+    return {
+        name, algorithm, moveCount: algorithm ? algorithm.split(" ").length : 0,
+        solved: true, status: "ok", solvedF2lPairCount: null,
+    };
 }
 
 function pair(order: number, targetSlot: string, reasonCode: string) {

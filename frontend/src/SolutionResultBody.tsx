@@ -61,6 +61,9 @@ export default function SolutionResultBody({result, requestedCross}: Props) {
                     <div className="solution-stage-list">
                         {stages.map((stage) => {
                             const expanded = selectedDetail === stage.name;
+                            const crossQuality = stage.name === "cross" && stage.solved
+                                ? crossQualityLabel(stage.solvedF2lPairCount ?? null)
+                                : null;
                             return (
                                 <article
                                     className={expanded ? `solution-stage-row solution-stage-row-${stage.name} expanded` : `solution-stage-row solution-stage-row-${stage.name}`}
@@ -69,6 +72,7 @@ export default function SolutionResultBody({result, requestedCross}: Props) {
                                     <button type="button" onClick={() => toggleStage(stage)} aria-expanded={expanded}>
                     <span>
                       <strong>{stage.name.toUpperCase()}</strong>
+                        {crossQuality ? <small className="solution-cross-quality">{crossQuality}</small> : null}
                         {!stage.solved ? (
                             <i title={stage.status}>
                                 <AlertTriangle size={14}/>
@@ -202,4 +206,8 @@ function SummaryItem({label, value}: { label: string; value: string }) {
 
 function normalizedCross(value: string): string {
     return value.trim().toUpperCase();
+}
+
+function crossQualityLabel(pairCount: number | null): string | null {
+    return pairCount == null ? null : ["Cross", "XCross", "XXCross", "XXXCross", "Full F2L"][pairCount] ?? null;
 }
