@@ -33,6 +33,23 @@ describe("DashboardSidebar roles", () => {
         expect(screen.getByRole("button", {name: "Algorithms"})).toBeInTheDocument();
     });
 
+    it("shows Algorithms to maintainers and User management only to admins", () => {
+        const {rerender} = renderSidebar({...baseUser, role: "maintainer"});
+        expect(screen.getByRole("button", {name: "Algorithms"})).toBeInTheDocument();
+        expect(screen.queryByRole("button", {name: "User management"})).not.toBeInTheDocument();
+
+        rerender(
+            <DashboardSidebar
+                activeView="timer"
+                activeProcessCount={0}
+                user={{...baseUser, role: "admin"}}
+                onViewChange={vi.fn()}
+                onLogout={vi.fn()}
+            />,
+        );
+        expect(screen.getByRole("button", {name: "User management"})).toBeInTheDocument();
+    });
+
     it("shows Settings to every signed-in user", () => {
         renderSidebar(baseUser);
         expect(screen.getByRole("button", {name: "Settings"})).toBeInTheDocument();

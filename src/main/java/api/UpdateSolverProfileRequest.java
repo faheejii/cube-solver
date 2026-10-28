@@ -1,9 +1,14 @@
 package api;
 
 import java.util.List;
+import java.util.UUID;
 
-public record UpdateSolverProfileRequest(List<String> disabledAlgorithms) {
-    public UpdateSolverProfileRequest {
-        disabledAlgorithms = disabledAlgorithms == null ? List.of() : List.copyOf(disabledAlgorithms);
+public record UpdateSolverProfileRequest(
+        List<String> disabledAlgorithms,
+        List<UUID> disabledAlgorithmIds,
+        List<UUID> enabledTrialRevisionIds
+) {
+    public UpdateSolverProfileRequest(List<String> disabledAlgorithms) {
+        this(disabledAlgorithms, null, null);
     }
 }

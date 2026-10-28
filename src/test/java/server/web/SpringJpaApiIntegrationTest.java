@@ -11,10 +11,15 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import server.SpringCubeApplication;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
+import database.algorithms.AlgorithmCatalogSeedImportService;
+import database.algorithms.AlgorithmCatalogStateJpaRepository;
+import database.algorithms.UserDisabledAlgorithmJpaRepository;
+import database.algorithms.UserEnabledTrialRevisionJpaRepository;
 import test.support.PostgresTestDatabase;
 import database.persistence.repository.AuthSessionJpaRepository;
 import database.persistence.repository.UserJpaRepository;
@@ -22,6 +27,7 @@ import database.persistence.repository.UserJpaRepository;
 import jakarta.servlet.http.Cookie;
 import java.sql.SQLException;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasSize;
@@ -29,6 +35,8 @@ import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -58,6 +66,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 )
 class SpringJpaApiIntegrationTest {
     private static final String PASSWORD = "integration-password";
+    private static final AtomicInteger AUTH_CLIENT_SEQUENCE = new AtomicInteger();
     private static PostgresTestDatabase postgres;
     private static String schemaUrl;
     private static String previousDatabaseUrl;
@@ -80,6 +89,8 @@ class SpringJpaApiIntegrationTest {
         previousDatabaseUrl = System.getProperty("database.url");
         System.setProperty("database.url", schemaUrl);
         registry.add("database.url", () -> schemaUrl);
+        registry.add("server.auth-requests-per-minute", () -> 1000);
+        registry.add("server.auth-requests-per-minute", () -> 1000);
     }
 
     @AfterAll
@@ -103,6 +114,196 @@ class SpringJpaApiIntegrationTest {
     void fullSpringContext_shouldDiscoverJpaRepositories() {
         assertNotNull(applicationContext.getBean(UserJpaRepository.class));
         assertNotNull(applicationContext.getBean(AuthSessionJpaRepository.class));
+        assertNotNull(applicationContext.getBean(UserDisabledAlgorithmJpaRepository.class));
+        assertNotNull(applicationContext.getBean(UserEnabledTrialRevisionJpaRepository.class));
+    }
+
+    @Test
+    void algorithmSeed_shouldImportAllSourceDefinitionsOnlyOnce() {
+        var states = applicationContext.getBean(AlgorithmCatalogStateJpaRepository.class);
+
+        var jdbc = applicationContext.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        assertEquals(201, jdbc.queryForObject("SELECT COUNT(*) FROM algorithm_catalog_algorithms WHERE seed_key IS NOT NULL", Integer.class));
+        assertEquals(201, jdbc.queryForObject("SELECT COUNT(*) FROM algorithm_catalog_revisions r JOIN algorithm_catalog_algorithms a ON a.id = r.algorithm_id WHERE a.seed_key IS NOT NULL", Integer.class));
+        assertEquals(201, jdbc.queryForObject("SELECT COUNT(*) FROM algorithm_catalog_workflow_events WHERE action = 'seed-import-approved'", Integer.class));
+        var state = states.findById((short) 1).orElseThrow();
+        assertNotNull(state.getInitializedAt());
+        assertEquals("1", state.getSeedVersion());
+        assertEquals(201, jdbc
+                .queryForObject("SELECT COUNT(*) FROM algorithm_catalog_algorithms WHERE seed_key IS NOT NULL AND seed_order BETWEEN 0 AND 200",
+                        Integer.class));
+
+        var repeat = applicationContext.getBean(AlgorithmCatalogSeedImportService.class).initializeSeedCatalog();
+        assertFalse(repeat.initializedNow());
+        assertEquals(201, jdbc.queryForObject("SELECT COUNT(*) FROM algorithm_catalog_algorithms WHERE seed_key IS NOT NULL", Integer.class));
+        assertEquals(201, jdbc.queryForObject("SELECT COUNT(*) FROM algorithm_catalog_revisions r JOIN algorithm_catalog_algorithms a ON a.id = r.algorithm_id WHERE a.seed_key IS NOT NULL", Integer.class));
+        assertEquals(201, jdbc.queryForObject("SELECT COUNT(*) FROM algorithm_catalog_workflow_events WHERE action = 'seed-import-approved'", Integer.class));
+    }
+
+    @Test
+    void algorithmCatalog_shouldReadSeedFromDatabaseAndUseStableCursorPages() throws Exception {
+        var catalogAdminEmail = uniqueEmail("catalog-admin");
+        loginAs(catalogAdminEmail);
+        var catalogAdmin = applicationContext.getBean(UserJpaRepository.class)
+                .findCredentialByEmail(catalogAdminEmail).orElseThrow();
+        catalogAdmin.setRole("admin");
+        applicationContext.getBean(UserJpaRepository.class).saveAndFlush(catalogAdmin);
+        var first = mockMvc.perform(get("/api/algorithms").cookie(sessionCookie()).param("limit", "20"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(20)))
+                .andExpect(jsonPath("$.items[0].algorithmId", notNullValue()))
+                .andExpect(jsonPath("$.items[0].revisionId", notNullValue()))
+                .andExpect(jsonPath("$.items[0].status", is("canonical")))
+                .andExpect(jsonPath("$.nextCursor", notNullValue()))
+                .andReturn();
+        var cursor = jsonString(first, "nextCursor");
+        var firstAlgorithmId = new tools.jackson.databind.ObjectMapper()
+                .readTree(first.getResponse().getContentAsString()).path("items").get(0).path("algorithmId").asText();
+        mockMvc.perform(get("/api/algorithms").cookie(sessionCookie()).param("limit", "20").param("cursor", cursor))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(20)))
+                .andExpect(jsonPath("$.items[0].algorithmId", notNullValue()))
+                .andExpect(jsonPath("$.items[0].algorithmId", org.hamcrest.Matchers.not(is(firstAlgorithmId))))
+                .andExpect(jsonPath("$.catalogVersion", notNullValue()));
+    }
+
+    @Test
+    void algorithmGovernance_shouldRequireExplicitTrialAndAdminApproval() throws Exception {
+        var adminEmail = uniqueEmail("catalog-workflow-admin");
+        loginAs(adminEmail);
+        var admin = applicationContext.getBean(UserJpaRepository.class).findCredentialByEmail(adminEmail).orElseThrow();
+        admin.setRole("admin");
+        applicationContext.getBean(UserJpaRepository.class).saveAndFlush(admin);
+
+        var knownOll = algorithms.AlgorithmCaseCatalog.entries(false).stream()
+                .filter(entry -> "oll".equals(entry.phase())).findFirst().orElseThrow();
+        var definition = "{\"phase\":\"oll\",\"name\":\"workflow-oll-" + UUID.randomUUID()
+                + "\",\"algorithm\":\"U U' " + knownOll.algorithm() + "\",\"notes\":\"workflow fixture\"}";
+        var created = mockMvc.perform(post("/api/algorithms").cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON).content(definition))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("experimental")))
+                .andExpect(jsonPath("$.revisionNumber", is(1)))
+                .andReturn();
+        var algorithmId = jsonString(created, "algorithmId");
+        var revisionId = jsonString(created, "id");
+
+        mockMvc.perform(get("/api/algorithms/{id}", algorithmId).cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.revisions", hasSize(1)));
+        mockMvc.perform(post("/api/algorithms/{id}/revisions/{revisionId}/actions", algorithmId, revisionId)
+                        .cookie(sessionCookie()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"deprecate\",\"expectedVersion\":0}"))
+                .andExpect(status().isConflict());
+        mockMvc.perform(put("/api/admin/solver-profile").cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"enabledTrialRevisionIds\":[\"" + revisionId + "\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabledTrialRevisionIds", hasSize(1)));
+
+        mockMvc.perform(post("/api/algorithms/{id}/revisions/{revisionId}/actions", algorithmId, revisionId)
+                        .cookie(sessionCookie()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"submit\",\"expectedVersion\":0}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("test-only")))
+                .andReturn();
+        mockMvc.perform(get("/api/admin/solver-profile").cookie(sessionCookie()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabledTrialRevisionIds", hasSize(1)));
+
+        mockMvc.perform(post("/api/algorithms/{id}/revisions/{revisionId}/actions", algorithmId, revisionId)
+                        .cookie(sessionCookie()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"withdraw\",\"expectedVersion\":1}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("experimental")));
+
+        mockMvc.perform(post("/api/algorithms/{id}/revisions/{revisionId}/actions", algorithmId, revisionId)
+                        .cookie(sessionCookie()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"submit\",\"expectedVersion\":2}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("test-only")))
+                .andReturn();
+        mockMvc.perform(post("/api/algorithms/{id}/revisions/{revisionId}/actions", algorithmId, revisionId)
+                        .cookie(sessionCookie()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"approve\",\"expectedVersion\":3,\"reason\":\"verified\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("canonical")))
+                .andReturn();
+        mockMvc.perform(post("/api/algorithms/{id}/revisions/{revisionId}/actions", algorithmId, revisionId)
+                        .cookie(sessionCookie()).contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"deprecate\",\"expectedVersion\":4,\"reason\":\"retired\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status", is("deprecated")));
+        mockMvc.perform(get("/api/algorithms").cookie(sessionCookie())
+                        .param("status", "deprecated").param("q", "workflow-oll-"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].revisionId", is(revisionId)));
+    }
+
+    @Test
+    void userRoleManagement_shouldEnforceCapabilitiesAndAuditChanges() throws Exception {
+        var targetEmail = uniqueEmail("role-target");
+        loginAs(targetEmail);
+        var targetSessionToken = sessionToken;
+        mockMvc.perform(get("/api/admin/users").cookie(sessionCookie()))
+                .andExpect(status().isForbidden());
+
+        var adminEmail = uniqueEmail("role-admin");
+        loginAs(adminEmail);
+        var adminAccount = applicationContext.getBean(UserJpaRepository.class)
+                .findCredentialByEmail(adminEmail).orElseThrow();
+        adminAccount.setRole("admin");
+        applicationContext.getBean(UserJpaRepository.class).saveAndFlush(adminAccount);
+        var adminSessionToken = sessionToken;
+        mockMvc.perform(get("/api/admin/users").cookie(sessionCookie()).param("q", "role-target").param("limit", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items", hasSize(1)))
+                .andExpect(jsonPath("$.items[0].email", is(targetEmail)))
+                .andExpect(jsonPath("$.items[0].role", is("user")))
+                .andExpect(jsonPath("$.items[0].protected", is(false)))
+                .andExpect(jsonPath("$.nextCursor", nullValue()));
+
+        var target = applicationContext.getBean(UserJpaRepository.class)
+                .findCredentialByEmail(targetEmail).orElseThrow();
+        var expectedUpdatedAt = target.getUpdatedAt().toString();
+        var roleChange = mockMvc.perform(patch("/api/admin/users/{id}/role", target.getId())
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"maintainer\",\"expectedUpdatedAt\":\"" + expectedUpdatedAt + "\"}"))
+                .andReturn();
+        assertTrue(roleChange.getResponse().getStatus() == 200, roleChange.getResponse().getContentAsString());
+        org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.role", is("maintainer"))
+                .match(roleChange);
+        assertTrue(applicationContext.getBean(org.springframework.jdbc.core.JdbcTemplate.class)
+                .queryForObject("SELECT count(*) FROM user_role_changes WHERE target_user_id = ?", Integer.class,
+                        target.getId()) == 1);
+
+        sessionToken = targetSessionToken;
+        mockMvc.perform(get("/api/admin/solver-profile").cookie(sessionCookie()))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/admin/users").cookie(sessionCookie()))
+                .andExpect(status().isForbidden());
+
+        sessionToken = adminSessionToken;
+        mockMvc.perform(patch("/api/admin/users/{id}/role", target.getId())
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"user\",\"expectedUpdatedAt\":\"" + expectedUpdatedAt + "\"}"))
+                .andExpect(status().isConflict());
+        mockMvc.perform(post("/api/auth/register")
+                        .with(uniqueAuthClient())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registerBody("solver-profile-admin@example.test")))
+                .andExpect(status().isCreated());
+        var bootstrap = applicationContext.getBean(UserJpaRepository.class)
+                .findCredentialByEmail("solver-profile-admin@example.test").orElseThrow();
+        mockMvc.perform(patch("/api/admin/users/{id}/role", bootstrap.getId())
+                        .cookie(sessionCookie())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"role\":\"user\",\"expectedUpdatedAt\":\""
+                                + bootstrap.getUpdatedAt() + "\"}"))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -115,7 +316,12 @@ class SpringJpaApiIntegrationTest {
                         .content("{\"disabledAlgorithms\":[\"pll:case-1\"]}"))
                 .andExpect(status().isForbidden());
 
-        loginAs("solver-profile-admin@example.test");
+        var profileAdminEmail = uniqueEmail("profile-admin");
+        loginAs(profileAdminEmail);
+        var profileAdmin = applicationContext.getBean(UserJpaRepository.class)
+                .findCredentialByEmail(profileAdminEmail).orElseThrow();
+        profileAdmin.setRole("admin");
+        applicationContext.getBean(UserJpaRepository.class).saveAndFlush(profileAdmin);
         mockMvc.perform(get("/api/admin/solver-profile").cookie(sessionCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.disabledAlgorithms", hasSize(0)));
@@ -134,12 +340,6 @@ class SpringJpaApiIntegrationTest {
         var secondAdmin = users.findCredentialByEmail(secondAdminEmail).orElseThrow();
         secondAdmin.setRole("admin");
         users.saveAndFlush(secondAdmin);
-        var secondAdminLogin = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginBody(secondAdminEmail)))
-                .andExpect(status().isOk())
-                .andReturn();
-        captureSession(secondAdminLogin);
         mockMvc.perform(get("/api/admin/solver-profile").cookie(sessionCookie()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.disabledAlgorithms", hasSize(0)));
@@ -197,6 +397,7 @@ class SpringJpaApiIntegrationTest {
     void registrationLoginSessionAndLogout_shouldUseJpaAuthentication() throws Exception {
         var email = uniqueEmail("auth");
         var registration = mockMvc.perform(post("/api/auth/register")
+                        .with(uniqueAuthClient())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerBody(email)))
                 .andExpect(status().isCreated())
@@ -216,6 +417,7 @@ class SpringJpaApiIntegrationTest {
                 .andExpect(status().isUnauthorized());
 
         var login = mockMvc.perform(post("/api/auth/login")
+                        .with(uniqueAuthClient())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(loginBody(email)))
                 .andExpect(status().isOk())
@@ -637,12 +839,30 @@ class SpringJpaApiIntegrationTest {
     }
 
     private void loginAs(String email) throws Exception {
-        var result = mockMvc.perform(post("/api/auth/register")
+        var registration = mockMvc.perform(post("/api/auth/register")
+                        .with(uniqueAuthClient())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(registerBody(email)))
-                .andExpect(status().isCreated())
                 .andReturn();
-        captureSession(result);
+        if (registration.getResponse().getStatus() == 201) {
+            captureSession(registration);
+            return;
+        }
+        var login = mockMvc.perform(post("/api/auth/login")
+                        .with(uniqueAuthClient())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginBody(email)))
+                .andExpect(status().isOk())
+                .andReturn();
+        captureSession(login);
+    }
+
+    private static RequestPostProcessor uniqueAuthClient() {
+        var address = "192.0.2." + (AUTH_CLIENT_SEQUENCE.incrementAndGet() % 250 + 1);
+        return request -> {
+            request.setRemoteAddr(address);
+            return request;
+        };
     }
 
     private MvcResult createSolve(String attemptId, Integer officialMs, boolean dnf) throws Exception {

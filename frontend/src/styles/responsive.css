@@ -80,7 +80,8 @@
     .dashboard-shell.view-timer,
     .dashboard-shell.view-history,
     .dashboard-shell.view-processes,
-    .dashboard-shell.view-settings {
+    .dashboard-shell.view-settings,
+    .dashboard-shell.view-users {
         display: block;
         padding: 10px 10px 82px;
     }
@@ -129,7 +130,8 @@
 
     .dashboard-history-view,
     .dashboard-process-view,
-    .dashboard-settings-view {
+    .dashboard-settings-view,
+    .dashboard-admin-users-view {
         min-height: auto;
     }
 

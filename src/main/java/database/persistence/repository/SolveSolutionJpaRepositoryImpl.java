@@ -21,6 +21,7 @@ public final class SolveSolutionJpaRepositoryImpl implements SolveSolutionUpsert
                     pll_algorithm, pll_moves, pll_solved, pll_status,
                     solved_f2l_slots, total_moves, solve_elapsed_ms, fully_solved, solver_version,
                     disabled_algorithms_json,
+                    algorithm_manifest_json,
                     updated_at
                 ) VALUES (
                     :solveId, :mode, :status, :crossFaceRequested, :crossFaceChosen,
@@ -32,6 +33,7 @@ public final class SolveSolutionJpaRepositoryImpl implements SolveSolutionUpsert
                     :pllAlgorithm, :pllMoves, :pllSolved, :pllStatus,
                     :solvedF2LSlots, :totalMoves, :solveElapsedMs, :fullySolved, :solverVersion,
                     CAST(:disabledAlgorithmsJson AS jsonb),
+                    CAST(:algorithmManifestJson AS jsonb),
                     NOW()
                 )
                 ON CONFLICT (solve_id, mode) DO UPDATE SET
@@ -66,6 +68,7 @@ public final class SolveSolutionJpaRepositoryImpl implements SolveSolutionUpsert
                     fully_solved = EXCLUDED.fully_solved,
                     solver_version = EXCLUDED.solver_version,
                     disabled_algorithms_json = EXCLUDED.disabled_algorithms_json,
+                    algorithm_manifest_json = COALESCE(EXCLUDED.algorithm_manifest_json, solve_solutions.algorithm_manifest_json),
                     updated_at = NOW()
                 """)
                 .setParameter("solveId", solution.getSolve().getId())
@@ -101,6 +104,7 @@ public final class SolveSolutionJpaRepositoryImpl implements SolveSolutionUpsert
                 .setParameter("fullySolved", solution.isFullySolved())
                 .setParameter("solverVersion", solution.getSolverVersion())
                 .setParameter("disabledAlgorithmsJson", solution.getDisabledAlgorithmsJson())
+                .setParameter("algorithmManifestJson", solution.getAlgorithmManifestJson())
                 .executeUpdate();
     }
 }

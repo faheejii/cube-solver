@@ -153,6 +153,15 @@ describe("useTimer keyboard controls", () => {
         expect(screen.getByText("running")).toBeInTheDocument();
     });
 
+    it("allows spaces in text fields while an overlay is open", () => {
+        render(<TimerHarness inspectionEnabled={false} overlayOpen/>);
+        const input = screen.getByLabelText("Timer test input");
+
+        expect(fireEvent.keyDown(input, {code: "Space", key: " "})).toBe(true);
+        expect(fireEvent.keyUp(input, {code: "Space", key: " "})).toBe(true);
+        expect(screen.getByText("idle")).toBeInTheDocument();
+    });
+
     it("does not stop a running solve while an accessible modal is open", async () => {
         render(<TimerHarness inspectionEnabled={false}/>);
         await holdSpaceFor(500);

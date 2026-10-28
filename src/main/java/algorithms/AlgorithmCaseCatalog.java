@@ -188,6 +188,33 @@ public final class AlgorithmCaseCatalog {
         return List.copyOf(entries);
     }
 
+    /**
+     * Returns authored definitions before setup-case projection can collapse equivalent derived
+     * cases. Calling entries(true) first ensures the solver-facing catalog validation runs.
+     */
+    public static List<SourceDefinition> sourceDefinitions() {
+        entries(true);
+        var corpus = readCorpus();
+        var definitions = new ArrayList<SourceDefinition>();
+        corpus.setupDefinitions().forEach(definition -> definitions.add(new SourceDefinition(
+                "setup", definition.name(), definition.algorithm(), definition.status(), definition.notes(),
+                null, definition.nonPreservedSlot(), definition.sourceSetup()
+        )));
+        corpus.insertDefinitions().forEach(definition -> definitions.add(new SourceDefinition(
+                "insert", definition.name(), definition.algorithm(), definition.status(), definition.notes(),
+                definition.slot(), null, null
+        )));
+        readCases(OLL_RESOURCE).forEach(definition -> definitions.add(new SourceDefinition(
+                "oll", definition.name(), definition.algorithm(), definition.status(), definition.notes(),
+                null, null, null
+        )));
+        readCases(PLL_RESOURCE).forEach(definition -> definitions.add(new SourceDefinition(
+                "pll", definition.name(), definition.algorithm(), definition.status(), definition.notes(),
+                null, null, null
+        )));
+        return List.copyOf(definitions);
+    }
+
     private static Corpus readCorpus() {
         var setupRoot = readResource(SETUP_RESOURCE);
         var insertRoot = readResource(INSERT_RESOURCE);
@@ -339,6 +366,18 @@ public final class AlgorithmCaseCatalog {
             String previewSetup,
             String status,
             String notes
+    ) {
+    }
+
+    public record SourceDefinition(
+            String phase,
+            String name,
+            String algorithm,
+            String status,
+            String notes,
+            F2LSlot slot,
+            F2LSlot nonPreservedSlot,
+            String sourceSetup
     ) {
     }
 }

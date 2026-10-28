@@ -112,7 +112,21 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
     let nextSolveId = Math.max(1, ...entries.map((entry) => entry.id)) + 1;
     let deleteFailuresRemaining = options.deleteFailures ?? 0;
     let disabledAlgorithms = [...(options.disabledAlgorithms ?? [])];
+    let disabledAlgorithmIds: string[] = [];
+    let enabledTrialRevisionIds: string[] = [];
     const algorithms = options.algorithms ?? catalogEntries;
+    const workspaceAlgorithms = algorithms.map((entry, index) => ({
+        ...entry,
+        algorithmId: `algorithm-${index + 1}`,
+        revisionId: `revision-${index + 1}`,
+        revisionNumber: 1,
+        revisionVersion: 0,
+        ownerUserId: null,
+        trialEligible: entry.status === "test-only",
+        permittedActions: entry.status === "canonical" ? (user.role === "admin" ? ["deprecate"] : [])
+            : entry.status === "experimental" ? ["submit"]
+                : entry.status === "test-only" ? (user.role === "admin" ? ["withdraw", "approve", "request-changes", "deprecate"] : ["withdraw"]) : [],
+    }));
     const requests: MockApiHandle["requests"] = [];
     const jobs = new Map<string, unknown>();
     const savedBySolve = new Map<number, unknown>();
@@ -147,22 +161,23 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
             return;
         }
         if (url.pathname === "/api/admin/solver-profile" && request.method() === "GET") {
-            if (user.role !== "admin") {
+            if (user.role === "user") {
                 await json(route, {error: "Forbidden"}, 403);
                 return;
             }
-            await json(route, {disabledAlgorithms});
+            await json(route, {disabledAlgorithms, disabledAlgorithmIds, enabledTrialRevisionIds, inactiveTrialRevisionIds: []});
             return;
         }
         if (url.pathname === "/api/admin/solver-profile" && request.method() === "PUT") {
-            if (user.role !== "admin") {
+            if (user.role === "user") {
                 await json(route, {error: "Forbidden"}, 403);
                 return;
             }
-            disabledAlgorithms = Array.isArray((body as {disabledAlgorithms?: unknown} | null)?.disabledAlgorithms)
-                ? [...new Set((body as {disabledAlgorithms: string[]}).disabledAlgorithms)]
-                : [];
-            await json(route, {disabledAlgorithms});
+            const profile = body as {disabledAlgorithms?: string[]; disabledAlgorithmIds?: string[]; enabledTrialRevisionIds?: string[]} | null;
+            disabledAlgorithms = profile?.disabledAlgorithms ?? disabledAlgorithms;
+            disabledAlgorithmIds = profile?.disabledAlgorithmIds ?? disabledAlgorithmIds;
+            enabledTrialRevisionIds = profile?.enabledTrialRevisionIds ?? enabledTrialRevisionIds;
+            await json(route, {disabledAlgorithms, disabledAlgorithmIds, enabledTrialRevisionIds, inactiveTrialRevisionIds: []});
             return;
         }
         if (url.pathname === "/api/stats") {
@@ -326,6 +341,27 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
             await json(route, {...(job as object), status: "cancelled", result: null});
             return;
         }
+        const detailMatch = url.pathname.match(/^\/api\/algorithms\/([^/]+)$/);
+        if (detailMatch && request.method() === "GET") {
+            const algorithmId = decodeURIComponent(detailMatch[1]);
+            const item = workspaceAlgorithms.find((entry) => entry.algorithmId === algorithmId);
+            if (!item) {
+                await json(route, {error: "Not found"}, 404);
+                return;
+            }
+            const {phase, name, algorithm, notes, slot, nonPreservedSlot, sourceSetup} = item;
+            await json(route, {
+                id: item.algorithmId, phase, name, ownerUserId: item.ownerUserId,
+                activeCanonicalRevisionId: item.status === "canonical" ? item.revisionId : null,
+                canCreateRevision: user.role === "admin" || item.ownerUserId === Number(user.id),
+                revisions: [{id: item.revisionId, algorithmId: item.algorithmId, revisionNumber: item.revisionNumber,
+                    definitionJson: JSON.stringify({phase, name, algorithm, notes, slot, nonPreservedSlot, sourceSetup}),
+                    authorUserId: item.ownerUserId, status: item.status, createdAt: "2026-01-01T00:00:00Z",
+                    version: item.revisionVersion, permittedActions: item.permittedActions}],
+                history: [],
+            });
+            return;
+        }
         if (url.pathname === "/api/algorithms") {
             const phase = url.searchParams.get("phase") ?? "";
             const slot = url.searchParams.get("slot") ?? "";
@@ -334,13 +370,13 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
             const statusMatches = (entry: typeof algorithms[number]) => status === ""
                 ? entry.status === "canonical"
                 : status === "all" || entry.status === status;
-            const filtered = algorithms.filter((entry) =>
+            const filtered = workspaceAlgorithms.filter((entry) =>
                 (!phase || entry.phase === phase)
                 && (!slot || entry.slot === slot)
                 && (!query || `${entry.name} ${entry.algorithm}`.toLowerCase().includes(query))
                 && statusMatches(entry)
             );
-            await json(route, {version: "1", items: filtered});
+            await json(route, {version: "1", catalogVersion: 1, items: filtered, nextCursor: null});
             return;
         }
         await json(route, {});

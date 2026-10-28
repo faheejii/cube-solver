@@ -3,6 +3,9 @@ package server.web;
 import database.AuthUser;
 import server.solve.SolveJobOperations;
 import server.solve.SolveJobSnapshot;
+import server.solve.DatabaseSolverSnapshotProvider;
+import server.solve.SolverSnapshot;
+import solver.CfopSolveService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -43,11 +46,16 @@ class SpringSolveJobControllerTest {
     @MockitoBean
     private SolveJobOperations jobManager;
 
+    @MockitoBean
+    private DatabaseSolverSnapshotProvider snapshots;
+
     @Configuration(proxyBeanMethods = false)
     static class MvcTestConfiguration {
         @Bean
-        SpringSolveJobController springSolveJobController(SolveJobOperations jobManager) {
-            return new SpringSolveJobController(jobManager);
+        SpringSolveJobController springSolveJobController(
+                SolveJobOperations jobManager, DatabaseSolverSnapshotProvider snapshots
+        ) {
+            return new SpringSolveJobController(jobManager, snapshots);
         }
 
         @Bean
@@ -93,7 +101,9 @@ class SpringSolveJobControllerTest {
     void create_delegatesRequestAndReturnsAcceptedJobSnapshot() throws Exception {
         var user = authenticatedUser();
         authenticateAs(user);
-        when(jobManager.submit(any(), eq(user.externalId()), eq(42L), eq(true)))
+        var captured = new SolverSnapshot(new CfopSolveService(), 4L, List.of(), List.of(), List.of(), List.of(), "{}");
+        when(snapshots.capture(user)).thenReturn(captured);
+        when(jobManager.submit(any(), eq(user.externalId()), eq(42L), eq(true), eq(captured)))
                 .thenReturn(snapshot("job-1", "queued"));
 
         mockMvc.perform(post("/api/solve-jobs")
@@ -113,7 +123,8 @@ class SpringSolveJobControllerTest {
                 .andExpect(jsonPath("$.id").value("job-1"))
                 .andExpect(jsonPath("$.status").value("queued"));
 
-        verify(jobManager).submit(any(), eq(user.externalId()), eq(42L), eq(true));
+        verify(snapshots).capture(user);
+        verify(jobManager).submit(any(), eq(user.externalId()), eq(42L), eq(true), eq(captured));
     }
 
     @Test

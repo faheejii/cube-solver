@@ -10,6 +10,13 @@ public interface SolveJobOperations {
             SolveApiRequest request, String userId, Long solveId, boolean saveOnComplete,
             List<String> disabledAlgorithms
     );
+    default SolveJobSnapshot submit(
+            SolveApiRequest request, String userId, Long solveId, boolean saveOnComplete,
+            SolverSnapshot solverSnapshot
+    ) {
+        return submit(request, userId, solveId, saveOnComplete,
+                solverSnapshot == null ? List.of() : solverSnapshot.legacyDisabledAlgorithms());
+    }
     default SolveJobSnapshot submit(SolveApiRequest request, String userId, Long solveId, boolean saveOnComplete) {
         return submit(request, userId, solveId, saveOnComplete, List.of());
     }

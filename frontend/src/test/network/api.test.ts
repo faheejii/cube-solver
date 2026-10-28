@@ -1,11 +1,13 @@
 import {beforeEach, describe, expect, it, vi} from "vitest";
 import {
     fetchCurrentUser,
+    fetchAdminUsers,
     fetchSolveHistory,
     login,
     SESSION_EXPIRED_EVENT,
     startSolveJob,
     updateSolvePenalty,
+    updateAdminUserRole,
 } from "../../api";
 
 const fetchMock = vi.fn<typeof fetch>();
@@ -92,6 +94,42 @@ describe("API session handling", () => {
                 avoidBTurns: true,
             }),
         }));
+    });
+
+    it("requests admin users with a literal query and opaque cursor", async () => {
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({items: [], nextCursor: null}), {
+            status: 200,
+            headers: {"Content-Type": "application/json"},
+        }));
+
+        await fetchAdminUsers("A+ User@example.com", "cursor/next");
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            "/api/admin/users?limit=20&q=A%2B+User%40example.com&cursor=cursor%2Fnext",
+            expect.objectContaining({credentials: "include"}),
+        );
+    });
+
+    it("sends the expected timestamp with an admin role update", async () => {
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({
+            id: 42,
+            externalId: "external-user-2",
+            displayName: "Maintainer",
+            email: "maintainer@example.com",
+            role: "maintainer",
+            protected: false,
+            updatedAt: "2026-10-28T12:00:00Z",
+        }), {status: 200, headers: {"Content-Type": "application/json"}}));
+
+        await updateAdminUserRole(42, "maintainer", "2026-10-28T11:00:00Z");
+
+        expect(fetchMock).toHaveBeenCalledWith(
+            "/api/admin/users/42/role",
+            expect.objectContaining({
+                method: "PATCH",
+                body: JSON.stringify({role: "maintainer", expectedUpdatedAt: "2026-10-28T11:00:00Z"}),
+            }),
+        );
     });
 
     it("updates a saved solve penalty through the owner-scoped API route", async () => {

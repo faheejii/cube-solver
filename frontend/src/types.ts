@@ -128,7 +128,7 @@ export type F2LAlgorithmCatalogEntry = {
         cornerOrientation: number;
         edgePosition: string;
         edgeOrientation: number;
-    };
+    } | null;
     algorithm: string;
     sourceSetup: string | null;
     status: "canonical" | "experimental" | "deprecated" | "test-only" | string;
@@ -145,7 +145,7 @@ export type LastLayerAlgorithmCatalogEntry = {
     signature: {
         kind: "oll" | "pll";
         [key: string]: string | boolean;
-    };
+    } | null;
     algorithm: string;
     sourceSetup: null;
     previewSetup: string;
@@ -155,13 +155,82 @@ export type LastLayerAlgorithmCatalogEntry = {
 
 export type AlgorithmCatalogEntry = F2LAlgorithmCatalogEntry | LastLayerAlgorithmCatalogEntry;
 
+export type AlgorithmWorkspaceEntry = AlgorithmCatalogEntry & {
+    algorithmId: string;
+    revisionId: string;
+    revisionNumber: number;
+    revisionVersion: number;
+    ownerUserId: number | null;
+    trialEligible?: boolean;
+    permittedActions: string[];
+};
+
 export type AlgorithmCatalogResponse = {
     version: string;
-    items: AlgorithmCatalogEntry[];
+    catalogVersion: number;
+    items: AlgorithmWorkspaceEntry[];
+    nextCursor: string | null;
+};
+
+export type AlgorithmDefinitionRequest = {
+    phase: "setup" | "insert" | "oll" | "pll";
+    name: string;
+    algorithm: string;
+    notes: string;
+    slot?: string | null;
+    nonPreservedSlot?: string | null;
+    sourceSetup?: string | null;
+};
+
+export type AlgorithmValidationResult = {
+    valid: boolean;
+    phase: string;
+    name: string;
+    algorithm: string;
+    sourceSetup: string | null;
+    slot: string | null;
+    nonPreservedSlot: string | null;
+    validatorNote: string | null;
+};
+
+export type AlgorithmRevision = {
+    id: string;
+    algorithmId: string;
+    revisionNumber: number;
+    definitionJson: string;
+    authorUserId: number | null;
+    status: string;
+    createdAt: string;
+    version: number;
+    permittedActions?: string[];
+};
+
+export type AlgorithmWorkflowEvent = {
+    action: string;
+    actorUserId: number | null;
+    revisionId: string;
+    previousStatus: string | null;
+    newStatus: string | null;
+    reason: string | null;
+    occurredAt: string;
+};
+
+export type AlgorithmDetail = {
+    id: string;
+    phase: string;
+    name: string;
+    ownerUserId: number | null;
+    activeCanonicalRevisionId: string | null;
+    canCreateRevision?: boolean;
+    revisions: AlgorithmRevision[];
+    history: AlgorithmWorkflowEvent[];
 };
 
 export type SolverProfileResponse = {
     disabledAlgorithms: string[];
+    disabledAlgorithmIds?: string[];
+    enabledTrialRevisionIds?: string[];
+    inactiveTrialRevisionIds?: string[];
 };
 
 
@@ -173,11 +242,13 @@ export type SolveJobRequest = SolveRequest & {
     saveOnComplete?: boolean;
 };
 
+export type UserRole = "user" | "maintainer" | "admin";
+
 export type AuthUser = {
     id: string;
     email: string;
     displayName: string | null;
-    role: "user" | "admin" | string;
+    role: UserRole;
 };
 
 export type LoginRequest = {

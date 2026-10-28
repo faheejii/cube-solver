@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import server.solve.SolverProfileOperations;
 
-/** Admin-only endpoint for each administrator's personal solver profile. */
+/** Maintainer-only endpoint for personal solver preferences. */
 @RestController
 @RequestMapping("/api/admin/solver-profile")
 final class SpringSolverProfileController {
@@ -23,26 +23,29 @@ final class SpringSolverProfileController {
 
     @GetMapping
     ResponseEntity<String> get() {
-        var user = requireAdminAndDatabase();
-        var disabled = profiles.findDisabledAlgorithms(user.externalId());
-        return SpringRequestSupport.json(200, profileJson(disabled));
+        var user = requireMaintainerAndDatabase();
+        return SpringRequestSupport.json(200, profileJson(profiles.findProfile(user.externalId())));
     }
 
     @PutMapping
     ResponseEntity<String> replace(@RequestBody UpdateSolverProfileRequest request) {
-        var user = requireAdminAndDatabase();
-        var disabled = profiles.replaceDisabledAlgorithms(user.externalId(), request.disabledAlgorithms());
-        return SpringRequestSupport.json(200, profileJson(disabled));
+        var user = requireMaintainerAndDatabase();
+        var profile = profiles.replaceProfile(user.externalId(), request.disabledAlgorithms(),
+                request.disabledAlgorithmIds(), request.enabledTrialRevisionIds());
+        return SpringRequestSupport.json(200, profileJson(profile));
     }
 
-    private database.AuthUser requireAdminAndDatabase() {
+    private database.AuthUser requireMaintainerAndDatabase() {
         if (!databaseHealth.isConfigured()) {
             throw new SpringDatabaseUnavailableException();
         }
-        return SpringRequestSupport.requireAdmin();
+        return SpringRequestSupport.requireMaintainer();
     }
 
-    private static String profileJson(java.util.List<String> disabled) {
-        return "{\"disabledAlgorithms\":" + JsonSupport.stringArrayJson(disabled) + "}";
+    private static String profileJson(SolverProfileOperations.Profile profile) {
+        return "{\"disabledAlgorithms\":" + JsonSupport.stringArrayJson(profile.disabledAlgorithms())
+                + ",\"disabledAlgorithmIds\":" + JsonSupport.stringArrayJson(profile.disabledAlgorithmIds())
+                + ",\"enabledTrialRevisionIds\":" + JsonSupport.stringArrayJson(profile.enabledTrialRevisionIds())
+                + ",\"inactiveTrialRevisionIds\":" + JsonSupport.stringArrayJson(profile.inactiveTrialRevisionIds()) + "}";
     }
 }

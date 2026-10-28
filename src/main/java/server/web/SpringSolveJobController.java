@@ -2,7 +2,7 @@ package server.web;
 
 import api.CreateSolveJobRequest;
 import server.solve.SolveJobOperations;
-import server.solve.SolverProfileOperations;
+import server.solve.DatabaseSolverSnapshotProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,16 +18,17 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/solve-jobs")
 final class SpringSolveJobController {
     private final SolveJobOperations jobManager;
-    private final SolverProfileOperations solverProfiles;
+    private final DatabaseSolverSnapshotProvider snapshots;
 
     @Autowired
-    SpringSolveJobController(SolveJobOperations jobManager, SolverProfileOperations solverProfiles) {
+    SpringSolveJobController(SolveJobOperations jobManager, DatabaseSolverSnapshotProvider snapshots) {
         this.jobManager = jobManager;
-        this.solverProfiles = solverProfiles;
+        this.snapshots = snapshots;
     }
 
     SpringSolveJobController(SolveJobOperations jobManager) {
-        this(jobManager, null);
+        this.jobManager = jobManager;
+        this.snapshots = null;
     }
 
     @PostMapping
@@ -36,23 +37,11 @@ final class SpringSolveJobController {
         if (request.saveOnComplete() && user == null) {
             throw new server.auth.AuthOperations.UnauthorizedException("Authentication required");
         }
-        var disabledAlgorithms = user != null && user.isAdmin() && solverProfiles != null
-                ? solverProfiles.findDisabledAlgorithms(user.externalId())
-                : java.util.List.<String>of();
-        var job = disabledAlgorithms.isEmpty()
-                ? jobManager.submit(
-                        request.solveRequest(),
-                        user == null ? null : user.externalId(),
-                        request.solveId(),
-                        request.saveOnComplete()
-                )
-                : jobManager.submit(
-                        request.solveRequest(),
-                        user.externalId(),
-                        request.solveId(),
-                        request.saveOnComplete(),
-                        disabledAlgorithms
-                );
+        var job = snapshots == null
+                ? jobManager.submit(request.solveRequest(), user == null ? null : user.externalId(),
+                        request.solveId(), request.saveOnComplete())
+                : jobManager.submit(request.solveRequest(), user == null ? null : user.externalId(),
+                        request.solveId(), request.saveOnComplete(), snapshots.capture(user));
         return SpringRequestSupport.json(202, JsonSupport.solveJobJson(job));
     }
 

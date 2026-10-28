@@ -1,22 +1,23 @@
 package server.web;
 
-import algorithms.AlgorithmCaseCatalog;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.Locale;
+import server.catalog.AlgorithmWorkspaceCatalogService;
 
-/** MVC adapter for the admin-only algorithm catalog endpoint. */
+/** MVC adapter for the maintainer workspace catalog endpoint. */
 @RestController
 @RequestMapping("/api/algorithms")
 final class SpringAlgorithmController {
     private final SpringDatabaseHealth databaseHealth;
+    private final AlgorithmWorkspaceCatalogService catalog;
 
-    SpringAlgorithmController(SpringDatabaseHealth databaseHealth) {
+    SpringAlgorithmController(SpringDatabaseHealth databaseHealth, AlgorithmWorkspaceCatalogService catalog) {
         this.databaseHealth = databaseHealth;
+        this.catalog = catalog;
     }
 
     @GetMapping
@@ -25,25 +26,20 @@ final class SpringAlgorithmController {
             @RequestParam(value = "phase", required = false) String phase,
             @RequestParam(value = "slot", required = false) String slot,
             @RequestParam(value = "status", required = false) String status,
-            @RequestParam(value = "q", required = false, defaultValue = "") String search
+            @RequestParam(value = "scope", required = false) String scope,
+            @RequestParam(value = "q", required = false, defaultValue = "") String search,
+            @RequestParam(value = "cursor", required = false) String cursor,
+            @RequestParam(value = "limit", required = false, defaultValue = "20") int limit
     ) {
         if (!databaseHealth.isConfigured()) {
             throw new SpringDatabaseUnavailableException();
         }
-        SpringRequestSupport.requireAdmin();
-        var normalizedSearch = search.toLowerCase(Locale.ROOT);
-        var entries = AlgorithmCaseCatalog.entries(includeNonCanonical).stream()
-                .filter(entry -> phase == null || phase.isBlank() || entry.phase().equalsIgnoreCase(phase))
-                .filter(entry -> slot == null || slot.isBlank()
-                        || (entry.slot() != null && entry.slot().name().equalsIgnoreCase(slot))
-                        || (entry.nonPreservedSlot() != null && entry.nonPreservedSlot().name().equalsIgnoreCase(slot)))
-                .filter(entry -> status == null || status.isBlank() || "all".equalsIgnoreCase(status)
-                        || entry.status().equalsIgnoreCase(status))
-                .filter(entry -> normalizedSearch.isBlank()
-                        || entry.name().toLowerCase(Locale.ROOT).contains(normalizedSearch)
-                        || entry.algorithm().toLowerCase(Locale.ROOT).contains(normalizedSearch))
-                .toList();
+        var actor = SpringRequestSupport.requireMaintainer();
+        var includeTrialStatuses = status != null && !status.isBlank()
+                && !"canonical".equalsIgnoreCase(status) && !"all".equalsIgnoreCase(status);
+        var page = catalog.list(actor, phase, slot, status, scope, search,
+                includeNonCanonical || includeTrialStatuses, cursor, limit);
         return SpringRequestSupport.json(200,
-                JsonSupport.algorithmCatalogJson(entries, AlgorithmCaseCatalog.VERSION));
+                JsonSupport.algorithmWorkspaceCatalogJson(page));
     }
 }

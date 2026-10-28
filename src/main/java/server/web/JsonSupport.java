@@ -97,6 +97,46 @@ final class JsonSupport {
         return builder.append("]}").toString();
     }
 
+    static String algorithmWorkspaceCatalogJson(server.catalog.AlgorithmWorkspaceCatalogService.CatalogPage page) {
+        var builder = new StringBuilder("{\"version\":\"")
+                .append(escape(AlgorithmCaseCatalog.VERSION))
+                .append("\",\"catalogVersion\":")
+                .append(page.version())
+                .append(",\"nextCursor\":")
+                .append(nullableString(page.nextCursor()))
+                .append(",\"items\":[");
+        for (int i = 0; i < page.items().size(); i++) {
+            if (i > 0) builder.append(',');
+            var item = page.items().get(i);
+            var entry = item.definition();
+            builder.append('{')
+                    .append("\"algorithmId\":\"").append(item.algorithmId()).append("\",")
+                    .append("\"revisionId\":\"").append(item.revisionId()).append("\",")
+                    .append("\"revisionNumber\":").append(item.revisionNumber()).append(',')
+                    .append("\"revisionVersion\":").append(item.revisionVersion()).append(',')
+                    .append("\"ownerUserId\":").append(item.ownerUserId() == null ? "null" : item.ownerUserId()).append(',')
+                    .append("\"trialEligible\":").append(item.trialEligible()).append(',')
+                    .append("\"permittedActions\":").append(stringArrayJson(item.permittedActions())).append(',')
+                    .append("\"phase\":\"").append(escape(entry.phase())).append("\",")
+                    .append("\"name\":\"").append(escape(entry.name())).append("\",")
+                    .append("\"slot\":").append(entry.slot() == null ? "null" : "\"" + entry.slot().name() + "\"").append(',')
+                    .append("\"nonPreservedSlot\":").append(entry.nonPreservedSlot() == null ? "null" : "\"" + entry.nonPreservedSlot().name() + "\"").append(',')
+                    .append("\"preservedSlots\":[");
+            var preserved = entry.preservedSlots() == null ? java.util.List.<cfop.F2LSlot>of() : entry.preservedSlots().slots();
+            for (int slot = 0; slot < preserved.size(); slot++) {
+                if (slot > 0) builder.append(',');
+                builder.append('"').append(preserved.get(slot).name()).append('"');
+            }
+            builder.append("],\"signature\":").append(catalogSignatureJson(entry.signature())).append(',')
+                    .append("\"algorithm\":\"").append(escape(entry.algorithm())).append("\",")
+                    .append("\"sourceSetup\":").append(nullableString(entry.sourceSetup())).append(',')
+                    .append("\"previewSetup\":").append(nullableString(entry.previewSetup())).append(',')
+                    .append("\"status\":\"").append(escape(entry.status())).append("\",")
+                    .append("\"notes\":\"").append(escape(entry.notes())).append("\"}");
+        }
+        return builder.append("]}").toString();
+    }
+
     private static String catalogSignatureJson(Object signature) {
         if (signature instanceof cfop.F2LSetupSignature setup) {
             return "{\"kind\":\"f2l-setup\",\"cornerPosition\":\"" + setup.cornerPosition()
@@ -577,7 +617,7 @@ final class JsonSupport {
         return value == null ? "null" : value.toString();
     }
 
-    private static String nullableString(String value) {
+    static String nullableString(String value) {
         return value == null ? "null" : "\"" + escape(value) + "\"";
     }
 

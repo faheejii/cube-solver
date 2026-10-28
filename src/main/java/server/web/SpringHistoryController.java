@@ -138,9 +138,9 @@ final class SpringHistoryController {
         String disabledAlgorithmsJson = null;
         if (request.disabledAlgorithms() != null) {
             var disabledAlgorithms = solverProfiles.validate(request.disabledAlgorithms());
-            if (!user.isAdmin() && !disabledAlgorithms.isEmpty()) {
+            if (!user.isMaintainer() && !disabledAlgorithms.isEmpty()) {
                 throw new server.auth.AuthOperations.ForbiddenException(
-                        "Only administrators can save a custom solver profile");
+                        "Only maintainers can save a custom solver profile");
             }
             disabledAlgorithmsJson = JsonSupport.stringArrayJson(disabledAlgorithms);
         }

@@ -20,7 +20,7 @@ import java.util.Map;
 import java.util.Optional;
 
 public class F2LInsertCaseDatabase {
-    private final Map<F2LInsertCaseKey, F2LInsertCase> cases = new LinkedHashMap<>();
+    private final Map<String, F2LInsertCase> cases = new LinkedHashMap<>();
     private final Map<LookupKey, List<F2LInsertCase>> casesByLookup = new LinkedHashMap<>();
     private boolean validated;
 
@@ -40,10 +40,10 @@ public class F2LInsertCaseDatabase {
         if (insertCase == null) {
             throw new IllegalArgumentException("insertCase cannot be null");
         }
-        if (cases.containsKey(insertCase.key())) {
-            throw new IllegalArgumentException("Duplicate F2L insert case key: " + insertCase.key());
+        if (cases.containsKey(insertCase.name())) {
+            throw new IllegalArgumentException("Duplicate F2L insert case name: " + insertCase.name());
         }
-        cases.put(insertCase.key(), insertCase);
+        cases.put(insertCase.name(), insertCase);
         var lookupKey = new LookupKey(insertCase.insertSlot(), insertCase.signature());
         casesByLookup.computeIfAbsent(lookupKey, ignored -> new ArrayList<>()).add(insertCase);
         indexSourceVariants(insertCase);

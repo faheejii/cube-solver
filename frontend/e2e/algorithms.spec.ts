@@ -9,7 +9,7 @@ test.describe("Algorithms access and catalog flow", () => {
 
         await page.getByRole("button", {name: "Algorithms"}).click();
         await expect(page.getByRole("heading", {name: "Algorithms"})).toBeVisible();
-        await expect(page.getByText("4 cases")).toBeVisible();
+        await expect(page.getByText("4 shown")).toBeVisible();
 
         const ollRow = page.locator(".algorithm-catalog-row").filter({hasText: "OLL Sune"});
         await expect(ollRow).toBeVisible();
@@ -21,6 +21,7 @@ test.describe("Algorithms access and catalog flow", () => {
 
         await ollRow.getByText("Details").click();
         await expect(ollRow.getByText("OLL facelets: UFR UR UBR")).toBeVisible();
+        await page.getByRole("dialog", {name: "Algorithm details"}).getByRole("button", {name: "Close"}).click();
 
         await ollRow.getByRole("button", {name: "Copy algorithm"}).click();
         await expect(ollRow.getByRole("button", {name: "Copied"})).toBeVisible();
@@ -40,7 +41,7 @@ test.describe("Algorithms access and catalog flow", () => {
         await expect(preview).toHaveCount(0);
 
         await page.getByLabel("Algorithm phase").selectOption("");
-        await page.getByLabel("Algorithm status").selectOption("experimental");
+        await page.getByLabel("Algorithm status").selectOption("my-experimental");
         await expect(page.getByText("Experimental insert")).toBeVisible();
         await expect(page.getByText("OLL Sune")).toHaveCount(0);
     });
@@ -65,6 +66,18 @@ test.describe("Algorithms access and catalog flow", () => {
         await expect(page.getByText("Solver profile saved to your account.")).toBeVisible();
         expect(api.requests.some((request) => request.method === "PUT"
             && request.pathname === "/api/admin/solver-profile"
-            && JSON.stringify(request.body) === JSON.stringify({disabledAlgorithms: ["oll:OLL Sune"]}))).toBe(true);
+            && JSON.stringify(request.body) === JSON.stringify({disabledAlgorithmIds: ["algorithm-3"], enabledTrialRevisionIds: []}))).toBe(true);
+    });
+
+    test("allows spaces in algorithm notation while the authoring dialog is open", async ({page}) => {
+        await mockProductionApi(page, {user: adminUser});
+        await page.goto("/");
+        await page.getByRole("button", {name: "Algorithms"}).click();
+        await page.getByRole("button", {name: "New algorithm"}).click();
+
+        const dialog = page.getByRole("dialog", {name: "New algorithm"});
+        const notation = dialog.getByLabel("Algorithm");
+        await notation.pressSequentially("R U R'");
+        await expect(notation).toHaveValue("R U R'");
     });
 });

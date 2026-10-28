@@ -70,6 +70,14 @@ final class SpringRequestSupport {
         return user;
     }
 
+    static AuthUser requireMaintainer() {
+        var user = requireUser();
+        if (!user.isMaintainer()) {
+            throw new server.auth.AuthOperations.ForbiddenException("Maintainer access required");
+        }
+        return user;
+    }
+
     static String sessionToken(HttpServletRequest request) {
         var cookies = request.getHeaders(HttpHeaders.COOKIE);
         while (cookies.hasMoreElements()) {

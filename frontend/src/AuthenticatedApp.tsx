@@ -46,6 +46,12 @@ export default function AuthenticatedApp() {
         }
     }
 
+    async function refreshAuthenticatedUser() {
+        const currentUser = await fetchCurrentUser();
+        setUser(currentUser);
+        if (!currentUser) setSessionExpired(true);
+    }
+
     if (checking) return <AuthLoading/>;
     if (!user) {
         return (
@@ -59,7 +65,7 @@ export default function AuthenticatedApp() {
             />
         );
     }
-    return <App user={user} onLogout={() => void handleLogout()}/>;
+    return <App user={user} onLogout={() => void handleLogout()} onUserRefresh={() => refreshAuthenticatedUser()}/>;
 }
 
 function AuthLoading() {

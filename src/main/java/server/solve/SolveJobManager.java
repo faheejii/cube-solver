@@ -152,6 +152,30 @@ final class SolveJobManager implements SolveJobOperations, AutoCloseable {
     ) {
         var request = apiRequest.toSolveRequest();
         var solveProfile = solverProfiles.validate(disabledAlgorithms);
+        var capturedSnapshot = SolverSnapshot.legacy(solverProfiles.solverFor(solveProfile), solveProfile);
+        return submitCaptured(apiRequest, request, userId, solveId, saveOnComplete, capturedSnapshot);
+    }
+
+    @Override
+    public SolveJobSnapshot submit(
+            SolveApiRequest apiRequest,
+            String userId,
+            Long solveId,
+            boolean saveOnComplete,
+            SolverSnapshot solverSnapshot
+    ) {
+        if (solverSnapshot == null) throw new IllegalArgumentException("solverSnapshot is required");
+        return submitCaptured(apiRequest, apiRequest.toSolveRequest(), userId, solveId, saveOnComplete, solverSnapshot);
+    }
+
+    private SolveJobSnapshot submitCaptured(
+            SolveApiRequest apiRequest,
+            solver.CfopSolveRequest request,
+            String userId,
+            Long solveId,
+            boolean saveOnComplete,
+            SolverSnapshot solverSnapshot
+    ) {
         validateSaveRequest(userId, solveId, saveOnComplete);
         long solveDeadlineNanos = solveDeadlineNanos(apiRequest);
 
@@ -161,7 +185,7 @@ final class SolveJobManager implements SolveJobOperations, AutoCloseable {
                 solveId,
                 saveOnComplete,
                 System.nanoTime() + solveDeadlineNanos,
-                solveProfile
+                solverSnapshot
         );
         jobsById.put(job.id, job);
         operationalMetrics.jobSubmitted();
@@ -264,7 +288,7 @@ final class SolveJobManager implements SolveJobOperations, AutoCloseable {
         long startedAt = System.nanoTime();
         try {
             var result = SolveCancellation.withDeadline(job.remainingNanos(), () ->
-                    solverProfiles.solverFor(job.disabledAlgorithms).solveWithProgress(request, progress -> {
+                    job.solverSnapshot.solver().solveWithProgress(request, progress -> {
                         SolveCancellation.throwIfCancelled();
                         job.updateProgress(progress);
                     })
@@ -276,7 +300,8 @@ final class SolveJobManager implements SolveJobOperations, AutoCloseable {
                         solveId,
                         requestedCrossFace,
                         result,
-                        job.disabledAlgorithms
+                        job.disabledAlgorithms,
+                        job.solverSnapshot
                     ))
                     : () -> {
                     };
@@ -424,6 +449,7 @@ final class SolveJobManager implements SolveJobOperations, AutoCloseable {
         private final Long solveId;
         private final boolean saveOnComplete;
         private final long expiresAtNanos;
+        private final SolverSnapshot solverSnapshot;
         private final List<String> disabledAlgorithms;
         private final AtomicLong statesExplored = new AtomicLong();
         private final AtomicLong statesPruned = new AtomicLong();
@@ -454,13 +480,14 @@ final class SolveJobManager implements SolveJobOperations, AutoCloseable {
         private boolean retained;
 
         private JobState(String id, String userId, Long solveId, boolean saveOnComplete, long expiresAtNanos,
-                         List<String> disabledAlgorithms) {
+                         SolverSnapshot solverSnapshot) {
             this.id = id;
             this.userId = userId;
             this.solveId = solveId;
             this.saveOnComplete = saveOnComplete;
             this.expiresAtNanos = expiresAtNanos;
-            this.disabledAlgorithms = List.copyOf(disabledAlgorithms);
+            this.solverSnapshot = java.util.Objects.requireNonNull(solverSnapshot, "solverSnapshot");
+            this.disabledAlgorithms = solverSnapshot.legacyDisabledAlgorithms();
         }
 
         private synchronized boolean markRunning() {

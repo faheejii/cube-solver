@@ -192,6 +192,7 @@ public class SpringHistoryPersistenceService {
         solution.setFullySolved(command.fullySolved());
         solution.setSolverVersion(command.solverVersion());
         solution.setDisabledAlgorithmsJson(command.disabledAlgorithmsJson());
+        solution.setAlgorithmManifestJson(command.algorithmManifestJson());
         solutions.upsert(solution);
         return solutions.findBySolveIdAndMode(command.solveId(), command.mode())
                 .map(saved -> toSavedSolution(saved, solve.getScramble()))

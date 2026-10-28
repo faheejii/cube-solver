@@ -273,6 +273,25 @@
     line-height: 1.5;
 }
 
+.confirmation-dialog-reason {
+    display: grid;
+    gap: 6px;
+    color: var(--text-soft);
+    font-size: 0.9rem;
+}
+
+.confirmation-dialog-reason textarea {
+    width: 100%;
+    min-height: 72px;
+    resize: vertical;
+    border: 1px solid var(--border);
+    border-radius: var(--button-radius);
+    background: var(--panel-raised);
+    color: var(--text);
+    padding: 9px 11px;
+    font: inherit;
+}
+
 .confirmation-dialog .confirmation-dialog-error {
     color: var(--red);
 }

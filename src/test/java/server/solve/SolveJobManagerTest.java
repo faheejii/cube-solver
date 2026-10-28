@@ -73,6 +73,22 @@ class SolveJobManagerTest {
     }
 
     @Test
+    void queuedJobUsesSolverCapturedAtSubmission() throws Exception {
+        var defaultSolver = new ControlledSolveService(new CountDownLatch(0));
+        var capturedSolver = new ControlledSolveService(new CountDownLatch(0));
+        var manager = manager(defaultSolver);
+        var snapshot = new SolverSnapshot(capturedSolver, 7L, List.of(), List.of(), List.of(), List.of(), "{}");
+
+        var job = manager.submit(new SolveApiRequest("R", "U", "greedy"), null, null, false, snapshot);
+
+        assertEquals("completed", waitForStatus(manager, job.id(), "completed").status());
+        assertEquals(0, defaultSolver.optimizedInvocations.get());
+        assertEquals(0, defaultSolver.fastInvocations.get());
+        assertEquals(0, capturedSolver.optimizedInvocations.get());
+        assertEquals(1, capturedSolver.fastInvocations.get());
+    }
+
+    @Test
     void cancel_shouldRemoveQueuedJobWithoutRunningIt() throws Exception {
         var optimizedRelease = new CountDownLatch(1);
         var service = new ControlledSolveService(optimizedRelease);
@@ -343,6 +359,7 @@ class SolveJobManagerTest {
         private final CountDownLatch optimizedRelease;
         private final boolean timeout;
         private final AtomicInteger optimizedInvocations = new AtomicInteger();
+        private final AtomicInteger fastInvocations = new AtomicInteger();
 
         private ControlledSolveService(CountDownLatch optimizedRelease) {
             this(optimizedRelease, false);
@@ -375,6 +392,8 @@ class SolveJobManagerTest {
                         SolveCancellation.throwIfCancelled();
                     }
                 }
+            } else {
+                fastInvocations.incrementAndGet();
             }
             var solved = new CfopStageResult("stage", "", 0, true, "ok");
             return new CfopSolveResult(

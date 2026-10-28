@@ -12,7 +12,12 @@ import type {
     LoginRequest,
     RegisterRequest,
     AlgorithmCatalogResponse,
+    AlgorithmDefinitionRequest,
+    AlgorithmDetail,
+    AlgorithmRevision,
+    AlgorithmValidationResult,
     SolverProfileResponse,
+    UserRole,
 } from "./types";
 import type {TimerPenalty} from "./hooks/useTimer";
 
@@ -76,6 +81,21 @@ async function requestJson<T>(
 
 export type SolveHistoryFilterOptions = {q?: string; time?: string; penalty?: "all" | "none" | "+2" | "dnf"};
 export type FilteredSolveHistoryResponse = SolveHistoryResponse & {totalCount: number};
+
+export type AdminManagedUser = {
+    id: number;
+    externalId: string;
+    displayName: string | null;
+    email: string;
+    role: UserRole;
+    protected: boolean;
+    updatedAt: string;
+};
+
+export type AdminUsersResponse = {
+    items: AdminManagedUser[];
+    nextCursor: string | null;
+};
 
 export async function register(request: RegisterRequest): Promise<AuthUser> {
     return requestJson<AuthUser>("/api/auth/register", jsonRequest("POST", request), false);
@@ -201,15 +221,62 @@ export async function fetchAlgorithms(filters?: {
     slot?: string;
     search?: string;
     status?: string;
+    cursor?: string | null;
+    limit?: number;
+    includeNonCanonical?: boolean;
+    scope?: string;
 }): Promise<AlgorithmCatalogResponse> {
-    const params = new URLSearchParams();
+    const params = new URLSearchParams({limit: String(filters?.limit ?? 20)});
     if (filters?.phase) params.set("phase", filters.phase);
     if (filters?.slot) params.set("slot", filters.slot);
     if (filters?.search) params.set("q", filters.search);
     if (filters?.status) params.set("status", filters.status);
+    if (filters?.cursor) params.set("cursor", filters.cursor);
+    if (filters?.includeNonCanonical) params.set("includeNonCanonical", "true");
+    if (filters?.scope) params.set("scope", filters.scope);
     const query = params.toString();
     return requestJson<AlgorithmCatalogResponse>(
         `/api/algorithms${query ? `?${query}` : ""}`
+    );
+}
+
+export async function fetchAlgorithmDetail(algorithmId: string): Promise<AlgorithmDetail> {
+    return requestJson<AlgorithmDetail>(`/api/algorithms/${encodeURIComponent(algorithmId)}`);
+}
+
+export async function validateAlgorithmDefinition(
+    definition: AlgorithmDefinitionRequest,
+): Promise<AlgorithmValidationResult> {
+    return requestJson<AlgorithmValidationResult>("/api/algorithms/validate", jsonRequest("POST", definition));
+}
+
+export async function createAlgorithm(
+    definition: AlgorithmDefinitionRequest,
+): Promise<AlgorithmRevision> {
+    return requestJson<AlgorithmRevision>("/api/algorithms", jsonRequest("POST", definition));
+}
+
+export async function createAlgorithmRevision(
+    algorithmId: string,
+    definition: AlgorithmDefinitionRequest,
+    expectedVersion: number,
+): Promise<AlgorithmRevision> {
+    return requestJson<AlgorithmRevision>(
+        `/api/algorithms/${encodeURIComponent(algorithmId)}/revisions`,
+        jsonRequest("POST", {definition, expectedVersion}),
+    );
+}
+
+export async function actOnAlgorithmRevision(
+    algorithmId: string,
+    revisionId: string,
+    action: string,
+    expectedVersion: number,
+    reason?: string,
+): Promise<AlgorithmRevision> {
+    return requestJson<AlgorithmRevision>(
+        `/api/algorithms/${encodeURIComponent(algorithmId)}/revisions/${encodeURIComponent(revisionId)}/actions`,
+        jsonRequest("POST", {action, expectedVersion, reason}),
     );
 }
 
@@ -217,6 +284,28 @@ export async function fetchAdminSolverProfile(): Promise<SolverProfileResponse> 
     return requestJson<SolverProfileResponse>("/api/admin/solver-profile");
 }
 
-export async function updateAdminSolverProfile(disabledAlgorithms: string[]): Promise<SolverProfileResponse> {
-    return requestJson<SolverProfileResponse>("/api/admin/solver-profile", jsonRequest("PUT", {disabledAlgorithms}));
+export async function updateAdminSolverProfile(profile: {
+    disabledAlgorithmIds?: string[];
+    enabledTrialRevisionIds?: string[];
+    disabledAlgorithms?: string[];
+}): Promise<SolverProfileResponse> {
+    return requestJson<SolverProfileResponse>("/api/admin/solver-profile", jsonRequest("PUT", profile));
+}
+
+export async function fetchAdminUsers(q = "", cursor?: string | null): Promise<AdminUsersResponse> {
+    const params = new URLSearchParams({limit: "20"});
+    if (q) params.set("q", q);
+    if (cursor) params.set("cursor", cursor);
+    return requestJson<AdminUsersResponse>(`/api/admin/users?${params.toString()}`);
+}
+
+export async function updateAdminUserRole(
+    userId: number,
+    role: UserRole,
+    expectedUpdatedAt: string,
+): Promise<AdminManagedUser> {
+    return requestJson<AdminManagedUser>(
+        `/api/admin/users/${encodeURIComponent(userId)}/role`,
+        jsonRequest("PATCH", {role, expectedUpdatedAt}),
+    );
 }
