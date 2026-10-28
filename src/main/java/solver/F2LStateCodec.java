@@ -3,10 +3,9 @@ package solver;
 import cfop.F2LGeometry.TargetSlot;
 import cfop.F2LPreservationMask;
 import cfop.F2LSlot;
-import cube.Corner;
 import cube.CubeOrientation;
 import cube.CubeState;
-import cube.Edge;
+import cube.Face;
 import cube.Move;
 import cube.OrientedCube;
 
@@ -18,20 +17,51 @@ final class F2LStateCodec {
     private F2LStateCodec() {
     }
 
-    static long encodeState(CubeState cube, Edge[] targetCross, TargetSlot targetSlot, List<TargetSlot> protectedSlots) {
-        long key = 0L;
-        int shift = 0;
-        for (var edge : targetCross) {
-            key |= ((long) encodeEdge(cube, edge)) << shift;
-            shift += 5;
+    static CompleteStateKey completeStateKey(
+            CubeState cube,
+            CubeOrientation orientation,
+            TargetSlot[] targetSlots,
+            List<TargetSlot> protectedSlots
+    ) {
+        var cubeKey = cubeKey(cube);
+        int protectedMask = 0;
+        for (int index = 0; index < targetSlots.length; index++) {
+            if (protectedSlots.contains(targetSlots[index])) {
+                protectedMask |= 1 << index;
+            }
         }
-        for (var slot : relevantSlots(targetSlot, protectedSlots)) {
-            key |= ((long) encodeCorner(cube, slot.corner())) << shift;
-            shift += 5;
-            key |= ((long) encodeEdge(cube, slot.edge())) << shift;
-            shift += 5;
+        int frame = orientation.faceAt(Face.U).ordinal()
+                | (orientation.faceAt(Face.R).ordinal() << 3)
+                | (orientation.faceAt(Face.F).ordinal() << 6);
+        return new CompleteStateKey(cubeKey.corners(), cubeKey.edges(), frame, protectedMask);
+    }
+
+    static CubeKey cubeKey(CubeState cube) {
+        long corners = 0L;
+        int cornerShift = 0;
+        for (int position = 0; position < cube.cornerPerm.length; position++) {
+            corners |= (long) (cube.cornerPerm[position] & 0x7) << cornerShift;
+            cornerShift += 3;
+            corners |= (long) (cube.cornerOri[position] & 0x3) << cornerShift;
+            cornerShift += 2;
         }
-        return key;
+
+        long edges = 0L;
+        int edgeShift = 0;
+        for (int position = 0; position < cube.edgePerm.length; position++) {
+            edges |= (long) (cube.edgePerm[position] & 0xf) << edgeShift;
+            edgeShift += 4;
+            edges |= (long) (cube.edgeOri[position] & 0x1) << edgeShift;
+            edgeShift++;
+        }
+
+        return new CubeKey(corners, edges);
+    }
+
+    record CubeKey(long corners, long edges) {
+    }
+
+    record CompleteStateKey(long corners, long edges, int frame, int protectedMask) {
     }
 
     static F2LPreservationMask preservationMaskFor(List<TargetSlot> protectedSlots, CubeOrientation orientation) {
@@ -59,21 +89,4 @@ final class F2LStateCodec {
         return slots;
     }
 
-    private static int encodeCorner(CubeState cube, Corner targetCorner) {
-        for (var position : Corner.values()) {
-            if (cube.cornerPerm[position.ordinal()] == targetCorner.ordinal()) {
-                return position.ordinal() | (cube.cornerOri[position.ordinal()] << 3);
-            }
-        }
-        throw new IllegalStateException("Missing F2L corner: " + targetCorner);
-    }
-
-    private static int encodeEdge(CubeState cube, Edge targetEdge) {
-        for (var position : Edge.values()) {
-            if (cube.edgePerm[position.ordinal()] == targetEdge.ordinal()) {
-                return position.ordinal() | (cube.edgeOri[position.ordinal()] << 4);
-            }
-        }
-        throw new IllegalStateException("Missing F2L edge: " + targetEdge);
-    }
 }

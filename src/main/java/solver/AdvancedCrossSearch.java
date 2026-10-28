@@ -9,12 +9,9 @@ import cube.Corner;
 import cube.CubeState;
 import cube.Edge;
 import cube.Face;
-import cube.LogicalFaceletView;
 import cube.Move;
 import cube.MoveApplier;
 import cube.OrientationFrames;
-import io.CubeConverter;
-import io.FaceletState;
 
 /** Searches for a cross with two or one F2L pairs before normal cross fallback. */
 final class AdvancedCrossSearch {
@@ -104,14 +101,7 @@ final class AdvancedCrossSearch {
 
     /** Maps stickers through the same logical-frame view used by the CFOP analyzers. */
     private static CubeState normalizeToFrame(CubeState state, cube.CubeOrientation orientation) {
-        var view = LogicalFaceletView.of(state, orientation);
-        var stickers = new cube.Face[Face.values().length][FaceletState.FACELET_COUNT_PER_FACE];
-        for (var face : Face.values()) {
-            for (var index = 0; index < FaceletState.FACELET_COUNT_PER_FACE; index++) {
-                stickers[face.ordinal()][index] = view.sticker(face, index);
-            }
-        }
-        return CubeConverter.toCubeState(new FaceletState(stickers));
+        return LogicalFrameNormalizer.normalize(state, orientation);
     }
 
     private static Algorithm search(

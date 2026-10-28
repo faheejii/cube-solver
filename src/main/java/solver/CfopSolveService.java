@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -407,37 +408,38 @@ public class CfopSolveService {
             Consumer<F2LSolver.F2LSearchProgress> optimizedProgressListener,
             BooleanSupplier shouldStop
     ) {
-        var continuation = baseline.continuation();
+        var bestContinuation = new AtomicReference<>(baseline.continuation());
         var latestProgress = new AtomicReference<>(new F2LSolver.F2LSearchProgress(
                 0, 0, 0, baseline.fastF2l().getMoveCount(), 0, 0,
-                baseline.crossResult().moveCount() + continuation.totalMoves()
+                baseline.crossResult().moveCount() + baseline.continuation().totalMoves()
         ));
-        var candidates = f2lSolver.solveOptimizedCandidates(
+        var evaluatedCandidates = new AtomicInteger();
+        f2lSolver.solveOptimizedCandidates(
                 new OrientedCube(baseline.postCrossCube().copy(), baseline.postCrossOrientation()),
                 progress -> {
                     latestProgress.set(progress);
                     optimizedProgressListener.accept(progress);
-                }, baseline.fastF2l(), shouldStop
+                }, baseline.fastF2l(), shouldStop,
+                candidate -> {
+                    if (shouldStop.getAsBoolean()) return -1;
+                    SolveCancellation.throwIfCancelled();
+                    var evaluated = evaluateContinuation(candidate, true);
+                    int evaluatedCount = evaluatedCandidates.incrementAndGet();
+                    bestContinuation.updateAndGet(current -> CONTINUATION_COMPARATOR.compare(evaluated, current) < 0
+                            ? evaluated : current);
+                    var currentBest = bestContinuation.get();
+                    int lowerBound = currentBest.fullySolved() ? currentBest.totalMoves() : -1;
+                    var progress = latestProgress.get();
+                    optimizedProgressListener.accept(new F2LSolver.F2LSearchProgress(
+                            progress.statesExplored(), progress.statesPruned(), progress.duplicateStates(),
+                            progress.bestMoves(), progress.completedCandidates(), evaluatedCount,
+                            baseline.crossResult().moveCount() + currentBest.totalMoves()
+                    ));
+                    return lowerBound;
+                },
+                baseline.continuation().fullySolved() ? baseline.continuation().totalMoves() : Integer.MAX_VALUE
         );
-        int evaluated = 0;
-        for (var candidate : candidates) {
-            if (shouldStop.getAsBoolean()) {
-                break;
-            }
-            SolveCancellation.throwIfCancelled();
-            var evaluatedContinuation = evaluateContinuation(candidate, true);
-            evaluated++;
-            if (CONTINUATION_COMPARATOR.compare(evaluatedContinuation, continuation) < 0) {
-                continuation = evaluatedContinuation;
-            }
-            var progress = latestProgress.get();
-            optimizedProgressListener.accept(new F2LSolver.F2LSearchProgress(
-                    progress.statesExplored(), progress.statesPruned(), progress.duplicateStates(),
-                    progress.bestMoves(), progress.completedCandidates(), evaluated,
-                    baseline.crossResult().moveCount() + continuation.totalMoves()
-            ));
-        }
-        return continuation;
+        return bestContinuation.get();
     }
 
     private CfopSolveResult resultFor(
