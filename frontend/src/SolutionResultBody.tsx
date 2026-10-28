@@ -215,5 +215,7 @@ function normalizedCross(value: string): string {
 }
 
 function crossQualityLabel(pairCount: number | null): string | null {
-    return pairCount == null ? null : ["Cross", "XCross", "XXCross", "XXXCross", "Full F2L"][pairCount] ?? null;
+    return pairCount == null || pairCount < 1 || pairCount > 4
+        ? null
+        : [null, "XCross", "XXCross", "XXXCross", "Full F2L"][pairCount] ?? null;
 }

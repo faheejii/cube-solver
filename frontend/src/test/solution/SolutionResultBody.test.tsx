@@ -44,12 +44,11 @@ const result: SolveResponse = {
 
 describe("SolutionResultBody F2L explanation", () => {
     it.each([
-        [0, "Cross"],
         [1, "XCross"],
         [2, "XXCross"],
         [3, "XXXCross"],
         [4, "Full F2L"],
-    ])("shows the cross quality label for %i solved pairs", (pairCount, label) => {
+    ])("shows the cross quality label for %i solved F2L pairs", (pairCount, label) => {
         render(<SolutionResultBody
             result={{...result, cross: {...result.cross, solvedF2lPairCount: pairCount}}}
             requestedCross="D"
@@ -58,10 +57,19 @@ describe("SolutionResultBody F2L explanation", () => {
         expect(screen.getByText(label)).toBeInTheDocument();
     });
 
+    it("does not show a cross quality label when the cross solves no F2L pairs", () => {
+        render(<SolutionResultBody
+            result={{...result, cross: {...result.cross, solvedF2lPairCount: 0}}}
+            requestedCross="D"
+        />);
+
+        expect(screen.queryByText("XCross")).not.toBeInTheDocument();
+        expect(screen.queryByText("Cross", {selector: ".solution-cross-quality"})).not.toBeInTheDocument();
+    });
+
     it("does not show a cross quality label when metadata is unavailable", () => {
         render(<SolutionResultBody result={result} requestedCross="D"/>);
 
-        expect(screen.queryByText("Cross", {selector: ".solution-cross-quality"})).not.toBeInTheDocument();
         expect(screen.queryByText("XCross")).not.toBeInTheDocument();
     });
 
