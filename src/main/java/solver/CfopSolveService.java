@@ -12,6 +12,7 @@ import cube.Algorithm;
 import cube.CubeOrientation;
 import cube.CubeState;
 import cube.Face;
+import cube.Move;
 import cube.MoveApplier;
 import cube.OrientedCube;
 import io.ScrambleParser;
@@ -20,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -109,7 +111,9 @@ public class CfopSolveService {
         var crossCandidates = new ArrayList<CrossCandidate>();
         for (var face : COLOR_NEUTRAL_FACES) {
             SolveCancellation.throwIfCancelled();
-            crossCandidates.add(new CrossCandidate(face, crossSolver.solve(scrambledCube, face)));
+            crossCandidates.add(new CrossCandidate(
+                    face, crossSolver.solve(scrambledCube, face, request.crossSearchOptions())
+            ));
         }
         crossCandidates.sort(Comparator
                 .comparingInt((CrossCandidate candidate) -> candidate.algorithm().getMoveCount())
@@ -158,7 +162,9 @@ public class CfopSolveService {
             var face = COLOR_NEUTRAL_FACES[index];
             publishProgress(progressListener, F2LSolver.SolvePhase.CROSS_EVALUATION, face,
                     index, COLOR_NEUTRAL_FACES.length, 0, 0, false, null);
-            crossCandidates.add(new CrossCandidate(face, crossSolver.solve(scrambledCube, face)));
+            crossCandidates.add(new CrossCandidate(
+                    face, solveAdvancedCrossOrFallback(crossSolver, scrambledCube, face, request.crossSearchOptions())
+            ));
             publishProgress(progressListener, F2LSolver.SolvePhase.CROSS_EVALUATION, face,
                     index + 1, COLOR_NEUTRAL_FACES.length, 0, 0, false, null);
         }
@@ -200,7 +206,7 @@ public class CfopSolveService {
         }
         baselines.sort(Comparator.comparing(
                 baseline -> resultFor(baseline, baseline.continuation(), F2LMode.OPTIMIZED, 0),
-                SOLUTION_COMPARATOR
+                COLOR_NEUTRAL_OPTIMIZED_COMPARATOR
         ));
 
         var best = baselines.get(0);
@@ -230,7 +236,7 @@ public class CfopSolveService {
                     () -> System.nanoTime() >= optimizationDeadlineNanos
             );
             var optimized = baseline.withContinuation(optimizedContinuation);
-            if (SOLUTION_COMPARATOR.compare(
+            if (COLOR_NEUTRAL_OPTIMIZED_COMPARATOR.compare(
                     resultFor(optimized, optimized.continuation(), F2LMode.OPTIMIZED, 0),
                     resultFor(best, best.continuation(), F2LMode.OPTIMIZED, 0)
             ) < 0) {
@@ -261,7 +267,23 @@ public class CfopSolveService {
             Consumer<F2LSolver.F2LSearchProgress> optimizedProgressListener,
             BooleanSupplier shouldStop
     ) {
-        var baseline = prepareFixedCross(request);
+        FixedCrossBaseline baseline;
+        if (request.f2lMode() == F2LMode.OPTIMIZED) {
+            long startTime = System.nanoTime();
+            publishProgress(optimizedProgressListener, F2LSolver.SolvePhase.CROSS_EVALUATION,
+                    request.crossFace(), 0, 1, 0, 0, false, null);
+            var scrambledCube = new CubeState();
+            MoveApplier.applyAlgorithm(scrambledCube, request.scramble());
+            var crossSolver = new CrossSolver();
+            var cross = solveAdvancedCrossOrFallback(
+                    crossSolver, scrambledCube, request.crossFace(), request.crossSearchOptions()
+            );
+            publishProgress(optimizedProgressListener, F2LSolver.SolvePhase.CROSS_EVALUATION,
+                    request.crossFace(), 1, 1, 0, 0, false, null);
+            baseline = prepareFixedCross(request.scramble(), new CrossCandidate(request.crossFace(), cross), startTime);
+        } else {
+            baseline = prepareFixedCross(request);
+        }
         var continuation = baseline.continuation();
         if (request.f2lMode() == F2LMode.OPTIMIZED) {
             long deadlineNanos = optimizationDeadlineNanos(request, System.nanoTime());
@@ -278,6 +300,16 @@ public class CfopSolveService {
             }
         }
         return resultFor(baseline, continuation, request.f2lMode(), System.nanoTime() - baseline.startTimeNanos());
+    }
+
+    private static Algorithm solveAdvancedCrossOrFallback(
+            CrossSolver crossSolver,
+            CubeState cube,
+            Face face,
+            CrossSearchOptions options
+    ) {
+        var advanced = crossSolver.solveOptimizedCross(cube, face, options);
+        return advanced == null ? crossSolver.solve(cube, face, options) : advanced.algorithm();
     }
 
     private static java.util.List<CrossCandidate> shortlistCrossCandidates(ArrayList<CrossCandidate> candidates) {
@@ -324,7 +356,7 @@ public class CfopSolveService {
         var cube = new CubeState();
         MoveApplier.applyAlgorithm(cube, request.scramble());
         return prepareFixedCross(request.scramble(), new CrossCandidate(
-                request.crossFace(), new CrossSolver().solve(cube, request.crossFace())
+                request.crossFace(), new CrossSolver().solve(cube, request.crossFace(), request.crossSearchOptions())
         ), startTime);
     }
 
@@ -347,12 +379,14 @@ public class CfopSolveService {
         // consumed by F2L exactly the orientation the user sees.
         var orientedCube = new OrientedCube(cube);
         orientedCube.applyMoves(crossSolution.getMoves());
+        var solvedF2lPairCount = CrossQualityAnalyzer.solvedF2lPairCount(orientedCube);
         var crossResult = new CfopStageResult(
                 "cross",
                 crossSolution.toString(),
                 crossSolution.getMoveCount(),
-                CrossAnalyzer.isCrossSolved(cube, orientedCube.orientation()),
-                "ok"
+                solvedF2lPairCount != null,
+                "ok",
+                solvedF2lPairCount
         );
 
         var postCrossCube = orientedCube.cubeState().copy();
@@ -374,37 +408,38 @@ public class CfopSolveService {
             Consumer<F2LSolver.F2LSearchProgress> optimizedProgressListener,
             BooleanSupplier shouldStop
     ) {
-        var continuation = baseline.continuation();
+        var bestContinuation = new AtomicReference<>(baseline.continuation());
         var latestProgress = new AtomicReference<>(new F2LSolver.F2LSearchProgress(
                 0, 0, 0, baseline.fastF2l().getMoveCount(), 0, 0,
-                baseline.crossResult().moveCount() + continuation.totalMoves()
+                baseline.crossResult().moveCount() + baseline.continuation().totalMoves()
         ));
-        var candidates = f2lSolver.solveOptimizedCandidates(
+        var evaluatedCandidates = new AtomicInteger();
+        f2lSolver.solveOptimizedCandidates(
                 new OrientedCube(baseline.postCrossCube().copy(), baseline.postCrossOrientation()),
                 progress -> {
                     latestProgress.set(progress);
                     optimizedProgressListener.accept(progress);
-                }, baseline.fastF2l(), shouldStop
+                }, baseline.fastF2l(), shouldStop,
+                candidate -> {
+                    if (shouldStop.getAsBoolean()) return -1;
+                    SolveCancellation.throwIfCancelled();
+                    var evaluated = evaluateContinuation(candidate, true);
+                    int evaluatedCount = evaluatedCandidates.incrementAndGet();
+                    bestContinuation.updateAndGet(current -> CONTINUATION_COMPARATOR.compare(evaluated, current) < 0
+                            ? evaluated : current);
+                    var currentBest = bestContinuation.get();
+                    int lowerBound = currentBest.fullySolved() ? currentBest.totalMoves() : -1;
+                    var progress = latestProgress.get();
+                    optimizedProgressListener.accept(new F2LSolver.F2LSearchProgress(
+                            progress.statesExplored(), progress.statesPruned(), progress.duplicateStates(),
+                            progress.bestMoves(), progress.completedCandidates(), evaluatedCount,
+                            baseline.crossResult().moveCount() + currentBest.totalMoves()
+                    ));
+                    return lowerBound;
+                },
+                baseline.continuation().fullySolved() ? baseline.continuation().totalMoves() : Integer.MAX_VALUE
         );
-        int evaluated = 0;
-        for (var candidate : candidates) {
-            if (shouldStop.getAsBoolean()) {
-                break;
-            }
-            SolveCancellation.throwIfCancelled();
-            var evaluatedContinuation = evaluateContinuation(candidate, true);
-            evaluated++;
-            if (CONTINUATION_COMPARATOR.compare(evaluatedContinuation, continuation) < 0) {
-                continuation = evaluatedContinuation;
-            }
-            var progress = latestProgress.get();
-            optimizedProgressListener.accept(new F2LSolver.F2LSearchProgress(
-                    progress.statesExplored(), progress.statesPruned(), progress.duplicateStates(),
-                    progress.bestMoves(), progress.completedCandidates(), evaluated,
-                    baseline.crossResult().moveCount() + continuation.totalMoves()
-            ));
-        }
-        return continuation;
+        return bestContinuation.get();
     }
 
     private CfopSolveResult resultFor(
@@ -582,6 +617,22 @@ public class CfopSolveService {
             .thenComparing(result -> result.cross().moveCount())
             .thenComparing(result -> result.cross().algorithm() + "|" + result.f2l().algorithm()
                     + "|" + result.oll().algorithm() + "|" + result.pll().algorithm());
+
+    private static final Comparator<CfopSolveResult> COLOR_NEUTRAL_OPTIMIZED_COMPARATOR = Comparator
+            .comparing(CfopSolveResult::fullySolved).reversed()
+            .thenComparingInt(CfopSolveService::lastLayerRotationCount)
+            .thenComparing(SOLUTION_COMPARATOR);
+
+    private static int lastLayerRotationCount(CfopSolveResult result) {
+        return rotationCount(result.oll().algorithm()) + rotationCount(result.pll().algorithm());
+    }
+
+    private static int rotationCount(String algorithm) {
+        if (algorithm == null || algorithm.isBlank()) {
+            return 0;
+        }
+        return (int) Algorithm.parse(algorithm).getMoves().stream().filter(Move::isCubeRotation).count();
+    }
 
     private record Continuation(
             CfopStageResult f2l,

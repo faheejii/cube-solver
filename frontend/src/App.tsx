@@ -4,6 +4,7 @@ import {CubePlaybackModeContext, CubePreviewModeContext} from "./CubePreviewMode
 import CrossFaceSelect from "./CrossFaceSelect";
 import ConfirmationDialog from "./ConfirmationDialog";
 import DashboardSidebar, {type DashboardView} from "./DashboardSidebar";
+import {canAccessCapability} from "./permissions";
 import SaveToast from "./SaveToast";
 import SolvePenaltyControl from "./SolvePenaltyControl";
 import StatisticsRail from "./StatisticsRail";
@@ -24,7 +25,7 @@ import {
 } from "./format";
 import {useHistoryData} from "./hooks/useHistoryData";
 import {useSolveProcesses} from "./hooks/useSolveProcesses";
-import {useSettings} from "./hooks/useSettings";
+import {crossSearchRequestPreferences, useSettings} from "./hooks/useSettings";
 import {generateScramble} from "./scrambleGenerator";
 import {INSPECTION_DNF_MS, INSPECTION_PLUS_TWO_MS, useTimer, type CompletedAttemptSnapshot, type TimerPenalty, type TimerPhase} from "./hooks/useTimer";
 import {isTerminalProcess} from "./jobs";
@@ -44,6 +45,7 @@ const SolutionResultBody = lazy(() => import("./SolutionResultBody"));
 const DEFAULT_SCRAMBLE = "R D R' D2 R D' R'";
 const ActiveSolutionsView = lazy(() => import("./ActiveSolutionsView"));
 const AlgorithmsView = lazy(() => import("./AlgorithmsView"));
+const UserManagementView = lazy(() => import("./UserManagementView"));
 const HistoryView = lazy(() => import("./HistoryView"));
 const SettingsView = lazy(() => import("./SettingsView"));
 const FACE_OPTIONS = [
@@ -61,7 +63,7 @@ type AttemptSaveStatus = "idle" | "saving" | "saved" | "error";
 type ModalStatus = "idle" | "loading" | "ready" | "error";
 type PendingModalAction = {type: "close"} | {type: "mode"; mode: F2LMode} | {type: "cross"; cross: string};
 
-export default function App({user, onLogout}: {user: AuthUser; onLogout: () => void}) {
+export default function App({user, onLogout, onUserRefresh}: {user: AuthUser; onLogout: () => void; onUserRefresh: () => Promise<void>}) {
     const [committedScramble, setCommittedScramble] = useState("");
     const [clientAttemptId, setClientAttemptId] = useState(() => crypto.randomUUID());
     const [draftScramble, setDraftScramble] = useState("");
@@ -110,6 +112,11 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
     const modalJobRequestIdRef = useRef(0);
     const modalLoadRequestIdRef = useRef(0);
     const modalReturnFocusRef = useRef<HTMLElement | SVGElement | null>(null);
+
+    useEffect(() => {
+        if (activeView === "algorithms" && !canAccessCapability(user.role, "algorithms.view")) setActiveView("timer");
+        if (activeView === "users" && !canAccessCapability(user.role, "users.manage")) setActiveView("timer");
+    }, [activeView, user.role]);
 
     useLayoutEffect(() => {
         if (modalStatus !== "idle") return;
@@ -213,6 +220,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
             crossFace,
             f2lMode,
             deadlineSeconds: settings.solveDeadlineSeconds,
+            ...crossSearchRequestPreferences(settings, f2lMode),
             ...deepColorNeutralRequest(crossFace, f2lMode, settings.deepColorNeutralOptimization),
         };
 
@@ -247,7 +255,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 void cancelSolveJob(jobId);
             }
         };
-    }, [committedScramble, crossFace, f2lMode, settings.solveDeadlineSeconds, settings.deepColorNeutralOptimization]);
+    }, [committedScramble, crossFace, f2lMode, settings.solveDeadlineSeconds, settings.deepColorNeutralOptimization, settings.fastAvoidBTurns, settings.optimizedAvoidBTurns]);
 
     useEffect(() => {
         if (timerPhase !== "stopped" || stoppedElapsedMs === null) {
@@ -405,6 +413,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 crossFace: requestedCross,
                 f2lMode: mode,
                 deadlineSeconds: settings.solveDeadlineSeconds,
+                ...crossSearchRequestPreferences(settings, mode),
                 ...deepColorNeutralRequest(requestedCross, mode, settings.deepColorNeutralOptimization),
                 solveId: autoSave ? detail.id : undefined,
                 saveOnComplete: autoSave,
@@ -665,6 +674,7 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                     crossFace: snapshot.crossFace,
                     f2lMode: snapshot.f2lMode,
                     deadlineSeconds: settings.solveDeadlineSeconds,
+                    ...crossSearchRequestPreferences(settings, snapshot.f2lMode),
                     ...deepColorNeutralRequest(snapshot.crossFace, snapshot.f2lMode, settings.deepColorNeutralOptimization),
                     solveId: savedAttempt.id,
                     saveOnComplete: true,
@@ -780,7 +790,11 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                 activeView={activeView}
                 activeProcessCount={processes.filter((process) => !isTerminalProcess(process)).length}
                 user={user}
-                onViewChange={(view) => setActiveView(view === "algorithms" && user.role !== "admin" ? "timer" : view)}
+                onViewChange={(view) => {
+                    if (view === "algorithms" && !canAccessCapability(user.role, "algorithms.view")) return;
+                    if (view === "users" && !canAccessCapability(user.role, "users.manage")) return;
+                    setActiveView(view);
+                }}
                 onLogout={onLogout}
             />
 
@@ -883,8 +897,10 @@ export default function App({user, onLogout}: {user: AuthUser; onLogout: () => v
                             />
                         ) : activeView === "settings" ? (
                             <SettingsView settings={settings} onChange={updateSettings}/>
-                        ) : activeView === "algorithms" && user.role === "admin" ? (
-                            <AlgorithmsView/>
+                        ) : activeView === "algorithms" && canAccessCapability(user.role, "algorithms.view") ? (
+                            <AlgorithmsView currentUser={user} onAuthorizationFailure={onUserRefresh}/>
+                        ) : activeView === "users" && canAccessCapability(user.role, "users.manage") ? (
+                            <UserManagementView currentUser={user} onAuthorizationFailure={onUserRefresh}/>
                         ) : (
                             <ActiveSolutionsView
                                 processes={processes}
@@ -1210,6 +1226,7 @@ function buildSaveSolutionRequest(
             pairs: result.f2l.pairs,
         },
         comparisonJson: result.comparison ?? null,
+        disabledAlgorithms: result.disabledAlgorithms ?? null,
     };
 }
 
@@ -1243,6 +1260,7 @@ function savedSolutionResult(scramble: string, saved: SavedSolution): SolveRespo
         totalMoveCount: saved.totalMoveCount,
         elapsedMs: saved.elapsedMs,
         comparison: saved.comparison ?? null,
+        disabledAlgorithms: saved.disabledAlgorithms ?? null,
     };
 }
 

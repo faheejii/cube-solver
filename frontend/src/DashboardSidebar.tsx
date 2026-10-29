@@ -1,7 +1,8 @@
-import {Activity, BookOpen, History, LogOut, Settings, Timer} from "lucide-react";
+import {Activity, BookOpen, History, LogOut, Settings, Timer, Users} from "lucide-react";
+import {canAccessCapability} from "./permissions";
 import type {AuthUser} from "./types";
 
-export type DashboardView = "timer" | "history" | "processes" | "algorithms" | "settings";
+export type DashboardView = "timer" | "history" | "processes" | "algorithms" | "users" | "settings";
 
 type Props = {
     activeView: DashboardView;
@@ -60,7 +61,7 @@ export default function DashboardSidebar({
                         <strong className="dashboard-nav-badge">{activeProcessCount}</strong>
                     ) : null}
                 </button>
-                {user.role === "admin" ? (
+                {canAccessCapability(user.role, "algorithms.view") ? (
                     <button
                         className={activeView === "algorithms" ? "dashboard-nav-item active" : "dashboard-nav-item"}
                         type="button"
@@ -68,6 +69,16 @@ export default function DashboardSidebar({
                     >
                         <BookOpen size={19}/>
                         <span>Algorithms</span>
+                    </button>
+                ) : null}
+                {canAccessCapability(user.role, "users.manage") ? (
+                    <button
+                        className={activeView === "users" ? "dashboard-nav-item active" : "dashboard-nav-item"}
+                        type="button"
+                        onClick={() => onViewChange("users")}
+                    >
+                        <Users size={19}/>
+                        <span>User management</span>
                     </button>
                 ) : null}
                 <button

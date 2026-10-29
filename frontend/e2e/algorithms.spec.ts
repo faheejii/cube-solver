@@ -9,7 +9,7 @@ test.describe("Algorithms access and catalog flow", () => {
 
         await page.getByRole("button", {name: "Algorithms"}).click();
         await expect(page.getByRole("heading", {name: "Algorithms"})).toBeVisible();
-        await expect(page.getByText("4 cases")).toBeVisible();
+        await expect(page.getByText("4 shown")).toBeVisible();
 
         const ollRow = page.locator(".algorithm-catalog-row").filter({hasText: "OLL Sune"});
         await expect(ollRow).toBeVisible();
@@ -21,6 +21,7 @@ test.describe("Algorithms access and catalog flow", () => {
 
         await ollRow.getByText("Details").click();
         await expect(ollRow.getByText("OLL facelets: UFR UR UBR")).toBeVisible();
+        await page.getByRole("dialog", {name: "Algorithm details"}).getByRole("button", {name: "Close"}).click();
 
         await ollRow.getByRole("button", {name: "Copy algorithm"}).click();
         await expect(ollRow.getByRole("button", {name: "Copied"})).toBeVisible();
@@ -31,11 +32,16 @@ test.describe("Algorithms access and catalog flow", () => {
         await expect(preview).toBeVisible();
         await expect(preview.getByText("Setup state:")).toBeVisible();
         await expect(preview.locator("[data-preview-setup]")).toHaveAttribute("data-preview-setup", "R U R' U R U2 R'");
+        await expect(preview.locator("[data-playback-state]")).toHaveAttribute("data-playback-state", "playing");
+        await preview.getByRole("button", {name: "Pause playback"}).click();
+        await expect(preview.locator("[data-playback-state]")).toHaveAttribute("data-playback-state", "paused");
+        await preview.getByRole("button", {name: "Play playback"}).click();
+        await expect(preview.locator("[data-playback-state]")).toHaveAttribute("data-playback-state", "playing");
         await preview.getByRole("button", {name: "Close"}).click();
         await expect(preview).toHaveCount(0);
 
         await page.getByLabel("Algorithm phase").selectOption("");
-        await page.getByLabel("Algorithm status").selectOption("experimental");
+        await page.getByLabel("Algorithm status").selectOption("my-experimental");
         await expect(page.getByText("Experimental insert")).toBeVisible();
         await expect(page.getByText("OLL Sune")).toHaveCount(0);
     });
@@ -46,5 +52,32 @@ test.describe("Algorithms access and catalog flow", () => {
 
         await expect(page.getByRole("button", {name: "Algorithms"})).toHaveCount(0);
         await expect(page.getByRole("heading", {name: "Algorithms"})).toHaveCount(0);
+    });
+
+    test("lets admins disable a canonical case for their own solver profile", async ({page}) => {
+        const api = await mockProductionApi(page, {user: adminUser});
+        await page.goto("/");
+        await page.getByRole("button", {name: "Algorithms"}).click();
+
+        const toggle = page.getByRole("checkbox", {name: "Disable OLL Sune for my solver"});
+        await expect(toggle).toBeEnabled();
+        await toggle.check();
+
+        await expect(page.getByText("Solver profile saved to your account.")).toBeVisible();
+        expect(api.requests.some((request) => request.method === "PUT"
+            && request.pathname === "/api/admin/solver-profile"
+            && JSON.stringify(request.body) === JSON.stringify({disabledAlgorithmIds: ["algorithm-3"], enabledTrialRevisionIds: []}))).toBe(true);
+    });
+
+    test("allows spaces in algorithm notation while the authoring dialog is open", async ({page}) => {
+        await mockProductionApi(page, {user: adminUser});
+        await page.goto("/");
+        await page.getByRole("button", {name: "Algorithms"}).click();
+        await page.getByRole("button", {name: "New algorithm"}).click();
+
+        const dialog = page.getByRole("dialog", {name: "New algorithm"});
+        const notation = dialog.getByLabel("Algorithm");
+        await notation.pressSequentially("R U R'");
+        await expect(notation).toHaveValue("R U R'");
     });
 });

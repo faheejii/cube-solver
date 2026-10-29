@@ -16,6 +16,7 @@ import database.persistence.repository.UserStatsJpaRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import solver.CfopStageResult;
+import solver.CrossQualityAnalyzer;
 import statistics.SolveStatistics;
 import statistics.SolveStatisticsCalculator;
 
@@ -110,7 +111,9 @@ public class SpringHistoryPersistenceService {
         return new SolveHistoryDetail(
                 solve.getId(), solve.getClientAttemptId(), solve.getScramble(), solve.getCrossFaceRequested(),
                 solve.getTimerMs(), solve.getOfficialMs(), solve.getPenalty(), solve.isDnf(), solve.getCreatedAt(),
-                solutions.findReadyBySolveId(solveId).stream().map(this::toSavedSolution).toList()
+                solutions.findReadyBySolveId(solveId).stream()
+                        .map(solution -> toSavedSolution(solution, solve.getScramble()))
+                        .toList()
         );
     }
 
@@ -188,9 +191,11 @@ public class SpringHistoryPersistenceService {
         solution.setSolveElapsedMs(command.solveElapsedMs());
         solution.setFullySolved(command.fullySolved());
         solution.setSolverVersion(command.solverVersion());
+        solution.setDisabledAlgorithmsJson(command.disabledAlgorithmsJson());
+        solution.setAlgorithmManifestJson(command.algorithmManifestJson());
         solutions.upsert(solution);
         return solutions.findBySolveIdAndMode(command.solveId(), command.mode())
-                .map(this::toSavedSolution)
+                .map(saved -> toSavedSolution(saved, solve.getScramble()))
                 .orElseThrow(() -> new IllegalStateException("Saved solution could not be reloaded"));
     }
 
@@ -241,16 +246,20 @@ public class SpringHistoryPersistenceService {
         return instant == null ? null : OffsetDateTime.ofInstant(instant, ZoneOffset.UTC);
     }
 
-    private SavedSolution toSavedSolution(SolveSolutionEntity solution) {
+    private SavedSolution toSavedSolution(SolveSolutionEntity solution, String scramble) {
         return new SavedSolution(
                 solution.getMode(), solution.getCrossFaceRequested(), solution.getCrossFaceChosen(),
                 solution.getF2lSetupCaseCount(), solution.getF2lInsertCaseCount(),
-                stage("cross", solution.getCrossAlgorithm(), solution.getCrossMoves(), solution.isCrossSolved(), solution.getCrossStatus()),
+                new CfopStageResult(
+                        "cross", solution.getCrossAlgorithm(), solution.getCrossMoves(), solution.isCrossSolved(),
+                        solution.getCrossStatus(), CrossQualityAnalyzer.solvedF2lPairCount(scramble, solution.getCrossAlgorithm())
+                ),
                 stage("f2l", solution.getF2lAlgorithm(), solution.getF2lMoves(), solution.isF2lSolved(), solution.getF2lStatus()),
                 stage("oll", solution.getOllAlgorithm(), solution.getOllMoves(), solution.isOllSolved(), solution.getOllStatus()),
                 stage("pll", solution.getPllAlgorithm(), solution.getPllMoves(), solution.isPllSolved(), solution.getPllStatus()),
                 solution.getSolvedF2LSlots(), solution.isFullySolved(), solution.getTotalMoves(), solution.getSolveElapsedMs(),
-                solution.getSolverVersion(), solution.getUpdatedAt(), solution.getF2lTraceJson(), solution.getComparisonJson()
+                solution.getSolverVersion(), solution.getUpdatedAt(), solution.getF2lTraceJson(), solution.getComparisonJson(),
+                solution.getDisabledAlgorithmsJson()
         );
     }
 

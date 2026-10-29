@@ -16,4 +16,19 @@ public interface UserJpaRepository extends JpaRepository<UserEntity, Long> {
               and user.passwordHash is not null
             """)
     Optional<UserEntity> findCredentialByEmail(@Param("email") String email);
+
+    @Query("""
+            select user from UserEntity user
+            where user.id > :afterId
+              and (:query = '' or locate(lower(:query), lower(coalesce(user.email, ''))) > 0
+                   or locate(lower(:query), lower(coalesce(user.displayName, ''))) > 0)
+            order by user.id asc
+            """)
+    java.util.List<UserEntity> searchAfter(
+            @Param("afterId") long afterId,
+            @Param("query") String query,
+            org.springframework.data.domain.Pageable pageable
+    );
+
+    long countByRole(String role);
 }

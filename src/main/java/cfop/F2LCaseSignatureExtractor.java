@@ -50,15 +50,40 @@ public final class F2LCaseSignatureExtractor {
         );
     }
 
+    /**
+     * Reuses a precomputed immutable sticker view for the exact same cube state.
+     * The caller must not supply a view built from a different cubie state.
+     */
+    public static F2LCaseSignature extract(
+            CubeState cube,
+            F2LSlot slot,
+            CubeOrientation orientation,
+            FaceletState facelets
+    ) {
+        var targetPair = targetPair(slot, orientation);
+        return extract(cube, targetPair.corner(), targetPair.edge(), orientation, facelets);
+    }
+
     public static F2LCaseSignature extract(CubeState cube, Corner targetCorner, Edge targetEdge, CubeOrientation orientation) {
+        var facelets = CubeConverter.toFaceletStateAllowingCenterParity(cube);
+        return extract(cube, targetCorner, targetEdge, orientation, facelets);
+    }
+
+    public static F2LCaseSignature extract(
+            CubeState cube,
+            Corner targetCorner,
+            Edge targetEdge,
+            CubeOrientation orientation,
+            FaceletState facelets
+    ) {
         var rawCornerPosition = findCornerPosition(cube, targetCorner);
         var rawEdgePosition = findEdgePosition(cube, targetEdge);
 
         return new F2LCaseSignature(
                 mapCornerPosition(rawCornerPosition, orientation),
-                cornerOrientation(cube, rawCornerPosition, targetCorner, orientation),
+                cornerOrientation(rawCornerPosition, targetCorner, orientation, facelets),
                 mapEdgePosition(rawEdgePosition, orientation),
-                edgeOrientation(cube, rawEdgePosition, targetEdge, orientation)
+                edgeOrientation(rawEdgePosition, targetEdge, orientation, facelets)
         );
     }
 
@@ -101,8 +126,7 @@ public final class F2LCaseSignatureExtractor {
         throw new IllegalStateException("Missing target edge: " + targetEdge);
     }
 
-    private static int edgeOrientation(CubeState cube, Edge rawPosition, Edge targetEdge, CubeOrientation orientation) {
-        FaceletState facelets = CubeConverter.toFaceletStateAllowingCenterParity(cube);
+    private static int edgeOrientation(Edge rawPosition, Edge targetEdge, CubeOrientation orientation, FaceletState facelets) {
         var logicalPositionFaces = edgeFaces(mapEdgePosition(rawPosition, orientation));
         var logicalTargetFirstColor = orientation.logicalFaceOf(edgeFaces(targetEdge)[0]);
         var refs = EDGE_FACELETS[rawPosition.ordinal()];
@@ -117,12 +141,11 @@ public final class F2LCaseSignatureExtractor {
 
     /** Corner orientation must be expressed in the current logical frame. */
     private static int cornerOrientation(
-            CubeState cube,
             Corner rawPosition,
             Corner targetCorner,
-            CubeOrientation orientation
+            CubeOrientation orientation,
+            FaceletState facelets
     ) {
-        FaceletState facelets = CubeConverter.toFaceletStateAllowingCenterParity(cube);
         var refs = CORNER_FACELETS[rawPosition.ordinal()];
         var logicalPositionFaces = cornerFaces(mapCornerPosition(rawPosition, orientation));
         var logicalTargetUpDownColor = orientation.logicalFaceOf(cornerFaces(targetCorner)[0]);

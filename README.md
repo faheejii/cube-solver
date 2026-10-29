@@ -24,7 +24,15 @@ The solver works on a cubie model, which means it tracks where the pieces are an
 
 Cross, F2L, OLL, and PLL all keep the live `OrientedCube` frame. The OLL and PLL databases expand logical cases into all 24 cube orientations at startup, so last-layer lookup stays frame-aware without a runtime canonicalization bridge. Low-level physical face-turn execution still happens through `MoveApplier.applyMove`.
 
-The application has two database-backed roles: `user` and `admin`. Normal users can solve, save, and review their own history. Administrators additionally receive the Algorithms tab and may read the canonical algorithm catalog. Role checks are enforced by the backend; hiding the navigation item is only a frontend convenience.
+The application has three database-backed roles: `user`, `maintainer`, and `admin`. Everyone can solve, save, and review their own history. Maintainers can use the Algorithms workspace to author experimental revisions and opt into eligible trial algorithms. Admins additionally manage roles and review/approve shared revisions for canonical use. Each maintainer or admin can disable canonical algorithms for their own solves. Backend permissions are authoritative; hidden navigation is only a frontend convenience.
+
+## Algorithm governance
+
+PostgreSQL is the live source of truth for algorithm identities, immutable revisions, workflow status, ownership, and audit events. The checked-in files in `src/main/resources/algorithms/` are the one-time installation seed and offline fixture catalog. A seed importer loads the 201 bundled definitions once and records its version/checksum; restarts do not overwrite database edits or restore deprecated entries.
+
+New UI-authored algorithms begin as private experimental revisions. Their author can opt into testing them in their own solver profile; experimental revisions are not globally deprecated. An author can withdraw a test-only revision back to experimental. Maintainers may explicitly opt into test-only revisions; an admin approves a specific revision before it becomes canonical. Only admins can globally deprecate shared test-only or canonical revisions. Deprecated revisions remain available for saved-solve provenance and inspection but are excluded from new solver contexts. Every solve job captures an immutable database catalog/profile snapshot before entering the queue, so later catalog or role changes affect only new jobs.
+
+The seed-backed public constructors and `SolverMain` remain available to offline tools and tests. They intentionally read the checked-in JSON and do not reflect live database governance changes.
 
 ## CFOP stages
 
@@ -40,6 +48,10 @@ Implemented:
 - face turns, slice moves, cube rotations, and lowercase wide moves
 - selected cross-face solving
 - color-neutral cross solving
+- Fast cross solving uses IDA* with a bundled cross-only pruning table; its B-turn restriction is configurable in Settings
+- Optimized fixed-cross and color-neutral modes use advanced cross search: per face, try XXCross up to 10 face turns, then XCross up to 8, then fall back to the regular cross solver
+- Optimized CN searches all six faces; regular CN builds baselines for its three shortest advanced crosses and optimizes two, while Deep CN evaluates all six completed solutions within its 120-second budget
+- a bundled reverse-BFS cross-plus-FR-pair pruning table, rotationally reused for any F2L slot by the advanced cross search
 - shared CFOP orchestration through `CfopSolveService`
 - default two-phase F2L solving with separate setup and insert databases
 - database-only F2L production solving with fail-fast miss diagnostics
@@ -52,9 +64,9 @@ Implemented:
 - solve API fields exposing F2L pair traces, move ranges, snapshots, orientations, case facts, selection evidence, and route comparisons
 - frontend F2L pair cards with deterministic explanation tags and individual pair-level cube playback
 - required F2L trace JSONB persistence and nullable Fast-versus-Optimized comparison metadata in saved solutions
-- versioned canonical F2L, OLL, and PLL JSON corpora under `src/main/resources/algorithms/` shared by solver loading and the left-panel Algorithms tab
-- read-only admin `/api/algorithms` catalog with phase, slot, status, and text filters, derived signatures, copy actions, expandable details, and cube previews
-- admin-only Algorithms tab with a compact responsive row list for F2L setup/insert, OLL, and PLL cases
+- versioned F2L, OLL, and PLL JSON installation seeds under `src/main/resources/algorithms/`, imported once into the live PostgreSQL catalog
+- maintainer/admin Algorithms workspace for experimental authoring, trial opt-in, shared testing, admin approval/deprecation, revision history, and cube previews
+- admin-only user management for assigning `user`, `maintainer`, and `admin` roles, with bootstrap/last-admin protections
 - AUF-only OLL and PLL lookup; all 24 frame variants are indexed at startup
 - bounded Fast and Optimized solve queues with cancellation support
 - a configurable 5–120 second end-to-end solver deadline with explicit timeout status
@@ -63,7 +75,7 @@ Implemented:
 - versioned PostgreSQL schema migrations through Flyway
 - pooled PostgreSQL connections and aggregate-based solve statistics
 - Java HTTP API and Vite/React frontend
-- browser-local Settings for the solver processing deadline, inspection behavior, deep color-neutral optimization, theme, and independent 2D/3D modes for the timer cube preview and solution playback
+- browser-local Settings for the solver processing deadline, inspection behavior, deep color-neutral optimization, independent B-turn restrictions for Fast and Optimized cross search, theme, and independent 2D/3D modes for the timer cube preview and solution playback
 - post-solve penalty controls in the Timer and History/solution views, allowing a saved solve to be changed between no penalty, +2, and DNF with statistics recalculated immediately; the Timer also lets users delete its displayed saved solve through the same confirmation flow as History
 - application-owned cube previews and playback driven by one authoritative cubie/sticker model, with WCA/cubing.js-compatible face, wide, slice, and rotation notation; previews can use the interactive Three.js renderer or a lightweight project-owned six-face SVG net
 
@@ -102,6 +114,26 @@ Run the focused F2L trace tests:
 ```bash
 mvn -q -Dtest=F2LTraceModelsTest,F2LGreedyTraceTest,F2LOptimizedTraceTest,F2LModeComparisonTest,F2LSolverTest test
 ```
+
+Regenerate the deterministic combined cross/pair pruning table only when its coordinate or move definition changes. This developer-only BFS uses roughly 400 MiB of heap and took about 23 seconds in the implementation environment; runtime varies by machine. It is not part of application startup or the standard test suite:
+
+```bash
+mvn -q -DskipTests package
+java -Xmx1g -cp target/classes solver.pruning.GenerateCombinedPruningTable
+```
+
+The generator writes the versioned, checksummed asset to `src/main/resources/solver/pruning/cross-fr.bin`. Runtime search loads this bundled table lazily. The configured overall solve deadline and cancellation still apply; the advanced cross search has no separate optimization time budget.
+
+Fast cross IDA* uses a separate cross-only reverse-BFS table (six goal-face orientations, 190,080 states each). It is small and generated offline when the cross coordinate or face-turn semantics change:
+
+```bash
+mvn -q -DskipTests package
+java -Xmx256m -cp target/classes solver.pruning.GenerateCrossPruningTable
+```
+
+The versioned, checksummed asset is `src/main/resources/solver/pruning/cross-only.bin` and is loaded lazily at runtime. BFS uses all 18 face turns for an admissible lower bound. The default Fast policy avoids B turns and tests four Y orientations; the default Optimized policy allows B turns and uses the existing unrestricted orientation. These defaults preserve previous solver behavior. Settings can independently enable B-turn avoidance for each mode.
+
+Cross search uses outer face turns only. The solver's general notation and playback still support wide turns for algorithm data and other cube workflows; cross-search algorithms never contain them.
 
 The API response includes additive F2L fields on the `f2l` stage when a trace is available:
 
@@ -193,15 +225,16 @@ The server exposes:
 - `PUT /api/solves/{id}/solutions/{mode}`
 - `GET /api/stats`
 - `GET /api/algorithms`
+- `DELETE /api/algorithms/{id}` for permanent deletion of an eligible private experimental algorithm lineage
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
 - `GET /api/auth/me`
 - static frontend files from `frontend/dist` when a frontend build exists
 
-Postgres remains optional for anonymous solver API calls. Accounts, authenticated job ownership, history, and statistics require `DATABASE_URL`. When configured, Flyway applies the initial schema during startup and the server fails clearly if initialization cannot complete. This pre-deployment schema is a fresh-start baseline: reset any prior local database before upgrading to it.
+PostgreSQL is required by the application server for its live algorithm catalog and solver contexts; it also stores accounts, authenticated job ownership, history, and statistics. Set `DATABASE_URL` before starting the server. Flyway applies the initial schema and subsequent forward migrations during startup, and startup/readiness reports catalog or database initialization failures instead of falling back to JSON for production solving. Existing database volumes with a valid Flyway history are upgraded in place; do not delete the volume to apply schema updates. If a database predates Flyway tracking or has manual schema edits, inspect and back it up before upgrading. The public seed-backed solver constructors remain available to offline tools without the live catalog.
 
-Set `ADMIN_EMAIL` to bootstrap an administrator. The matching account is promoted to `admin` during startup and newly registered accounts with that exact email are also assigned the admin role. All other registrations default to `user`; the role is never accepted from the registration request.
+Set `ADMIN_EMAIL` to bootstrap an administrator. The matching account is promoted to `admin` during startup and newly registered accounts with that exact email are also assigned the admin role. All other registrations default to `user`; the role is never accepted from the registration request. Admins can promote other accounts to `maintainer` or `admin` in the user-management view; the bootstrap account cannot be demoted and the last admin cannot be removed.
 
 Algorithm resources are organized by CFOP phase under `src/main/resources/algorithms/`:
 
@@ -216,9 +249,9 @@ algorithms/
     └── cases.json
 ```
 
-Each resource is versioned as `{ "version": "1", "cases": [...] }`. JSON is the source of algorithm identity and metadata; startup validation executes the algorithms to derive signatures and checks notation, duplicate names/signatures, preservation, completion, and orientation behavior. Production solving loads canonical cases only. Add a case to the appropriate resource, run the catalog/solver tests, review its derived metadata and cube preview in the admin Algorithms tab, and only then mark it canonical.
+Each installation seed is versioned as `{ "version": "1", "cases": [...] }`. On first startup, its 201 definitions receive deterministic catalog identities and immutable database revisions. PostgreSQL then owns live identity, definition, status, approval, and workflow history; subsequent restarts do not overwrite catalog edits. The seed files remain fixtures and the source for explicit future seed updates. Solver-index construction validates each selected snapshot and derives its signatures and orientation variants.
 
-The Algorithms tab is visible only to administrators. It supports phase, F2L slot, status, and text filters; copy-to-clipboard; expandable source/signature details; and `Test on cube`. Setup previews use their recorded source setup. OLL and PLL previews use generated inverse algorithms, while insert previews start from a solved cube when no setup is available.
+The Algorithms workspace is available to maintainers and admins. It supports phase, F2L slot, workflow scope/status, and text filters; copy-to-clipboard; revision details; authoring and validation; workflow actions; and `Test on cube`. Replaced Experimental or Test-only revisions become Superseded, remain in history, and cannot be enabled for new solves. An owner may permanently delete an entire algorithm lineage only if no revision was shared or approved and no saved solve manifest references it; deletion removes all revisions and workflow history and cannot be undone. Setup previews use their recorded source setup. OLL and PLL previews use generated inverse algorithms, while insert previews start from a solved cube when no setup is available. Maintainers can opt into their own experimental revisions and shared test-only revisions, and can disable canonical algorithms for their own solves. Admins can review submissions, approve revisions as canonical, globally deprecate/restore shared revisions, and manage account roles. Personal preferences use stable catalog/revision UUIDs through `GET`/`PUT /api/admin/solver-profile`; legacy `phase:name` disabled references remain accepted for compatibility. Each solve job captures its selected immutable catalog snapshot before queueing, and newly saved solutions include its revision/profile manifest.
 
 The app supports any PostgreSQL database, not just Neon. You can use:
 
@@ -292,6 +325,8 @@ That lets one timed solve keep separate Fast and Optimized solutions. Each mode 
 Deleting a solve uses `DELETE /api/solves/{id}`. The API derives ownership from the active session, cancels linked jobs, removes saved solutions through database cascade, and rebuilds user statistics before returning `204 No Content`.
 
 `GET /api/solves` accepts the existing `limit` and opaque `cursor` parameters plus optional `q`, `time`, and `penalty` filters. `q` is a literal, case-insensitive substring of the scramble. `time` matches displayed official times (`S.CC` or `M:SS.CC`), supports `*` wildcards and `DNF`, and a trailing `+` restricts a match to +2 solves; `q` and `time` cannot be combined. `penalty` is `all` (default), `none`, `+2`, or `dnf`. Results remain user-scoped and ordered newest-first by timestamp and ID. Responses include `totalCount` for the active filters alongside `items` and `nextCursor`.
+
+Solve and saved-solution responses include nullable `cross.solvedF2lPairCount`, derived by replaying the scramble and cross algorithm and counting solved F2L slots in the resulting frame. The value is `0` through `4`; the solution view labels these as Cross, XCross, XXCross, XXXCross, and Full F2L. A null value means the cross was not solved or its classification could not be derived. Saved responses derive it at read time, so existing records need no migration.
 
 ## Docker
 
@@ -391,7 +426,7 @@ Current frontend behavior:
 - optionally evaluates all six cross colors for Optimized + Color Neutral solves; this deep mode is disabled by default and uses a fixed two-minute budget
 - includes a timer with inspection behavior similar to common cube timers
 - presents solution dialogs as near-full-screen utility inspectors with joined cube/stage panes, bottom playback controls, stage navigation, and a speed dropdown
-- includes a Settings view where the processing deadline can be set from 5 to 120 seconds, inspection can be enabled or disabled, deep color-neutral optimization can be enabled, and the timer preview and solution playback can each be switched between 3D and a 2D six-face net; preferences are stored in the current browser
+- includes a Settings view where the processing deadline can be set from 5 to 120 seconds, inspection and deep color-neutral optimization can be toggled, Fast and Optimized B-turn avoidance can be configured independently, and the timer preview and solution playback can each be switched between 3D and a 2D six-face net; preferences are stored in the current browser
 - displays the current scramble and solution playback using their independently selected 3D or 2D cube modes
 - calculates best time, Ao5, Ao12, mean time, solve count, and DNF count from saved attempts; the global summary is shown above History, while the Statistics modal charts the latest 50 or all solves with metrics scoped to the selected range
 - saves completed attempts to Postgres and advances to the next scramble automatically
@@ -401,8 +436,8 @@ Current frontend behavior:
 - charts Time, Ao5, or Ao12 in the Statistics modal for either the latest 50 or all solves; chart points open the exact solve and preserve chart state and focus on return
 - supports permanent deletion of owned solves from the History tab or saved-solution modal, including the saved Fast and Optimized solutions
 - includes an Active Solutions page with live progress, result previews, retry, and termination
-- includes an admin-only Algorithms tab with a compact responsive case list, filters, copy actions, expandable details, and cube previews
-- hides admin navigation for normal users while retaining backend authorization for admin catalog access
+- includes a role-aware Algorithms workspace for maintainers/admins and admin-only user management
+- captures a database-backed algorithm catalog/profile snapshot for each new solve, while retaining backend authorization for every governance action
 - reveals the solution only when requested
 - keeps the Timer tab fixed to the viewport and opens animation plus solve details in an internal modal
 - supports per-stage playback and playback speed changes
@@ -464,7 +499,30 @@ mvn -q -Df2l.debug=true -Df2l.debug.verbose=true compile exec:java -Dexec.mainCl
 
 Missing F2L database cases fail immediately with the missing phase, slot, frame, and signature context so they can be seeded and reviewed deliberately. Before reporting a miss, F2L tries each slot-specific verified recovery trigger (`R U R'`, `L' U' L`, `R' U' R`, or `L U L'`) and accepts it only when it preserves the cross/protected pairs and exposes another database route.
 
-Optimized F2L search is bounded by both a production time budget and an internal state limit. For diagnostics, use `-Df2l.optimized.budget-seconds=60`; use a negative value only with `-Df2l.diagnostic=true` for an isolated unlimited-budget run. Search progress reports visited states, duplicate/pruned routes, frontier depth, and lookup/validation timings.
+Optimized F2L search is bounded by both a production time budget and an internal state limit. Its best-first estimate uses the existing cross-plus-pair pruning table when all configured setup, insert, and recovery moves fit the table's outer-turn metric; unsupported move families disable that estimate for the invocation. For diagnostics, use `-Df2l.optimization.budget-seconds=60`; use a negative value only with `-Df2l.diagnostic=true` for an isolated unlimited-budget run. Search progress reports visited states, duplicate/pruned routes, frontier depth, and lookup/validation timings.
+
+A manually invoked, deterministic benchmark compares Fast F2L, Optimized F2L, and full CFOP move totals on 100 seeded scrambles. It is excluded from normal Surefire discovery. Run it with:
+
+```bash
+mvn -q -DskipTests test-compile dependency:build-classpath -Dmdep.outputFile=/tmp/cube-solver-test-classpath.txt
+java -cp "target/test-classes:target/classes:$(cat /tmp/cube-solver-test-classpath.txt)" solver.F2LOptimizationBenchmark
+```
+
+The benchmark reports F2L search time separately from integrated OLL/PLL continuation evaluation, along with full CFOP move counts, completion, candidate counts, and available search counters. It also runs separate regression fixtures for recovery, a rotated frame, and one or two already-solved F2L pairs. Results are diagnostic and should be compared on an otherwise idle machine; they are not CI performance assertions.
+
+For CPU and allocation profiling, add `-XX:StartFlightRecording=filename=/tmp/f2l-optimization.jfr,settings=profile` to the benchmark's `java` command.
+
+For a quick paired screen of transition breadth, run the same 100 cases with a two-second per-solve cap and each candidate limit in a fresh JVM:
+
+```bash
+for limit in 8 16 32; do
+  java -Df2l.benchmark.budget-seconds=2 -Df2l.optimized.max-transitions="$limit" \
+  -cp "target/test-classes:target/classes:$(cat /tmp/cube-solver-test-classpath.txt)" \
+    solver.F2LOptimizationBenchmark > "/tmp/f2l-transitions-$limit.txt"
+done
+```
+
+The checked-in transition limit remains 8. On the 2026-10-27 seeded 100-case screen, 8 produced a 46.64-move mean full CFOP solution (49.46 at baseline) with 100/100 F2L completions in two repeated runs; 16 produced 47.95 moves and 99/100 completions in both runs, while 32 produced 49.94 moves and 88/100 completions. The broader limits were not promoted.
 
 ## Notation Support
 
@@ -535,15 +593,12 @@ API and server:
 
 - [`src/main/java/api/SolveApiRequest.java`](src/main/java/api/SolveApiRequest.java)
 - [`src/main/java/server/SpringCubeApplication.java`](src/main/java/server/SpringCubeApplication.java)
-- [`src/main/java/server/SpringAuthController.java`](src/main/java/server/SpringAuthController.java)
-- [`src/main/java/server/SpringHistoryController.java`](src/main/java/server/SpringHistoryController.java)
-- [`src/main/java/server/SpringSolveJobController.java`](src/main/java/server/SpringSolveJobController.java)
-- [`src/main/java/server/SpringStatisticsController.java`](src/main/java/server/SpringStatisticsController.java)
-- [`src/main/java/server/SpringAlgorithmController.java`](src/main/java/server/SpringAlgorithmController.java)
-- [`src/main/java/server/SpringSecurityConfiguration.java`](src/main/java/server/SpringSecurityConfiguration.java)
+- [`src/main/java/server/web/`](src/main/java/server/web/) contains package-private Spring MVC route handlers, security adapters, request/response policy, JSON serialization, and server wiring.
+- [`src/main/java/server/auth/`](src/main/java/server/auth/) contains authentication/session implementation behind `AuthOperations`.
+- [`src/main/java/server/solve/`](src/main/java/server/solve/) contains asynchronous solve-job orchestration behind `SolveJobOperations` and its persistence/executor implementation.
 - [`src/main/java/database/persistence/`](src/main/java/database/persistence/)
 
-The production backend runs through Spring Boot. Spring MVC owns request routing, Spring Security owns cookie authentication, Spring Data JPA owns persistence, and Flyway owns schema startup. `F2LSolver` owns F2L orchestration and trace flow, while `F2LOptimizedSearch` owns bounded optimized search and `F2LStateCodec` owns compact state encoding and frame execution. `LastLayerSolver` owns OLL/PLL stage execution and status handling.
+The production backend runs through Spring Boot, whose `server` component scan includes the server subpackages. Spring MVC owns request routing, Spring Security owns cookie authentication, Spring Data JPA owns persistence, and Flyway owns schema startup. Route handlers remain package-private in `server.web`; authentication and solve-job implementations cross package boundaries only through their focused operations contracts. Solver entry points and tightly coupled package-private search collaborators remain in `solver` to preserve their existing public names and visibility; pruning-table tooling stays in `solver.pruning`. `F2LSolver` owns F2L orchestration and trace flow, while `F2LOptimizedSearch` owns bounded optimized search and `F2LStateCodec` owns compact state encoding and frame execution. `LastLayerSolver` owns OLL/PLL stage execution and status handling.
 
 Frontend structure:
 

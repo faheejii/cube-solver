@@ -1,4 +1,4 @@
-import {useEffect, useId, useRef} from "react";
+import {useEffect, useId, useRef, type ReactNode} from "react";
 import {createPortal} from "react-dom";
 import {LoaderCircle} from "lucide-react";
 
@@ -10,7 +10,9 @@ type Props = {
     pendingLabel?: string;
     tone?: "danger" | "neutral";
     pending?: boolean;
+    confirmDisabled?: boolean;
     error?: string | null;
+    children?: ReactNode;
     onCancel: () => void;
     onConfirm: () => void;
 };
@@ -23,7 +25,9 @@ export default function ConfirmationDialog({
                                                pendingLabel = "Working…",
                                                tone = "neutral",
                                                pending = false,
+                                               confirmDisabled = false,
                                                error = null,
+                                               children,
                                                onCancel,
                                                onConfirm,
                                            }: Props) {
@@ -32,6 +36,7 @@ export default function ConfirmationDialog({
     const errorId = useId();
     const cancelRef = useRef<HTMLButtonElement>(null);
     const confirmRef = useRef<HTMLButtonElement>(null);
+    const dialogRef = useRef<HTMLElement>(null);
     const interactionRef = useRef({onCancel, pending});
     interactionRef.current = {onCancel, pending};
 
@@ -43,8 +48,11 @@ export default function ConfirmationDialog({
                 event.preventDefault();
                 interactionRef.current.onCancel();
             } else if (event.key === "Tab") {
-                const first = cancelRef.current;
-                const last = confirmRef.current;
+                const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+                    'button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+                );
+                const first = focusable?.item(0) ?? cancelRef.current;
+                const last = focusable?.item(focusable.length - 1) ?? confirmRef.current;
                 if (event.shiftKey && document.activeElement === first) {
                     event.preventDefault();
                     last?.focus();
@@ -72,6 +80,7 @@ export default function ConfirmationDialog({
             <section
                 className="confirmation-dialog"
                 role="alertdialog"
+                ref={dialogRef}
                 aria-modal="true"
                 aria-labelledby={titleId}
                 aria-describedby={descriptionId}
@@ -80,6 +89,7 @@ export default function ConfirmationDialog({
             >
                 <h2 id={titleId}>{title}</h2>
                 <p id={descriptionId}>{description}</p>
+                {children}
                 {error ? <p className="confirmation-dialog-error" id={errorId} role="alert">{error}</p> : null}
                 <div className="confirmation-dialog-actions">
                     <button ref={cancelRef} type="button" onClick={onCancel} disabled={pending}>{cancelLabel}</button>
@@ -88,7 +98,7 @@ export default function ConfirmationDialog({
                         className={tone === "danger" ? "danger" : "primary"}
                         type="button"
                         onClick={onConfirm}
-                        disabled={pending}
+                        disabled={pending || confirmDisabled}
                         aria-describedby={error ? errorId : undefined}
                     >
                         {pending ? <><LoaderCircle size={15}/> {pendingLabel}</> : confirmLabel}

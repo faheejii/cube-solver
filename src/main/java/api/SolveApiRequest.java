@@ -9,7 +9,8 @@ public record SolveApiRequest(
         String crossFace,
         String f2lMode,
         Long deadlineSeconds,
-        Boolean deepColorNeutral
+        Boolean deepColorNeutral,
+        Boolean avoidBTurns
 ) {
     public static final long DEFAULT_DEADLINE_SECONDS = 15L;
     public static final long MIN_DEADLINE_SECONDS = 5L;
@@ -21,15 +22,25 @@ public record SolveApiRequest(
     }
 
     public SolveApiRequest(String scramble, String crossFace, String f2lMode) {
-        this(scramble, crossFace, f2lMode, null, false);
+        this(scramble, crossFace, f2lMode, null, false, null);
     }
 
     public SolveApiRequest(String scramble, String crossFace, String f2lMode, Long deadlineSeconds) {
-        this(scramble, crossFace, f2lMode, deadlineSeconds, false);
+        this(scramble, crossFace, f2lMode, deadlineSeconds, false, null);
+    }
+
+    public SolveApiRequest(
+            String scramble,
+            String crossFace,
+            String f2lMode,
+            Long deadlineSeconds,
+            Boolean deepColorNeutral
+    ) {
+        this(scramble, crossFace, f2lMode, deadlineSeconds, deepColorNeutral, null);
     }
 
     public SolveApiRequest(String scramble, String crossFace) {
-        this(scramble, crossFace, null, null, false);
+        this(scramble, crossFace, null, null, false, null);
     }
 
     public long deadlineSecondsOrDefault() {
@@ -58,9 +69,13 @@ public record SolveApiRequest(
 
     public CfopSolveRequest toSolveRequest() {
         var mode = F2LMode.fromApiValue(f2lMode);
+        var defaults = solver.CrossSearchOptions.defaultsFor(mode);
+        var crossSearchOptions = new solver.CrossSearchOptions(
+                avoidBTurns == null ? defaults.avoidBTurns() : avoidBTurns
+        );
         if (crossFace != null && isColorNeutral(crossFace)) {
             return new CfopSolveRequest(
-                    scramble, Face.U, true, mode, isDeepColorNeutralRequest(), effectiveDeadlineSeconds()
+                    scramble, Face.U, true, mode, isDeepColorNeutralRequest(), effectiveDeadlineSeconds(), crossSearchOptions
             );
         }
 
@@ -68,7 +83,7 @@ public record SolveApiRequest(
                 ? Face.U
                 : Face.fromNotation(crossFace.trim().charAt(0));
         return new CfopSolveRequest(
-                scramble, face, false, mode, false, effectiveDeadlineSeconds()
+                scramble, face, false, mode, false, effectiveDeadlineSeconds(), crossSearchOptions
         );
     }
 

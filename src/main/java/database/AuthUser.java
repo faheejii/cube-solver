@@ -8,4 +8,8 @@ public record AuthUser(long id, String externalId, String email, String displayN
     public boolean isAdmin() {
         return "admin".equals(role);
     }
+
+    public boolean isMaintainer() {
+        return "maintainer".equals(role) || isAdmin();
+    }
 }

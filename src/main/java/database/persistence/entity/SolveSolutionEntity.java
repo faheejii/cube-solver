@@ -111,6 +111,12 @@ public class SolveSolutionEntity {
     private boolean fullySolved;
     @Column(name = "solver_version")
     private String solverVersion;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "disabled_algorithms_json", columnDefinition = "jsonb")
+    private String disabledAlgorithmsJson;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "algorithm_manifest_json", columnDefinition = "jsonb")
+    private String algorithmManifestJson;
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;
     @Column(name = "updated_at", nullable = false)
@@ -184,6 +190,10 @@ public class SolveSolutionEntity {
     public void setFullySolved(boolean value) { fullySolved = value; }
     public String getSolverVersion() { return solverVersion; }
     public void setSolverVersion(String value) { solverVersion = value; }
+    public String getDisabledAlgorithmsJson() { return disabledAlgorithmsJson; }
+    public void setDisabledAlgorithmsJson(String value) { disabledAlgorithmsJson = value; }
+    public String getAlgorithmManifestJson() { return algorithmManifestJson; }
+    public void setAlgorithmManifestJson(String value) { algorithmManifestJson = value; }
     public OffsetDateTime getCreatedAt() { return createdAt; }
     public OffsetDateTime getUpdatedAt() { return updatedAt; }
 

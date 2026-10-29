@@ -4,6 +4,7 @@ export type SolveStage = {
     moveCount: number;
     solved: boolean;
     status: string;
+    solvedF2lPairCount?: number | null;
 };
 
 export type CubeStateSnapshot = {
@@ -106,6 +107,7 @@ export type SolveResponse = {
     totalMoveCount: number;
     elapsedMs: number;
     comparison?: F2LModeComparison | null;
+    disabledAlgorithms?: string[] | null;
 };
 
 export type SolveRequest = {
@@ -126,10 +128,10 @@ export type F2LAlgorithmCatalogEntry = {
         cornerOrientation: number;
         edgePosition: string;
         edgeOrientation: number;
-    };
+    } | null;
     algorithm: string;
     sourceSetup: string | null;
-    status: "canonical" | "experimental" | "deprecated" | "test-only" | string;
+    status: "canonical" | "experimental" | "deprecated" | "superseded" | "test-only" | string;
     notes: string;
     previewSetup: string | null;
 };
@@ -143,34 +145,110 @@ export type LastLayerAlgorithmCatalogEntry = {
     signature: {
         kind: "oll" | "pll";
         [key: string]: string | boolean;
-    };
+    } | null;
     algorithm: string;
     sourceSetup: null;
     previewSetup: string;
-    status: "canonical" | "experimental" | "deprecated" | "test-only" | string;
+    status: "canonical" | "experimental" | "deprecated" | "superseded" | "test-only" | string;
     notes: string;
 };
 
 export type AlgorithmCatalogEntry = F2LAlgorithmCatalogEntry | LastLayerAlgorithmCatalogEntry;
 
+export type AlgorithmWorkspaceEntry = AlgorithmCatalogEntry & {
+    algorithmId: string;
+    revisionId: string;
+    revisionNumber: number;
+    revisionVersion: number;
+    ownerUserId: number | null;
+    trialEligible?: boolean;
+    permittedActions: string[];
+};
+
 export type AlgorithmCatalogResponse = {
     version: string;
-    items: AlgorithmCatalogEntry[];
+    items: AlgorithmWorkspaceEntry[];
+    nextCursor: string | null;
+};
+
+export type AlgorithmDefinitionRequest = {
+    phase: "setup" | "insert" | "oll" | "pll";
+    name: string;
+    algorithm: string;
+    notes: string;
+    slot?: string | null;
+    nonPreservedSlot?: string | null;
+    sourceSetup?: string | null;
+};
+
+export type AlgorithmValidationResult = {
+    valid: boolean;
+    phase: string;
+    name: string;
+    algorithm: string;
+    sourceSetup: string | null;
+    slot: string | null;
+    nonPreservedSlot: string | null;
+    validatorNote: string | null;
+};
+
+export type AlgorithmRevision = {
+    id: string;
+    algorithmId: string;
+    revisionNumber: number;
+    definitionJson: string;
+    authorUserId: number | null;
+    status: string;
+    createdAt: string;
+    version: number;
+    permittedActions?: string[];
+};
+
+export type AlgorithmWorkflowEvent = {
+    action: string;
+    actorUserId: number | null;
+    revisionId: string;
+    previousStatus: string | null;
+    newStatus: string | null;
+    reason: string | null;
+    occurredAt: string;
+};
+
+export type AlgorithmDetail = {
+    id: string;
+    phase: string;
+    name: string;
+    ownerUserId: number | null;
+    activeCanonicalRevisionId: string | null;
+    canCreateRevision?: boolean;
+    canDeleteExperimentalAlgorithm?: boolean;
+    revisions: AlgorithmRevision[];
+    history: AlgorithmWorkflowEvent[];
+};
+
+export type SolverProfileResponse = {
+    disabledAlgorithms: string[];
+    disabledAlgorithmIds?: string[];
+    enabledTrialRevisionIds?: string[];
+    inactiveTrialRevisionIds?: string[];
 };
 
 
 export type SolveJobRequest = SolveRequest & {
     deadlineSeconds?: number;
     deepColorNeutral?: boolean;
+    avoidBTurns?: boolean;
     solveId?: number;
     saveOnComplete?: boolean;
 };
+
+export type UserRole = "user" | "maintainer" | "admin";
 
 export type AuthUser = {
     id: string;
     email: string;
     displayName: string | null;
-    role: "user" | "admin" | string;
+    role: UserRole;
 };
 
 export type LoginRequest = {
@@ -201,6 +279,7 @@ export type SolveJob = {
     optimizationBudgetExpired: boolean;
     result: SolveResponse | null;
     error: string | null;
+    disabledAlgorithms?: string[];
 };
 
 export type SolutionProcessSource = "timer" | "history" | "background";
@@ -282,6 +361,7 @@ export type SavedSolution = Omit<SolveResponse, "scramble"> & {
     crossFaceRequested: string;
     solverVersion: string | null;
     updatedAt: string;
+    disabledAlgorithms?: string[] | null;
 };
 
 export type SolveHistoryDetail = {
@@ -329,4 +409,5 @@ export type SaveSolutionRequest = {
         pairs: F2LPair[];
     };
     comparisonJson?: F2LModeComparison | null;
+    disabledAlgorithms?: string[] | null;
 };

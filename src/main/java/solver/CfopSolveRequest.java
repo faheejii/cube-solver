@@ -8,7 +8,8 @@ public record CfopSolveRequest(
         boolean colorNeutralCross,
         F2LMode f2lMode,
         boolean deepColorNeutral,
-        Long optimizationDeadlineSeconds
+        Long optimizationDeadlineSeconds,
+        CrossSearchOptions crossSearchOptions
 ) {
     public CfopSolveRequest(String scramble, Face crossFace) {
         this(scramble, crossFace, false, F2LMode.GREEDY, false, null);
@@ -32,7 +33,19 @@ public record CfopSolveRequest(
             boolean colorNeutralCross,
             F2LMode f2lMode
     ) {
-        this(scramble, crossFace, colorNeutralCross, f2lMode, false, null);
+        this(scramble, crossFace, colorNeutralCross, f2lMode, false, null, null);
+    }
+
+    public CfopSolveRequest(
+            String scramble,
+            Face crossFace,
+            boolean colorNeutralCross,
+            F2LMode f2lMode,
+            boolean deepColorNeutral,
+            Long optimizationDeadlineSeconds
+    ) {
+        this(scramble, crossFace, colorNeutralCross, f2lMode, deepColorNeutral,
+                optimizationDeadlineSeconds, null);
     }
 
     public CfopSolveRequest {
@@ -44,6 +57,9 @@ public record CfopSolveRequest(
         }
         if (f2lMode == null) {
             f2lMode = F2LMode.GREEDY;
+        }
+        if (crossSearchOptions == null) {
+            crossSearchOptions = CrossSearchOptions.defaultsFor(f2lMode);
         }
         if (optimizationDeadlineSeconds != null
                 && (optimizationDeadlineSeconds < 5L || optimizationDeadlineSeconds > 120L)) {

@@ -197,7 +197,7 @@ export function useTimer({
     useEffect(() => {
         const handleKeyDown = (event: KeyboardEvent) => {
             if (overlayOpen || hasModalDialog()) {
-                if (event.code === "Space") {
+                if (event.code === "Space" && !isTextEntryTarget(event.target)) {
                     event.preventDefault();
                 }
                 cancelArmedTimer();
@@ -238,7 +238,7 @@ export function useTimer({
 
         const handleKeyUp = (event: KeyboardEvent) => {
             if (overlayOpen || hasModalDialog()) {
-                if (event.code === "Space") {
+                if (event.code === "Space" && !isTextEntryTarget(event.target)) {
                     event.preventDefault();
                 }
                 cancelArmedTimer();

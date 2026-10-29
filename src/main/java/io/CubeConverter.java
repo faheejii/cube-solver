@@ -5,6 +5,8 @@ import cube.CubeState;
 import cube.Edge;
 import cube.Face;
 
+import java.util.Arrays;
+
 public final class CubeConverter {
     private static final StickerRef[][] CORNER_FACELETS = {
             {sticker(Face.U, 8), sticker(Face.R, 0), sticker(Face.F, 2)}, // URF
@@ -107,7 +109,10 @@ public final class CubeConverter {
     }
 
     private static FaceletState buildFaceletState(CubeState cube) {
-        FaceletState facelets = new FaceletState();
+        Face[][] stickers = new Face[FaceletState.FACE_COUNT][FaceletState.FACELET_COUNT_PER_FACE];
+        for (Face face : Face.values()) {
+            Arrays.fill(stickers[face.ordinal()], face);
+        }
 
         for (Corner position : Corner.values()) {
             Corner cubie = Corner.values()[cube.cornerPerm[position.ordinal()]];
@@ -116,7 +121,7 @@ public final class CubeConverter {
             StickerRef[] refs = CORNER_FACELETS[position.ordinal()];
 
             for (int i = 0; i < refs.length; i++) {
-                facelets = facelets.withSticker(refs[i].face, refs[i].index, colors[mod(i - orientation, 3)]);
+                stickers[refs[i].face.ordinal()][refs[i].index] = colors[mod(i - orientation, 3)];
             }
         }
 
@@ -127,11 +132,11 @@ public final class CubeConverter {
             StickerRef[] refs = EDGE_FACELETS[position.ordinal()];
 
             for (int i = 0; i < refs.length; i++) {
-                facelets = facelets.withSticker(refs[i].face, refs[i].index, colors[mod(i - orientation, 2)]);
+                stickers[refs[i].face.ordinal()][refs[i].index] = colors[mod(i - orientation, 2)];
             }
         }
 
-        return facelets;
+        return new FaceletState(stickers);
     }
 
     private static Face[] readCornerStickers(FaceletState facelets, Corner position) {
