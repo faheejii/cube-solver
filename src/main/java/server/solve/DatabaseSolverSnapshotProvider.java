@@ -8,7 +8,6 @@ import database.algorithms.AlgorithmCatalogAlgorithmEntity;
 import database.algorithms.AlgorithmCatalogAlgorithmJpaRepository;
 import database.algorithms.AlgorithmCatalogRevisionEntity;
 import database.algorithms.AlgorithmCatalogRevisionJpaRepository;
-import database.algorithms.AlgorithmCatalogStateJpaRepository;
 import database.algorithms.UserDisabledAlgorithmJpaRepository;
 import database.algorithms.UserEnabledTrialRevisionJpaRepository;
 import org.springframework.stereotype.Service;
@@ -34,7 +33,6 @@ public class DatabaseSolverSnapshotProvider {
 
     private final AlgorithmCatalogAlgorithmJpaRepository algorithms;
     private final AlgorithmCatalogRevisionJpaRepository revisions;
-    private final AlgorithmCatalogStateJpaRepository catalogState;
     private final UserDisabledAlgorithmJpaRepository disabledPreferences;
     private final UserEnabledTrialRevisionJpaRepository trialPreferences;
     private final ObjectMapper mapper;
@@ -43,14 +41,12 @@ public class DatabaseSolverSnapshotProvider {
     public DatabaseSolverSnapshotProvider(
             AlgorithmCatalogAlgorithmJpaRepository algorithms,
             AlgorithmCatalogRevisionJpaRepository revisions,
-            AlgorithmCatalogStateJpaRepository catalogState,
             UserDisabledAlgorithmJpaRepository disabledPreferences,
             UserEnabledTrialRevisionJpaRepository trialPreferences,
             ObjectMapper mapper
     ) {
         this.algorithms = algorithms;
         this.revisions = revisions;
-        this.catalogState = catalogState;
         this.disabledPreferences = disabledPreferences;
         this.trialPreferences = trialPreferences;
         this.mapper = mapper;
@@ -58,9 +54,6 @@ public class DatabaseSolverSnapshotProvider {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public SolverSnapshot capture(AuthUser user) {
-        var version = catalogState.findById((short) 1)
-                .orElseThrow(() -> new IllegalStateException("Algorithm catalog state row is missing"))
-                .getCatalogVersion();
         var roots = algorithms.findAll();
         var rootsById = new LinkedHashMap<UUID, AlgorithmCatalogAlgorithmEntity>();
         roots.forEach(root -> rootsById.put(root.getId(), root));
@@ -133,8 +126,8 @@ public class DatabaseSolverSnapshotProvider {
         var enabledTrials = eligibleTrialsByRoot.entrySet().stream()
                 .filter(entry -> entry.getValue().size() == 1)
                 .map(entry -> entry.getValue().getFirst().getId()).sorted().toList();
-        var manifest = manifest(version, user, identities, disabledIds, enabledTrials);
-        return new SolverSnapshot(solver, version, identities, disabledIds.stream().sorted().toList(),
+        var manifest = manifest(user, identities, disabledIds, enabledTrials);
+        return new SolverSnapshot(solver, identities, disabledIds.stream().sorted().toList(),
                 enabledTrials, legacyNames, manifest);
     }
 
@@ -188,14 +181,12 @@ public class DatabaseSolverSnapshotProvider {
     }
 
     private String manifest(
-            long version,
             AuthUser user,
             List<SolverSnapshot.AlgorithmRevisionIdentity> identities,
             Collection<UUID> disabledIds,
             List<UUID> enabledTrials
     ) {
         var manifest = new LinkedHashMap<String, Object>();
-        manifest.put("catalogVersion", version);
         manifest.put("role", user == null ? "anonymous" : user.role());
         manifest.put("algorithms", identities);
         manifest.put("disabledAlgorithmIds", disabledIds.stream().sorted().toList());

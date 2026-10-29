@@ -18,7 +18,7 @@ class DatabaseMigrationIntegrationTest {
             try (var connection = database.openConnection(); var statement = connection.createStatement()) {
                 try (var result = statement.executeQuery("SELECT COUNT(*) FROM flyway_schema_history WHERE success")) {
                     assertTrue(result.next());
-                    assertEquals(6, result.getInt(1));
+                    assertEquals(7, result.getInt(1));
                 }
                 try (var result = statement.executeQuery("""
                         SELECT COUNT(*)
@@ -59,6 +59,16 @@ class DatabaseMigrationIntegrationTest {
                         """)) {
                     assertTrue(result.next());
                     assertEquals(4, result.getInt(1));
+                }
+                try (var result = statement.executeQuery("""
+                        SELECT COUNT(*)
+                        FROM information_schema.columns
+                        WHERE table_schema = current_schema()
+                          AND table_name = 'algorithm_catalog_state'
+                          AND column_name = 'catalog_version'
+                        """)) {
+                    assertTrue(result.next());
+                    assertEquals(0, result.getInt(1));
                 }
                 try (var result = statement.executeQuery("""
                         SELECT COUNT(*)

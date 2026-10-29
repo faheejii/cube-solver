@@ -13,8 +13,6 @@ public class AlgorithmCatalogStateEntity {
     @Id
     @Column(name = "singleton_id")
     private short singletonId;
-    @Column(name = "catalog_version", nullable = false)
-    private long catalogVersion;
     @Column(name = "seed_version")
     private String seedVersion;
     @Column(name = "seed_checksum")
@@ -29,7 +27,6 @@ public class AlgorithmCatalogStateEntity {
     }
 
     public short getSingletonId() { return singletonId; }
-    public long getCatalogVersion() { return catalogVersion; }
     public String getSeedVersion() { return seedVersion; }
     public String getSeedChecksum() { return seedChecksum; }
     public OffsetDateTime getInitializedAt() { return initializedAt; }
@@ -38,6 +35,5 @@ public class AlgorithmCatalogStateEntity {
         this.seedVersion = version;
         this.seedChecksum = checksum;
         this.initializedAt = at;
-        this.catalogVersion++;
     }
 }

@@ -80,7 +80,6 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
     const [loadingMore, setLoadingMore] = useState(false);
     const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
     const [catalogReload, setCatalogReload] = useState(0);
-    const [catalogVersion, setCatalogVersion] = useState<number | null>(null);
     const [catalogNotice, setCatalogNotice] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
     const [actionPendingId, setActionPendingId] = useState<string | null>(null);
@@ -166,7 +165,6 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
                 if (disposed || listRequestId.current !== requestId) return;
                 setEntries(response.items);
                 setCursor(response.nextCursor);
-                setCatalogVersion(response.catalogVersion);
             })
             .catch((requestError) => {
                 if (!disposed && listRequestId.current === requestId) {
@@ -214,7 +212,6 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
                 return [...current, ...response.items.filter((entry) => !knownRevisions.has(entry.revisionId))];
             });
             setCursor(response.nextCursor);
-            setCatalogVersion(response.catalogVersion);
         } catch (requestError) {
             if (listRequestId.current === requestId) {
                 if (!refreshAfterForbidden(requestError)) {
@@ -543,7 +540,6 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
             {error ? <div className="dashboard-alert error">{error}</div> : null}
             {catalogNotice ? <div className="dashboard-alert success" role="status">{catalogNotice}</div> : null}
             {actionError ? <div className="dashboard-alert error" role="alert">{actionError}</div> : null}
-            {catalogVersion !== null ? <span className="algorithm-catalog-version">Catalog version {catalogVersion}</span> : null}
             {loading ? <div className="history-loading"><LoaderCircle size={20}/> Loading algorithms</div> : null}
             {!loading && !error && visibleEntries.length === 0
                 && !(status === "disabled" && (profileLoading || profileLoadError)) ? (

@@ -100,9 +100,7 @@ final class JsonSupport {
     static String algorithmWorkspaceCatalogJson(server.catalog.AlgorithmWorkspaceCatalogService.CatalogPage page) {
         var builder = new StringBuilder("{\"version\":\"")
                 .append(escape(AlgorithmCaseCatalog.VERSION))
-                .append("\",\"catalogVersion\":")
-                .append(page.version())
-                .append(",\"nextCursor\":")
+                .append("\",\"nextCursor\":")
                 .append(nullableString(page.nextCursor()))
                 .append(",\"items\":[");
         for (int i = 0; i < page.items().size(); i++) {

@@ -24,7 +24,6 @@ vi.mock("../../api", () => ({
     })),
     fetchAlgorithms: vi.fn(async () => ({
         version: "1",
-        catalogVersion: 7,
         nextCursor: null,
         items: [{
             algorithmId: "algorithm-setup", revisionId: "revision-setup", revisionNumber: 1, revisionVersion: 1, ownerUserId: null, trialEligible: false, permittedActions: [],
@@ -112,7 +111,7 @@ function renderAlgorithmsView() {
 describe("AlgorithmsView", () => {
     beforeEach(() => {
         vi.mocked(fetchAlgorithms).mockReset().mockImplementation(async (): Promise<AlgorithmCatalogResponse> => ({
-            version: "1", catalogVersion: 7, nextCursor: null, items: [
+            version: "1", nextCursor: null, items: [
                 {algorithmId: "algorithm-setup", revisionId: "revision-setup", revisionNumber: 1, revisionVersion: 1, ownerUserId: null, permittedActions: [], phase: "setup", name: "case-26.1-FR", slot: null, nonPreservedSlot: "FR", preservedSlots: ["FL", "BL"], signature: {kind: "f2l-setup", cornerPosition: "URF", cornerOrientation: 0, edgePosition: "BR", edgeOrientation: 1}, algorithm: "R U' R'", sourceSetup: "R U R' F R' F' R U", status: "canonical", notes: "", previewSetup: "R U R' F R' F' R U"},
                 {algorithmId: "algorithm-oll", revisionId: "revision-oll", revisionNumber: 1, revisionVersion: 1, ownerUserId: null, permittedActions: [], phase: "oll", name: "case-1", slot: null, nonPreservedSlot: null, preservedSlots: [], signature: {kind: "oll", u0: true, u1: false}, algorithm: "R U2 R2 F R F' U2 R' F R F'", sourceSetup: null, previewSetup: "F R' F' R U2 F R' F' R2 U2 R'", status: "canonical", notes: ""},
                 {algorithmId: "algorithm-pll", revisionId: "revision-pll", revisionNumber: 1, revisionVersion: 1, ownerUserId: null, permittedActions: [], phase: "pll", name: "case-1-pll", slot: null, nonPreservedSlot: null, preservedSlots: [], signature: {kind: "pll", urfPiece: "URF", uflPiece: "UFL", ulbPiece: "ULB", ubrPiece: "UBR"}, algorithm: "M2 U M2 U2 M2 U M2", sourceSetup: null, previewSetup: "M2 U' M2 U2 M2 U' M2", status: "canonical", notes: ""},
@@ -203,7 +202,6 @@ describe("AlgorithmsView", () => {
     it("uses personal opt-in for experimental algorithms without disable or deprecate actions", async () => {
         vi.mocked(fetchAlgorithms).mockResolvedValueOnce({
             version: "1",
-            catalogVersion: 7,
             nextCursor: null,
             items: [{
                 algorithmId: "algorithm-exp", revisionId: "revision-exp", revisionNumber: 1, revisionVersion: 1, ownerUserId: 1, trialEligible: true, permittedActions: ["submit"],
@@ -295,8 +293,8 @@ describe("AlgorithmsView", () => {
 
     it("loads the next cursor page and appends only new revisions", async () => {
         vi.mocked(fetchAlgorithms)
-            .mockResolvedValueOnce({version: "1", catalogVersion: 7, nextCursor: "cursor-1", items: [{algorithmId: "a", revisionId: "r1", revisionNumber: 1, revisionVersion: 2, ownerUserId: 1, permittedActions: [], phase: "oll", name: "first", slot: null, nonPreservedSlot: null, preservedSlots: [], signature: {kind: "oll", u0: true}, algorithm: "R U R'", sourceSetup: null, previewSetup: "R U' R'", status: "canonical", notes: ""}]})
-            .mockResolvedValueOnce({version: "1", catalogVersion: 7, nextCursor: null, items: [
+            .mockResolvedValueOnce({version: "1", nextCursor: "cursor-1", items: [{algorithmId: "a", revisionId: "r1", revisionNumber: 1, revisionVersion: 2, ownerUserId: 1, permittedActions: [], phase: "oll", name: "first", slot: null, nonPreservedSlot: null, preservedSlots: [], signature: {kind: "oll", u0: true}, algorithm: "R U R'", sourceSetup: null, previewSetup: "R U' R'", status: "canonical", notes: ""}]})
+            .mockResolvedValueOnce({version: "1", nextCursor: null, items: [
                 {algorithmId: "a", revisionId: "r1", revisionNumber: 1, revisionVersion: 2, ownerUserId: 1, permittedActions: [], phase: "oll", name: "first", slot: null, nonPreservedSlot: null, preservedSlots: [], signature: {kind: "oll", u0: true}, algorithm: "R U R'", sourceSetup: null, previewSetup: "R U' R'", status: "canonical", notes: ""},
                 {algorithmId: "b", revisionId: "r2", revisionNumber: 1, revisionVersion: 1, ownerUserId: 1, permittedActions: [], phase: "pll", name: "second", slot: null, nonPreservedSlot: null, preservedSlots: [], signature: {kind: "pll", urfPiece: "URF"}, algorithm: "U", sourceSetup: null, previewSetup: "U'", status: "test-only", notes: ""},
             ]});
@@ -309,7 +307,7 @@ describe("AlgorithmsView", () => {
     });
 
     it("shows only permitted workflow actions and loads revision details", async () => {
-        vi.mocked(fetchAlgorithms).mockResolvedValueOnce({version: "1", catalogVersion: 8, nextCursor: null, items: [{
+        vi.mocked(fetchAlgorithms).mockResolvedValueOnce({version: "1", nextCursor: null, items: [{
             algorithmId: "algorithm-1", revisionId: "revision-1", revisionNumber: 2, revisionVersion: 3, ownerUserId: 1,
             permittedActions: ["submit"], phase: "oll", name: "draft", slot: null, nonPreservedSlot: null,
             preservedSlots: [], signature: {kind: "oll", u0: true}, algorithm: "R U R'", sourceSetup: null,
@@ -327,7 +325,7 @@ describe("AlgorithmsView", () => {
     });
 
     it("requires a reason before an admin can return a revision for changes", async () => {
-        vi.mocked(fetchAlgorithms).mockResolvedValueOnce({version: "1", catalogVersion: 8, nextCursor: null, items: [{
+        vi.mocked(fetchAlgorithms).mockResolvedValueOnce({version: "1", nextCursor: null, items: [{
             algorithmId: "algorithm-review", revisionId: "revision-review", revisionNumber: 2, revisionVersion: 4, ownerUserId: 1,
             permittedActions: ["request-changes"], phase: "oll", name: "review-case", slot: null, nonPreservedSlot: null,
             preservedSlots: [], signature: {kind: "oll", u0: true}, algorithm: "R U R'", sourceSetup: null,
@@ -347,7 +345,7 @@ describe("AlgorithmsView", () => {
     });
 
     it("confirms restoring a previously approved revision", async () => {
-        vi.mocked(fetchAlgorithms).mockResolvedValueOnce({version: "1", catalogVersion: 8, nextCursor: null, items: [{
+        vi.mocked(fetchAlgorithms).mockResolvedValueOnce({version: "1", nextCursor: null, items: [{
             algorithmId: "algorithm-restore", revisionId: "revision-restore", revisionNumber: 1, revisionVersion: 5, ownerUserId: 1,
             permittedActions: ["restore"], phase: "pll", name: "retired-case", slot: null, nonPreservedSlot: null,
             preservedSlots: [], signature: {kind: "pll", urfPiece: "URF"}, algorithm: "U", sourceSetup: null,

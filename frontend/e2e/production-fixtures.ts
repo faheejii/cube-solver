@@ -376,7 +376,7 @@ export async function mockProductionApi(page: Page, options: MockApiOptions = {}
                 && (!query || `${entry.name} ${entry.algorithm}`.toLowerCase().includes(query))
                 && statusMatches(entry)
             );
-            await json(route, {version: "1", catalogVersion: 1, items: filtered, nextCursor: null});
+            await json(route, {version: "1", items: filtered, nextCursor: null});
             return;
         }
         await json(route, {});

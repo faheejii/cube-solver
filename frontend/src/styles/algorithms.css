@@ -14,7 +14,6 @@
 .algorithms-header-actions { display: flex; align-items: center; gap: 12px; }
 .algorithms-search { position: relative; }
 .algorithms-search .icon-button { width: 30px; min-width: 30px; height: 30px; }
-.algorithm-catalog-version { display: block; margin: -6px 0 10px; color: var(--muted); font-size: 0.7rem; }
 .algorithm-detail-link { border: 0; padding: 0; background: transparent; color: var(--blue-bright); font: inherit; text-align: left; cursor: pointer; }
 .algorithm-detail-link:hover { text-decoration: underline; }
 .algorithm-load-more { display: flex; justify-content: center; align-items: center; gap: 10px; padding: 18px; }

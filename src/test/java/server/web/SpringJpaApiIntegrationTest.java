@@ -164,7 +164,7 @@ class SpringJpaApiIntegrationTest {
                 .andExpect(jsonPath("$.items", hasSize(20)))
                 .andExpect(jsonPath("$.items[0].algorithmId", notNullValue()))
                 .andExpect(jsonPath("$.items[0].algorithmId", org.hamcrest.Matchers.not(is(firstAlgorithmId))))
-                .andExpect(jsonPath("$.catalogVersion", notNullValue()));
+                .andExpect(jsonPath("$.catalogVersion").doesNotExist());
     }
 
     @Test

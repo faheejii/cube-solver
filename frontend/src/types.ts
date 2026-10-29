@@ -167,7 +167,6 @@ export type AlgorithmWorkspaceEntry = AlgorithmCatalogEntry & {
 
 export type AlgorithmCatalogResponse = {
     version: string;
-    catalogVersion: number;
     items: AlgorithmWorkspaceEntry[];
     nextCursor: string | null;
 };

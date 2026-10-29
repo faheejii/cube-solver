@@ -8,7 +8,6 @@ import java.util.UUID;
 /** Immutable solver and provenance captured before a solve job enters the queue. */
 public record SolverSnapshot(
         CfopSolveService solver,
-        Long catalogVersion,
         List<AlgorithmRevisionIdentity> algorithms,
         List<UUID> disabledAlgorithmIds,
         List<UUID> enabledTrialRevisionIds,
@@ -24,7 +23,7 @@ public record SolverSnapshot(
     }
 
     public static SolverSnapshot legacy(CfopSolveService solver, List<String> disabledAlgorithms) {
-        return new SolverSnapshot(solver, null, List.of(), List.of(), List.of(), disabledAlgorithms, null);
+        return new SolverSnapshot(solver, List.of(), List.of(), List.of(), disabledAlgorithms, null);
     }
 
     public record AlgorithmRevisionIdentity(

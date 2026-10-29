@@ -7,7 +7,6 @@ import database.AuthUser;
 import database.algorithms.AlgorithmCatalogAlgorithmJpaRepository;
 import database.algorithms.AlgorithmCatalogRevisionEntity;
 import database.algorithms.AlgorithmCatalogRevisionJpaRepository;
-import database.algorithms.AlgorithmCatalogStateJpaRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
@@ -31,19 +30,16 @@ public class AlgorithmWorkspaceCatalogService {
     private static final ObjectMapper JSON = new ObjectMapper();
     private final AlgorithmCatalogAlgorithmJpaRepository algorithms;
     private final AlgorithmCatalogRevisionJpaRepository revisions;
-    private final AlgorithmCatalogStateJpaRepository states;
     private final JdbcTemplate jdbc;
     private final java.util.concurrent.ConcurrentHashMap<UUID, CachedProjection> projections = new java.util.concurrent.ConcurrentHashMap<>();
 
     public AlgorithmWorkspaceCatalogService(
             AlgorithmCatalogAlgorithmJpaRepository algorithms,
             AlgorithmCatalogRevisionJpaRepository revisions,
-            AlgorithmCatalogStateJpaRepository states,
             JdbcTemplate jdbc
     ) {
         this.algorithms = algorithms;
         this.revisions = revisions;
-        this.states = states;
         this.jdbc = jdbc;
     }
 
@@ -111,10 +107,7 @@ public class AlgorithmWorkspaceCatalogService {
         var pageItems = List.copyOf(visible.subList(0, Math.min(limit, visible.size())));
         var nextCursor = hasMore && !pageItems.isEmpty()
                 ? encodeCursor(pageItems.getLast().algorithmId(), pageItems.getLast().revisionId()) : null;
-        var version = states.findById((short) 1)
-                .orElseThrow(() -> new IllegalStateException("Algorithm catalog state is missing"))
-                .getCatalogVersion();
-        return new CatalogPage(version, pageItems, nextCursor);
+        return new CatalogPage(pageItems, nextCursor);
     }
 
     private boolean isVisible(AuthUser actor, Long ownerId, String seedKey, AlgorithmCatalogRevisionEntity revision) {
@@ -263,7 +256,7 @@ public class AlgorithmWorkspaceCatalogService {
         public WorkspaceItem { permittedActions = List.copyOf(permittedActions); }
     }
 
-    public record CatalogPage(long version, List<WorkspaceItem> items, String nextCursor) {
+    public record CatalogPage(List<WorkspaceItem> items, String nextCursor) {
         public CatalogPage { items = List.copyOf(items); }
     }
 }

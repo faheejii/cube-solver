@@ -113,7 +113,6 @@ public class AlgorithmGovernanceService {
                 definition.json(), actor.id(), "experimental", now);
         revisions.saveAndFlush(revision);
         writeEvent("created", actor.id(), revisionId, null, "experimental", null, now);
-        bumpCatalogVersion();
         return revisionView(revision);
     }
 
@@ -151,7 +150,6 @@ public class AlgorithmGovernanceService {
                 prior.getRevisionNumber() + 1, definition.json(), actor.id(), "experimental", now());
         revisions.saveAndFlush(next);
         writeEvent("revision-created", actor.id(), next.getId(), null, "experimental", null, now());
-        bumpCatalogVersion();
         return revisionView(next);
     }
 
@@ -220,7 +218,6 @@ public class AlgorithmGovernanceService {
             }
             default -> throw new IllegalArgumentException("Unsupported action");
         }
-        bumpCatalogVersion();
         return revisionView(revisions.findById(revisionId).orElseThrow(NotFoundException::new));
     }
 
@@ -448,10 +445,6 @@ public class AlgorithmGovernanceService {
 
     private void lockCatalog() {
         states.findSingletonForUpdate().orElseThrow(() -> new IllegalStateException("Algorithm catalog state row is missing"));
-    }
-
-    private void bumpCatalogVersion() {
-        jdbc.update("UPDATE algorithm_catalog_state SET catalog_version = catalog_version + 1 WHERE singleton_id = 1");
     }
 
     private void writeEvent(String action, long actorId, UUID revisionId, String before, String after, String reason, OffsetDateTime at) {

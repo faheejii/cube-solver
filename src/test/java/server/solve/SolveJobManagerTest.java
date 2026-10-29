@@ -77,7 +77,7 @@ class SolveJobManagerTest {
         var defaultSolver = new ControlledSolveService(new CountDownLatch(0));
         var capturedSolver = new ControlledSolveService(new CountDownLatch(0));
         var manager = manager(defaultSolver);
-        var snapshot = new SolverSnapshot(capturedSolver, 7L, List.of(), List.of(), List.of(), List.of(), "{}");
+        var snapshot = new SolverSnapshot(capturedSolver, List.of(), List.of(), List.of(), List.of(), "{}");
 
         var job = manager.submit(new SolveApiRequest("R", "U", "greedy"), null, null, false, snapshot);
 

@@ -40,8 +40,7 @@ public class AlgorithmCatalogSeedImportService {
         if (state.getInitializedAt() != null) {
             ensureLegacyAliases(seed);
             migrateLegacyDisabledProfiles(seed);
-            return new InitializationResult(false, 0, state.getCatalogVersion(),
-                    state.getSeedVersion(), state.getSeedChecksum());
+            return new InitializationResult(false, 0, state.getSeedVersion(), state.getSeedChecksum());
         }
 
         var checksum = AlgorithmCatalogSeed.checksum(seed);
@@ -81,8 +80,7 @@ public class AlgorithmCatalogSeedImportService {
         state.markSeedInitialized(AlgorithmCaseCatalog.VERSION, checksum, now);
         states.save(state);
         migrateLegacyDisabledProfiles(seed);
-        return new InitializationResult(true, seed.size(), state.getCatalogVersion(),
-                state.getSeedVersion(), state.getSeedChecksum());
+        return new InitializationResult(true, seed.size(), state.getSeedVersion(), state.getSeedChecksum());
     }
 
     private void ensureLegacyAliases(List<AlgorithmCatalogSeed.SeedEntry> seed) {
@@ -132,7 +130,6 @@ public class AlgorithmCatalogSeedImportService {
     public record InitializationResult(
             boolean initializedNow,
             int importedCount,
-            long catalogVersion,
             String seedVersion,
             String seedChecksum
     ) {

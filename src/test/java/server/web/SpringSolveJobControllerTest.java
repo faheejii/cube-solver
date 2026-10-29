@@ -101,7 +101,7 @@ class SpringSolveJobControllerTest {
     void create_delegatesRequestAndReturnsAcceptedJobSnapshot() throws Exception {
         var user = authenticatedUser();
         authenticateAs(user);
-        var captured = new SolverSnapshot(new CfopSolveService(), 4L, List.of(), List.of(), List.of(), List.of(), "{}");
+        var captured = new SolverSnapshot(new CfopSolveService(), List.of(), List.of(), List.of(), List.of(), "{}");
         when(snapshots.capture(user)).thenReturn(captured);
         when(jobManager.submit(any(), eq(user.externalId()), eq(42L), eq(true), eq(captured)))
                 .thenReturn(snapshot("job-1", "queued"));
