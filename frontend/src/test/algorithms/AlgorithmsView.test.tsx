@@ -13,6 +13,7 @@ vi.mock("../../api", () => ({
         definitionJson: JSON.stringify({phase: "oll", name: "new-case", algorithm: "R U R'", notes: ""}),
         authorUserId: 1, status: "experimental", createdAt: "2026-01-01T00:00:00Z", version: 0,
     })),
+    deleteExperimentalAlgorithm: vi.fn(async () => undefined),
     fetchAlgorithmDetail: vi.fn(async () => ({
         id: "algorithm-1", phase: "oll", name: "case-1", ownerUserId: null,
         activeCanonicalRevisionId: "revision-1",

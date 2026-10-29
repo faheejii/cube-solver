@@ -1,9 +1,10 @@
-import {Clipboard, LoaderCircle, Pause, Play, Plus, Search, ShieldCheck, X} from "lucide-react";
+import {Clipboard, LoaderCircle, Pause, Play, Plus, Search, ShieldCheck, Trash2, X} from "lucide-react";
 import {useEffect, useMemo, useRef, useState} from "react";
 import {
     actOnAlgorithmRevision,
     createAlgorithm,
     createAlgorithmRevision,
+    deleteExperimentalAlgorithm,
     fetchAdminSolverProfile,
     fetchAlgorithmDetail,
     fetchAlgorithms,
@@ -55,6 +56,7 @@ function catalogFilters(selection: string): {status?: string; scope?: string; in
     if (selection === "my-experimental") return {status: "experimental", scope: "my-experimental", includeNonCanonical: true};
     if (selection === "shared-testing") return {status: "test-only", scope: "shared-testing", includeNonCanonical: true};
     if (selection === "review-queue") return {status: "test-only", scope: "review-queue", includeNonCanonical: true};
+    if (selection === "deprecated" || selection === "superseded") return {status: selection, includeNonCanonical: true};
     return {status: selection, includeNonCanonical: selection === "all"};
 }
 
@@ -89,6 +91,9 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
     const [detail, setDetail] = useState<AlgorithmDetail | null>(null);
     const [detailLoading, setDetailLoading] = useState(false);
     const [detailError, setDetailError] = useState<string | null>(null);
+    const [pendingDelete, setPendingDelete] = useState<{algorithmId: string; name: string; revisionIds: string[]} | null>(null);
+    const [deletePending, setDeletePending] = useState(false);
+    const [deleteError, setDeleteError] = useState<string | null>(null);
     const [authoringOpen, setAuthoringOpen] = useState(false);
     const [authoringTarget, setAuthoringTarget] = useState<{algorithmId: string; expectedVersion: number} | null>(null);
     const [definition, setDefinition] = useState<AlgorithmDefinitionRequest>(INITIAL_DEFINITION);
@@ -108,6 +113,7 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
     const [profileSaved, setProfileSaved] = useState(false);
     const [profileLoadAttempt, setProfileLoadAttempt] = useState(0);
     const profileSaveLock = useRef(false);
+    const searchInputRef = useRef<HTMLInputElement>(null);
     const listRequestId = useRef(0);
     const detailRequestId = useRef(0);
     const loadMoreLock = useRef(false);
@@ -251,6 +257,33 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
             if (!refreshAfterForbidden(requestError)) {
                 setDetailError(requestError instanceof Error ? requestError.message : "Could not refresh revision history");
             }
+        }
+    }
+
+    async function permanentlyDeleteAlgorithm() {
+        if (!pendingDelete || deletePending) return;
+        const target = pendingDelete;
+        setDeletePending(true);
+        setDeleteError(null);
+        try {
+            await deleteExperimentalAlgorithm(target.algorithmId);
+            const deletedRevisions = new Set(target.revisionIds);
+            setEnabledTrialRevisionIds((current) => current.filter((revisionId) => !deletedRevisions.has(revisionId)));
+            setInactiveTrialRevisionIds((current) => current.filter((revisionId) => !deletedRevisions.has(revisionId)));
+            setPendingDelete(null);
+            setDetailId(null);
+            setDetail(null);
+            setCatalogNotice(`Deleted ${target.name} and its experimental revision history.`);
+            setCatalogReload((value) => value + 1);
+            window.setTimeout(() => searchInputRef.current?.focus(), 0);
+        } catch (requestError) {
+            if (refreshAfterForbidden(requestError)) {
+                setPendingDelete(null);
+            } else {
+                setDeleteError(requestError instanceof Error ? requestError.message : "Could not delete this algorithm.");
+            }
+        } finally {
+            setDeletePending(false);
         }
     }
 
@@ -475,6 +508,7 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
                 <label className="algorithms-search">
                     <Search size={16}/>
                     <input
+                        ref={searchInputRef}
                         value={search}
                         onChange={(event) => setSearch(event.target.value)}
                         onCompositionStart={() => setSearchComposing(true)}
@@ -503,6 +537,7 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
                     <option value="shared-testing">Shared testing</option>
                     {currentUser.role === "admin" ? <option value="review-queue">Review queue</option> : null}
                     <option value="deprecated">Deprecated</option>
+                    <option value="superseded">Superseded</option>
                     <option value="disabled">Disabled only</option>
                     <option value="all">All visible revisions</option>
                 </select>
@@ -638,8 +673,8 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
                         {detailError ? <div className="dashboard-alert error" role="alert">{detailError}<button className="dashboard-secondary-button compact" type="button" onClick={() => void openDetail(detailId)}>Retry</button></div> : null}
                         {detail ? <>
                             <p className="algorithm-governance-summary">Algorithm ID <code>{detail.id}</code>{detail.activeCanonicalRevisionId ? <> · Active canonical revision <code>{detail.activeCanonicalRevisionId}</code></> : " · No active canonical revision"}</p>
-                            {detail.canCreateRevision ? <div className="algorithm-row-actions">
-                                <button className="dashboard-primary-button compact" type="button" onClick={() => {
+                            {detail.canCreateRevision || detail.canDeleteExperimentalAlgorithm ? <div className="algorithm-detail-header-actions">
+                                {detail.canCreateRevision ? <button className="dashboard-primary-button compact" type="button" onClick={() => {
                                     const latest = detail.revisions[0];
                                     const source = latest ? parseAlgorithmDefinition(latest.definitionJson) : null;
                                     if (!source) {
@@ -652,7 +687,12 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
                                     setValidatedDefinition(null);
                                     setAuthoringError(null);
                                     setAuthoringOpen(true);
-                                }}>Create experimental revision</button>
+                                }}>Create experimental revision</button> : null}
+                                {detail.canDeleteExperimentalAlgorithm ? <button className="dashboard-secondary-button compact danger-text" type="button" onClick={() => {
+                                    setDeleteError(null);
+                                    setPendingDelete({algorithmId: detail.id, name: detail.name,
+                                        revisionIds: detail.revisions.map((revision) => revision.id)});
+                                }}><Trash2 size={15}/> Delete experimental algorithm</button> : null}
                             </div> : null}
                             {(() => {
                                 const canonical = detail.revisions.find((revision) => revision.id === detail.activeCanonicalRevisionId);
@@ -764,6 +804,18 @@ export default function AlgorithmsView({currentUser, onAuthorizationFailure}: {
                         placeholder="Add a note to the workflow history"/>
                 </label> : null}
             </ConfirmationDialog> : null}
+            {pendingDelete ? <ConfirmationDialog
+                title="Delete experimental algorithm?"
+                description={`Permanently delete ${pendingDelete.name}, all ${pendingDelete.revisionIds.length} private revisions, and their workflow history. This cannot be undone, and these revisions cannot be restored or used as a starting point later.`}
+                confirmLabel="Delete permanently"
+                pendingLabel="Deleting…"
+                cancelLabel="Keep algorithm"
+                tone="danger"
+                pending={deletePending}
+                error={deleteError}
+                onCancel={() => { setPendingDelete(null); setDeleteError(null); }}
+                onConfirm={() => void permanentlyDeleteAlgorithm()}
+            /> : null}
             {preview ? (
                 <div className="algorithm-preview-backdrop" role="presentation" onClick={() => setPreview(null)}>
                     <section className="algorithm-preview-dialog" role="dialog" aria-modal="true" aria-label={`${preview.name} preview`} onClick={(event) => event.stopPropagation()}>

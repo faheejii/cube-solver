@@ -64,8 +64,8 @@ public class AlgorithmGovernanceService {
     public AlgorithmDetail detail(UUID algorithmId, AuthUser actor) {
         requireMaintainer(actor);
         var algorithm = algorithms.findById(algorithmId).orElseThrow(NotFoundException::new);
-        var visible = revisions.findAll().stream()
-                .filter(revision -> revision.getAlgorithmId().equals(algorithmId))
+        var algorithmRevisions = revisions.findAllByAlgorithmId(algorithmId);
+        var visible = algorithmRevisions.stream()
                 .filter(revision -> canSee(revision, algorithm, actor))
                 .sorted(Comparator.comparingInt(AlgorithmCatalogRevisionEntity::getRevisionNumber).reversed())
                 .map(revision -> revisionView(revision, permittedActions(revision, actor)))
@@ -89,7 +89,30 @@ public class AlgorithmGovernanceService {
         return new AlgorithmDetail(algorithm.getId(), algorithm.getPhase(), algorithm.getName(),
                 algorithm.getOwnerUserId(), algorithm.getActiveCanonicalRevisionId(),
                 actor.isAdmin() || algorithm.getOwnerUserId() != null && algorithm.getOwnerUserId() == actor.id(),
-                visible, history);
+                canDeleteExperimentalAlgorithm(algorithm, algorithmRevisions, actor), visible, history);
+    }
+
+    @Transactional
+    public void deleteExperimentalAlgorithm(UUID algorithmId, AuthUser actor) {
+        requireMaintainer(actor);
+        lockCatalog();
+        var algorithm = algorithms.findById(algorithmId).orElseThrow(NotFoundException::new);
+        if (algorithm.getOwnerUserId() == null || algorithm.getOwnerUserId() != actor.id()) {
+            throw new NotFoundException();
+        }
+        var algorithmRevisions = revisions.findAllByAlgorithmId(algorithmId);
+        if (!canDeleteExperimentalAlgorithm(algorithm, algorithmRevisions, actor)) {
+            throw new ConflictException("This algorithm cannot be deleted because it has been shared, approved, used by a saved solve, or is no longer fully experimental");
+        }
+
+        for (var revision : algorithmRevisions) {
+            jdbc.update("DELETE FROM algorithm_catalog_workflow_events WHERE revision_id = ?", revision.getId());
+        }
+        for (var revision : algorithmRevisions) {
+            jdbc.update("DELETE FROM algorithm_catalog_revisions WHERE id = ?", revision.getId());
+        }
+        jdbc.update("DELETE FROM algorithm_catalog_algorithms WHERE id = ?", algorithmId);
+        entityManager.clear();
     }
 
     @Transactional
@@ -141,7 +164,7 @@ public class AlgorithmGovernanceService {
                 .filter(r -> "experimental".equals(r.getStatus()) || "test-only".equals(r.getStatus()))
                 .max(Comparator.comparingInt(AlgorithmCatalogRevisionEntity::getRevisionNumber)).orElse(null);
         if (pending != null && pending.getId().equals(prior.getId())) {
-            transition(pending, "deprecated", "superseded", "Superseded by a new experimental revision", actor.id());
+            transition(pending, "superseded", "superseded", "Replaced by a new experimental revision", actor.id());
         } else if (pending != null) {
             throw new ConflictException("A pending revision already exists. Resolve it before creating another revision.");
         }
@@ -404,6 +427,8 @@ public class AlgorithmGovernanceService {
             case "deprecated" -> wasEverShared(revision.getId())
                     || (revision.getAuthorUserId() != null && revision.getAuthorUserId() == actor.id())
                     || (algorithm.getOwnerUserId() != null && algorithm.getOwnerUserId() == actor.id());
+            case "superseded" -> (revision.getAuthorUserId() != null && revision.getAuthorUserId() == actor.id())
+                    || (algorithm.getOwnerUserId() != null && algorithm.getOwnerUserId() == actor.id());
             default -> false;
         };
     }
@@ -413,6 +438,30 @@ public class AlgorithmGovernanceService {
                 SELECT EXISTS (SELECT 1 FROM algorithm_catalog_workflow_events
                     WHERE revision_id = ? AND new_status IN ('test-only', 'canonical'))
                 """, Boolean.class, revisionId));
+    }
+
+    private boolean canDeleteExperimentalAlgorithm(
+            AlgorithmCatalogAlgorithmEntity algorithm,
+            List<AlgorithmCatalogRevisionEntity> algorithmRevisions,
+            AuthUser actor
+    ) {
+        if (algorithm.getSeedKey() != null || algorithm.getActiveCanonicalRevisionId() != null
+                || algorithm.getOwnerUserId() == null || algorithm.getOwnerUserId() != actor.id()
+                || algorithmRevisions.isEmpty()) return false;
+        for (var revision : algorithmRevisions) {
+            if (!"experimental".equals(revision.getStatus()) && !"superseded".equals(revision.getStatus())) {
+                return false;
+            }
+            if (wasEverShared(revision.getId())) return false;
+        }
+        return !Boolean.TRUE.equals(jdbc.queryForObject("""
+                SELECT EXISTS (
+                    SELECT 1 FROM solve_solutions
+                    WHERE algorithm_manifest_json @> jsonb_build_object(
+                        'algorithms', jsonb_build_array(jsonb_build_object('algorithmId', ?::text))
+                    )
+                )
+                """, Boolean.class, algorithm.getId()));
     }
 
     private void requireVisible(AlgorithmCatalogRevisionEntity revision, AlgorithmCatalogAlgorithmEntity algorithm, AuthUser actor) {
@@ -498,7 +547,8 @@ public class AlgorithmGovernanceService {
     public record WorkflowEventView(String action, Long actorUserId, UUID revisionId, String previousStatus,
                                     String newStatus, String reason, OffsetDateTime occurredAt) { }
     public record AlgorithmDetail(UUID id, String phase, String name, Long ownerUserId,
-                                  UUID activeCanonicalRevisionId, boolean canCreateRevision, List<RevisionView> revisions,
+                                  UUID activeCanonicalRevisionId, boolean canCreateRevision,
+                                  boolean canDeleteExperimentalAlgorithm, List<RevisionView> revisions,
                                   List<WorkflowEventView> history) { }
 
     public static class NotFoundException extends RuntimeException { }

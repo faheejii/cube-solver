@@ -225,6 +225,7 @@ The server exposes:
 - `PUT /api/solves/{id}/solutions/{mode}`
 - `GET /api/stats`
 - `GET /api/algorithms`
+- `DELETE /api/algorithms/{id}` for permanent deletion of an eligible private experimental algorithm lineage
 - `POST /api/auth/register`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
@@ -250,7 +251,7 @@ algorithms/
 
 Each installation seed is versioned as `{ "version": "1", "cases": [...] }`. On first startup, its 201 definitions receive deterministic catalog identities and immutable database revisions. PostgreSQL then owns live identity, definition, status, approval, and workflow history; subsequent restarts do not overwrite catalog edits. The seed files remain fixtures and the source for explicit future seed updates. Solver-index construction validates each selected snapshot and derives its signatures and orientation variants.
 
-The Algorithms workspace is available to maintainers and admins. It supports phase, F2L slot, workflow scope/status, and text filters; copy-to-clipboard; revision details; authoring and validation; workflow actions; and `Test on cube`. Setup previews use their recorded source setup. OLL and PLL previews use generated inverse algorithms, while insert previews start from a solved cube when no setup is available. Maintainers can opt into their own experimental revisions and shared test-only revisions, and can disable canonical algorithms for their own solves. Admins can review submissions, approve revisions as canonical, globally deprecate/restore shared revisions, and manage account roles. Personal preferences use stable catalog/revision UUIDs through `GET`/`PUT /api/admin/solver-profile`; legacy `phase:name` disabled references remain accepted for compatibility. Each solve job captures its selected immutable catalog snapshot before queueing, and newly saved solutions include its revision/profile manifest.
+The Algorithms workspace is available to maintainers and admins. It supports phase, F2L slot, workflow scope/status, and text filters; copy-to-clipboard; revision details; authoring and validation; workflow actions; and `Test on cube`. Replaced Experimental or Test-only revisions become Superseded, remain in history, and cannot be enabled for new solves. An owner may permanently delete an entire algorithm lineage only if no revision was shared or approved and no saved solve manifest references it; deletion removes all revisions and workflow history and cannot be undone. Setup previews use their recorded source setup. OLL and PLL previews use generated inverse algorithms, while insert previews start from a solved cube when no setup is available. Maintainers can opt into their own experimental revisions and shared test-only revisions, and can disable canonical algorithms for their own solves. Admins can review submissions, approve revisions as canonical, globally deprecate/restore shared revisions, and manage account roles. Personal preferences use stable catalog/revision UUIDs through `GET`/`PUT /api/admin/solver-profile`; legacy `phase:name` disabled references remain accepted for compatibility. Each solve job captures its selected immutable catalog snapshot before queueing, and newly saved solutions include its revision/profile manifest.
 
 The app supports any PostgreSQL database, not just Neon. You can use:
 

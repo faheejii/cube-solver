@@ -18,7 +18,7 @@ class DatabaseMigrationIntegrationTest {
             try (var connection = database.openConnection(); var statement = connection.createStatement()) {
                 try (var result = statement.executeQuery("SELECT COUNT(*) FROM flyway_schema_history WHERE success")) {
                     assertTrue(result.next());
-                    assertEquals(7, result.getInt(1));
+                    assertEquals(8, result.getInt(1));
                 }
                 try (var result = statement.executeQuery("""
                         SELECT COUNT(*)
@@ -26,9 +26,9 @@ class DatabaseMigrationIntegrationTest {
                         JOIN pg_class table_row ON table_row.oid = trigger_row.tgrelid
                         WHERE table_row.relnamespace = current_schema()::regnamespace
                           AND trigger_row.tgname IN (
-                              'trg_algorithm_catalog_algorithm_no_delete',
-                              'trg_algorithm_catalog_revision_no_delete',
-                              'trg_algorithm_catalog_event_append_only'
+                              'trg_algorithm_catalog_algorithm_delete_guard',
+                              'trg_algorithm_catalog_revision_delete_guard',
+                              'trg_algorithm_catalog_event_delete_guard'
                           )
                           AND NOT trigger_row.tgisinternal
                         """)) {

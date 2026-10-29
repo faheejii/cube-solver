@@ -24,6 +24,7 @@
 .algorithm-revision-list { display: grid; gap: 10px; }
 .algorithm-revision-row { display: grid; gap: 10px; border: 1px solid var(--border); background: var(--panel-muted); padding: 13px; }
 .algorithm-revision-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.algorithm-detail-header-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 16px; }
 .algorithm-revision-row p { margin: 0; color: var(--muted); font-size: 0.8rem; }
 .algorithm-workflow-history { display: grid; gap: 10px; margin: 0; padding-left: 20px; }
 .algorithm-workflow-history li { padding-left: 4px; color: var(--text-soft); font-size: 0.78rem; }

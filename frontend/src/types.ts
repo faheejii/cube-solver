@@ -131,7 +131,7 @@ export type F2LAlgorithmCatalogEntry = {
     } | null;
     algorithm: string;
     sourceSetup: string | null;
-    status: "canonical" | "experimental" | "deprecated" | "test-only" | string;
+    status: "canonical" | "experimental" | "deprecated" | "superseded" | "test-only" | string;
     notes: string;
     previewSetup: string | null;
 };
@@ -149,7 +149,7 @@ export type LastLayerAlgorithmCatalogEntry = {
     algorithm: string;
     sourceSetup: null;
     previewSetup: string;
-    status: "canonical" | "experimental" | "deprecated" | "test-only" | string;
+    status: "canonical" | "experimental" | "deprecated" | "superseded" | "test-only" | string;
     notes: string;
 };
 
@@ -221,6 +221,7 @@ export type AlgorithmDetail = {
     ownerUserId: number | null;
     activeCanonicalRevisionId: string | null;
     canCreateRevision?: boolean;
+    canDeleteExperimentalAlgorithm?: boolean;
     revisions: AlgorithmRevision[];
     history: AlgorithmWorkflowEvent[];
 };

@@ -6,6 +6,7 @@ import api.AlgorithmRevisionRequest;
 import database.AuthUser;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,6 +36,17 @@ final class SpringAlgorithmGovernanceController {
     ResponseEntity<String> detail(@PathVariable("id") UUID id) {
         var actor = requireMaintainerAndDatabase();
         return invoke(() -> governance.detail(id, actor));
+    }
+
+    @DeleteMapping("/{id}")
+    ResponseEntity<?> deleteExperimentalAlgorithm(@PathVariable("id") UUID id) {
+        var actor = requireMaintainerAndDatabase();
+        try {
+            governance.deleteExperimentalAlgorithm(id, actor);
+            return SpringRequestSupport.noContent();
+        } catch (AlgorithmGovernanceService.NotFoundException exception) {
+            return SpringRequestSupport.error(404, "Algorithm not found");
+        }
     }
 
     @PostMapping("/validate")

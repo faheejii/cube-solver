@@ -244,6 +244,10 @@ export async function fetchAlgorithmDetail(algorithmId: string): Promise<Algorit
     return requestJson<AlgorithmDetail>(`/api/algorithms/${encodeURIComponent(algorithmId)}`);
 }
 
+export async function deleteExperimentalAlgorithm(algorithmId: string): Promise<void> {
+    return requestJson<void>(`/api/algorithms/${encodeURIComponent(algorithmId)}`, {method: "DELETE"});
+}
+
 export async function validateAlgorithmDefinition(
     definition: AlgorithmDefinitionRequest,
 ): Promise<AlgorithmValidationResult> {

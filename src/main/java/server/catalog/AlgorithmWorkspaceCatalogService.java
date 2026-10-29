@@ -119,6 +119,8 @@ public class AlgorithmWorkspaceCatalogService {
             case "deprecated" -> wasEverShared(revision.getId())
                     || revision.getAuthorUserId() != null && revision.getAuthorUserId() == actor.id()
                     || ownerId != null && ownerId == actor.id();
+            case "superseded" -> revision.getAuthorUserId() != null && revision.getAuthorUserId() == actor.id()
+                    || ownerId != null && ownerId == actor.id();
             default -> false;
         };
     }

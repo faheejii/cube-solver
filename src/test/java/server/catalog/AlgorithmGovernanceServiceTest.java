@@ -90,7 +90,7 @@ class AlgorithmGovernanceServiceTest {
         var revision = new AlgorithmCatalogRevisionEntity(UUID.randomUUID(), algorithmId, 1,
                 "{}", 2L, "experimental", OffsetDateTime.now());
         when(algorithms.findById(algorithmId)).thenReturn(Optional.of(algorithm));
-        when(revisions.findAll()).thenReturn(List.of(revision));
+        when(revisions.findAllByAlgorithmId(algorithmId)).thenReturn(List.of(revision));
 
         assertThrows(AlgorithmGovernanceService.NotFoundException.class,
                 () -> service.detail(algorithmId, new AuthUser(1, "maintainer-1", null, null, "maintainer")));

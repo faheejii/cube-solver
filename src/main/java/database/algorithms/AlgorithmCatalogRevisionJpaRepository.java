@@ -9,4 +9,5 @@ import java.util.UUID;
 public interface AlgorithmCatalogRevisionJpaRepository
         extends JpaRepository<AlgorithmCatalogRevisionEntity, UUID> {
     List<AlgorithmCatalogRevisionEntity> findAllByIdIn(Collection<UUID> ids);
+    List<AlgorithmCatalogRevisionEntity> findAllByAlgorithmId(UUID algorithmId);
 }
